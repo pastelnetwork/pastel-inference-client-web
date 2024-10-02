@@ -34,3 +34,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+node_modules
+.next
+./package-lock.json
+package-lock.json
+package-lock.json
+bun.lockb
+/bun.lockb
+public/
+/public
+/public/favicons/*
+public/favicons/*.png
+public/favicons/*.jpg
+public/favicons/android-icon-96x96.png
+*.jpg
+pastel_inference_client_web_nextjs_code_base__single_file.txt

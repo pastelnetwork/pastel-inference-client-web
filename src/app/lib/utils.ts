@@ -1,26 +1,24 @@
+// src/app/lib/utils.ts
+
 import CryptoJS from "crypto-js";
 import pako from "pako";
 import browserLogger from "@/app/lib/logger";
-import pastelGlobals from "@/app/lib/globals";
+import BrowserRPCReplacement from "@/app/lib/BrowserRPCReplacement";
+import * as storage from "@/app/lib/storage";
+import { cacheInstance } from "@/app/lib/cache";
 import {
   SupernodeInfo,
-  SupernodeWithDistance,
-  ModelParameter,
-  Model,
-  ModelMenu,
-  CachedItem,
   ValidationError,
   AuditResult,
   InferenceResultDict,
-  InferenceAPIUsageRequest,
   InferenceAPIUsageResponse,
   InferenceAPIOutputResult,
-  PreliminaryPriceQuote,
-  CreditPackPurchaseRequestResponse,
-  CreditPackPurchaseRequestConfirmation,
   ValidationResult,
+  CreditPackPurchaseRequestResponse,
+  SupernodeWithDistance,
 } from "@/app/types";
-import { models } from "@/app/lib/BrowserDatabase";
+
+const rpc = new BrowserRPCReplacement();
 
 const MAX_CACHE_AGE_MS = 1 * 60 * 1000; // 1 minute in milliseconds
 
@@ -44,42 +42,58 @@ const MAXIMUM_LOCAL_PASTEL_BLOCK_HEIGHT_DIFFERENCE_IN_BLOCKS = parseInt(
 );
 
 // Helper functions
-export function safeStringify(obj: any): string {
+export function safeStringify(obj: unknown): string {
   return JSON.stringify(obj, (key, value) =>
     typeof value === "bigint" ? value.toString() : value
   );
 }
 
+export function generateUUID(): string {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0,
+      v = c == "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+export async function retryPromise<T>(
+  promiseFunc: () => Promise<T>,
+  retryLimit: number
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let i = 0; i < retryLimit; i++) {
+    try {
+      return await promiseFunc();
+    } catch (error) {
+      lastError = error as Error;
+    }
+  }
+  throw lastError;
+}
+
 // Cache functions
+
 export async function clearOldCache(): Promise<void> {
-  const keys = await models.cache.findAll();
+  const keys = cacheInstance.findAll();
   const currentTime = Date.now();
   for (const key of keys) {
-    const item = await models.cache.findByPk(key);
+    const item = cacheInstance.findByPk(key);
     if (item && item.timestamp) {
       if (currentTime - item.timestamp > MAX_CACHE_AGE_MS) {
-        await models.cache.destroy({ where: { key } });
+        cacheInstance.destroy({ where: { key } });
       }
     } else {
-      await models.cache.destroy({ where: { key } });
+      cacheInstance.destroy({ where: { key } });
     }
   }
 }
 
 export async function storeInCache<T>(key: string, data: T): Promise<void> {
-  await models.cache.create({ key, data, timestamp: Date.now() });
+  cacheInstance.set(key, data);
 }
 
 export async function getFromCache<T>(key: string): Promise<T | null> {
-  const item = (await models.cache.findByPk(key)) as CachedItem<T> | null;
-  if (item && item.timestamp) {
-    if (Date.now() - item.timestamp <= MAX_CACHE_AGE_MS) {
-      return item.data;
-    } else {
-      await models.cache.destroy({ where: { key } });
-    }
-  }
-  return null;
+  return cacheInstance.get(key);
 }
 
 // Market price functions
@@ -102,7 +116,7 @@ export async function fetchCurrentPSLMarketPrice(): Promise<number> {
       const priceCG = jsonCG.pastel?.usd ?? null;
       return { priceCMC, priceCG };
     } catch (error) {
-      console.error(
+      browserLogger.error(
         `Error fetching PSL market prices: ${(error as Error).message}`
       );
       return { priceCMC: null, priceCG: null };
@@ -128,7 +142,7 @@ export async function fetchCurrentPSLMarketPrice(): Promise<number> {
     throw new Error(`Invalid PSL price: ${averagePrice}`);
   }
 
-  console.log(
+  browserLogger.info(
     `The current Average PSL price is: $${averagePrice.toFixed(8)} based on ${
       prices.length
     } sources`
@@ -142,14 +156,14 @@ export async function estimatedMarketPriceOfInferenceCreditsInPSLTerms(): Promis
     const costPerCreditUSD =
       TARGET_VALUE_PER_CREDIT_IN_USD / (1 - TARGET_PROFIT_MARGIN);
     const costPerCreditPSL = costPerCreditUSD / pslPriceUSD;
-    console.log(
+    browserLogger.info(
       `Estimated market price of 1.0 inference credit: ${costPerCreditPSL.toFixed(
         4
       )} PSL`
     );
     return costPerCreditPSL;
   } catch (error) {
-    console.error(
+    browserLogger.error(
       `Error calculating estimated market price of inference credits: ${safeStringify(
         (error as Error).message
       )}`
@@ -159,7 +173,7 @@ export async function estimatedMarketPriceOfInferenceCreditsInPSLTerms(): Promis
 }
 
 // Utility functions
-export function parseAndFormat(value: any): string {
+export function parseAndFormat(value: unknown): string {
   try {
     if (typeof value === "string") {
       if (value.includes("\n")) {
@@ -169,17 +183,17 @@ export function parseAndFormat(value: any): string {
       return JSON.stringify(parsedValue, null, 4);
     }
     return JSON.stringify(value, null, 4);
-  } catch (error) {
-    return value;
+  } catch {
+    return String(value);
   }
 }
 
-export function prettyJSON(data: any): string {
+export function prettyJSON(data: unknown): string {
   if (data instanceof Map) {
     data = Object.fromEntries(data);
   }
   if (Array.isArray(data) || (typeof data === "object" && data !== null)) {
-    const formattedData: { [key: string]: any } = {};
+    const formattedData: { [key: string]: unknown } = {};
     for (const [key, value] of Object.entries(data)) {
       if (typeof value === "string" && key.endsWith("_json")) {
         formattedData[key] = parseAndFormat(value);
@@ -193,7 +207,7 @@ export function prettyJSON(data: any): string {
   } else if (typeof data === "string") {
     return parseAndFormat(data);
   }
-  return data;
+  return String(data);
 }
 
 export function abbreviateJSON(jsonString: string, maxLength: number): string {
@@ -211,14 +225,14 @@ export function abbreviateJSON(jsonString: string, maxLength: number): string {
 export function logActionWithPayload(
   action: string,
   payloadName: string,
-  jsonPayload: any
+  jsonPayload: unknown
 ): void {
   const maxPayloadLength = 10000;
   let formattedPayload = prettyJSON(jsonPayload);
   if (formattedPayload.length > maxPayloadLength) {
     formattedPayload = abbreviateJSON(formattedPayload, maxPayloadLength);
   }
-  console.log(
+  browserLogger.info(
     `Now ${action} ${payloadName} with payload:\n${formattedPayload}`
   );
 }
@@ -255,7 +269,7 @@ export async function compressDataWithZstd(
 ): Promise<{ compressedData: Uint8Array; base64EncodedData: string }> {
   const compressedData = pako.deflate(inputData);
   const base64EncodedData = btoa(
-    String.fromCharCode.apply(null, compressedData)
+    String.fromCharCode.apply(null, Array.from(compressedData))
   );
   return { compressedData, base64EncodedData };
 }
@@ -290,8 +304,10 @@ export function escapeJsonString(str: string): string {
   return str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-export function pythonCompatibleStringify(obj: any): string {
-  function sortObjectByKeys(unsortedObj: any): any {
+export function pythonCompatibleStringify(obj: unknown): string {
+  function sortObjectByKeys(
+    unsortedObj: Record<string, unknown>
+  ): Record<string, unknown> {
     const priorityKeys = ["challenge", "challenge_id", "challenge_signature"];
     return Object.keys(unsortedObj)
       .sort((a, b) => {
@@ -309,7 +325,7 @@ export function pythonCompatibleStringify(obj: any): string {
         }
         return a.localeCompare(b);
       })
-      .reduce((acc: any, key) => {
+      .reduce((acc: Record<string, unknown>, key) => {
         const value = unsortedObj[key];
         if (
           typeof value === "object" &&
@@ -317,8 +333,10 @@ export function pythonCompatibleStringify(obj: any): string {
           !(value instanceof Date)
         ) {
           acc[key] = Array.isArray(value)
-            ? value.map(sortObjectByKeys)
-            : sortObjectByKeys(value);
+            ? value.map((item) =>
+                sortObjectByKeys(item as Record<string, unknown>)
+              )
+            : sortObjectByKeys(value as Record<string, unknown>);
         } else {
           acc[key] = value;
         }
@@ -326,12 +344,12 @@ export function pythonCompatibleStringify(obj: any): string {
       }, {});
   }
 
-  function customReplacer(key: string, value: any): any {
+  function customReplacer(_key: string, value: unknown): unknown {
     if (value instanceof Date) {
       return value.toISOString();
     }
     if (typeof value === "object" && value !== null) {
-      return sortObjectByKeys(value);
+      return sortObjectByKeys(value as Record<string, unknown>);
     }
     if (
       typeof value === "string" &&
@@ -345,7 +363,7 @@ export function pythonCompatibleStringify(obj: any): string {
     }
     return value;
   }
-  const sortedObject = sortObjectByKeys(obj);
+  const sortedObject = sortObjectByKeys(obj as Record<string, unknown>);
   let jsonString = JSON.stringify(sortedObject, customReplacer);
   jsonString = jsonString.replace(/"(true|false)"/g, "$1");
   jsonString = adjustJSONSpacing(jsonString);
@@ -357,13 +375,13 @@ export function base64EncodeJson(jsonInput: string): string {
 }
 
 export async function extractResponseFieldsFromCreditPackTicketMessageDataAsJSON(
-  modelInstance: any
+  modelInstance: Record<string, unknown>
 ): Promise<string> {
-  const responseFields: { [key: string]: any } = {};
+  const responseFields: { [key: string]: unknown } = {};
   const plainObject = modelInstance;
 
   let lastHashFieldName: string | null = null;
-  let lastSignatureFieldNames: string[] = [];
+  const lastSignatureFieldNames: string[] = [];
   for (const fieldName in plainObject) {
     if (fieldName.startsWith("sha3_256_hash_of")) {
       lastHashFieldName = fieldName;
@@ -396,7 +414,7 @@ export async function extractResponseFieldsFromCreditPackTicketMessageDataAsJSON
           responseFields[fieldName] = pythonCompatibleStringify(fieldValue);
         } else {
           responseFields[fieldName] =
-            typeof fieldValue === "number" ? fieldValue : fieldValue.toString();
+            typeof fieldValue === "number" ? fieldValue : String(fieldValue);
         }
       }
     });
@@ -404,9 +422,9 @@ export async function extractResponseFieldsFromCreditPackTicketMessageDataAsJSON
 }
 
 export async function computeSHA3256HashOfSQLModelResponseFields(
-  modelInstance: any
+  modelInstance: Record<string, unknown>
 ): Promise<string> {
-  let responseFieldsJSON =
+  const responseFieldsJSON =
     await extractResponseFieldsFromCreditPackTicketMessageDataAsJSON(
       modelInstance
     );
@@ -416,19 +434,24 @@ export async function computeSHA3256HashOfSQLModelResponseFields(
 }
 
 export async function prepareModelForEndpoint(
-  modelInstance: any
-): Promise<any> {
-  let preparedModelInstance: { [key: string]: any } = {};
-  let instanceData = modelInstance;
+  modelInstance: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const preparedModelInstance: { [key: string]: unknown } = {};
+  const instanceData = modelInstance;
   for (const key in instanceData) {
     if (Object.prototype.hasOwnProperty.call(instanceData, key)) {
       if (key.endsWith("_json")) {
         if (typeof instanceData[key] === "string") {
           try {
-            const parsedJson = JSON.parse(instanceData[key]);
+            const parsedJson = JSON.parse(instanceData[key] as string);
             preparedModelInstance[key] = pythonCompatibleStringify(parsedJson);
           } catch (e) {
-            console.error("Failed to parse JSON for key:", key, "Error:", e);
+            browserLogger.error(
+              "Failed to parse JSON for key:",
+              key,
+              "Error:",
+              e
+            );
             preparedModelInstance[key] = instanceData[key];
           }
         } else {
@@ -444,7 +467,9 @@ export async function prepareModelForEndpoint(
   return preparedModelInstance;
 }
 
-export function removeSequelizeFields(plainObject: any): void {
+export function removeSequelizeFields(
+  plainObject: Record<string, unknown>
+): void {
   const fieldsToRemove = [
     "id",
     "_changed",
@@ -462,18 +487,20 @@ export function removeSequelizeFields(plainObject: any): void {
 }
 
 export async function prepareModelForValidation(
-  modelInstance: any
-): Promise<any> {
-  let preparedModelInstance = { ...modelInstance };
+  modelInstance: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const preparedModelInstance = { ...modelInstance };
   Object.keys(preparedModelInstance).forEach((key) => {
     if (
       key.endsWith("_json") &&
       typeof preparedModelInstance[key] === "string"
     ) {
       try {
-        preparedModelInstance[key] = JSON.parse(preparedModelInstance[key]);
+        preparedModelInstance[key] = JSON.parse(
+          preparedModelInstance[key] as string
+        );
       } catch (error) {
-        console.error(`Error parsing ${key}: ${error}`);
+        browserLogger.error(`Error parsing ${key}: ${error}`);
       }
     }
   });
@@ -493,7 +520,7 @@ export function compareDatetimes(
 }
 
 export function validateTimestampFields(
-  modelInstance: any,
+  modelInstance: Record<string, unknown>,
   validationErrors: ValidationError[]
 ): void {
   for (const [fieldName, fieldValue] of Object.entries(modelInstance)) {
@@ -510,7 +537,7 @@ export function validateTimestampFields(
             message: `Timestamp in field ${fieldName} is too far from the current time`,
           });
         }
-      } catch (error) {
+      } catch {
         validationErrors.push({
           message: `Invalid timestamp format for field ${fieldName}`,
         });
@@ -520,7 +547,7 @@ export function validateTimestampFields(
 }
 
 export async function validatePastelBlockHeightFields(
-  modelInstance: any,
+  modelInstance: Record<string, unknown>,
   validationErrors: ValidationError[]
 ): Promise<void> {
   const [, , bestBlockHeight] = await rpc.getBestBlockHashAndMerkleRoot();
@@ -541,7 +568,7 @@ export async function validatePastelBlockHeightFields(
 }
 
 export async function validateHashFields(
-  modelInstance: any,
+  modelInstance: Record<string, unknown>,
   validationErrors: ValidationError[]
 ): Promise<void> {
   const expectedHash = await computeSHA3256HashOfSQLModelResponseFields(
@@ -558,7 +585,7 @@ export async function validateHashFields(
     }
   }
   if (hashFieldName) {
-    const actualHash = modelInstance[hashFieldName];
+    const actualHash = modelInstance[hashFieldName] as string;
     if (actualHash !== expectedHash) {
       validationErrors.push({
         message: `SHA3-256 hash in field ${hashFieldName} does not match the computed hash of the response fields`,
@@ -574,7 +601,7 @@ export async function getClosestSupernodePastelIDFromList(
 ): Promise<string | null> {
   await clearOldCache();
   if (!filteredSupernodes || filteredSupernodes.length === 0) {
-    console.warn("No filtered supernodes available");
+    browserLogger.warn("No filtered supernodes available");
     return null;
   }
 
@@ -586,7 +613,9 @@ export async function getClosestSupernodePastelIDFromList(
       } else if (supernode && supernode.extKey) {
         pastelID = supernode.extKey;
       } else {
-        console.warn(`Invalid supernode data: ${JSON.stringify(supernode)}`);
+        browserLogger.warn(
+          `Invalid supernode data: ${JSON.stringify(supernode)}`
+        );
         return null;
       }
 
@@ -594,7 +623,7 @@ export async function getClosestSupernodePastelIDFromList(
         const distance = await calculateXORDistance(localPastelID, pastelID);
         return { pastelID, distance: BigInt(distance) };
       } catch (error) {
-        console.error(
+        browserLogger.error(
           `Error calculating XOR distance: ${(error as Error).message}`
         );
         return null;
@@ -608,7 +637,7 @@ export async function getClosestSupernodePastelIDFromList(
   );
 
   if (validDistances.length === 0) {
-    console.warn("No valid XOR distances calculated");
+    browserLogger.warn("No valid XOR distances calculated");
     return null;
   }
 
@@ -648,7 +677,7 @@ export async function getSupernodeUrlFromPastelID(
 }
 
 export async function validatePastelIDSignatureFields(
-  modelInstance: any,
+  modelInstance: Record<string, unknown>,
   validationErrors: ValidationError[]
 ): Promise<void> {
   let lastSignatureFieldName: string | null = null;
@@ -662,7 +691,7 @@ export async function validatePastelIDSignatureFields(
       fieldName.toLowerCase().includes("_pastelid") &&
       fields[fieldName] !== "NA"
     ) {
-      firstPastelID = fields[fieldName];
+      firstPastelID = fields[fieldName] as string;
       break;
     }
   }
@@ -676,10 +705,9 @@ export async function validatePastelIDSignatureFields(
       lastHashFieldName = fieldName;
     }
   }
-  const embeddedField =
-    fields[
-      "supernode_pastelid_and_signature_on_inference_request_response_hash"
-    ];
+  const embeddedField = fields[
+    "supernode_pastelid_and_signature_on_inference_request_response_hash"
+  ] as string | undefined;
   if (embeddedField) {
     try {
       const parsedData = JSON.parse(embeddedField);
@@ -700,9 +728,9 @@ export async function validatePastelIDSignatureFields(
     signature
   ) {
     pastelID = firstPastelID;
-    messageToVerify = fields[lastHashFieldName];
+    messageToVerify = fields[lastHashFieldName] as string;
     if (!embeddedField) {
-      signature = fields[lastSignatureFieldName];
+      signature = fields[lastSignatureFieldName] as string;
     }
     const verificationResult = await rpc.verifyMessageWithPastelID(
       pastelID,
@@ -726,11 +754,11 @@ export async function getClosestSupernodeToPastelIDURL(
   supernodeListDF: SupernodeInfo[],
   maxResponseTimeInMilliseconds: number = 1200
 ): Promise<{ url: string | null; pastelID: string | null }> {
-  console.log(
+  browserLogger.info(
     `Attempting to find closest supernode for PastelID: ${inputPastelID}`
   );
   if (!inputPastelID) {
-    console.warn("No input PastelID provided");
+    browserLogger.warn("No input PastelID provided");
     return { url: null, pastelID: null };
   }
   await clearOldCache();
@@ -745,7 +773,7 @@ export async function getClosestSupernodeToPastelIDURL(
       maxResponseTimeInMilliseconds
     );
     if (!closestSupernodePastelID) {
-      console.warn("No closest supernode PastelID found");
+      browserLogger.warn("No closest supernode PastelID found");
       return { url: null, pastelID: null };
     }
 
@@ -762,12 +790,12 @@ export async function getClosestSupernodeToPastelIDURL(
           signal: AbortSignal.timeout(maxResponseTimeInMilliseconds),
         });
         return { url: supernodeURL, pastelID: closestSupernodePastelID };
-      } catch (error) {
+      } catch {
         return { url: null, pastelID: null };
       }
     }
   }
-  console.warn("No filtered supernodes available");
+  browserLogger.warn("No filtered supernodes available");
   return { url: null, pastelID: null };
 }
 
@@ -778,7 +806,7 @@ export async function getNClosestSupernodesToPastelIDURLs(
   maxResponseTimeInMilliseconds: number = 800
 ): Promise<{ url: string; pastelID: string }[]> {
   if (!inputPastelID) {
-    console.warn("No input PastelID provided");
+    browserLogger.warn("No input PastelID provided");
     return [];
   }
 
@@ -791,7 +819,7 @@ export async function getNClosestSupernodesToPastelIDURLs(
     );
 
     if (filteredSupernodes.length === 0) {
-      console.warn("No filtered supernodes available");
+      browserLogger.warn("No filtered supernodes available");
       return [];
     }
 
@@ -804,7 +832,7 @@ export async function getNClosestSupernodesToPastelIDURLs(
           );
           return { ...supernode, distance };
         } catch (error) {
-          console.error(
+          browserLogger.error(
             `Error calculating XOR distance for supernode ${
               supernode.extKey
             }: ${(error as Error).message}`
@@ -819,7 +847,7 @@ export async function getNClosestSupernodesToPastelIDURLs(
     );
 
     if (validXorDistances.length === 0) {
-      console.warn("No valid XOR distances calculated");
+      browserLogger.warn("No valid XOR distances calculated");
       return [];
     }
 
@@ -839,7 +867,7 @@ export async function getNClosestSupernodesToPastelIDURLs(
             signal: AbortSignal.timeout(maxResponseTimeInMilliseconds),
           });
           return { url, pastelID: extKey };
-        } catch (error) {
+        } catch {
           return null;
         }
       }
@@ -851,14 +879,14 @@ export async function getNClosestSupernodesToPastelIDURLs(
     );
 
     if (validSupernodes.length === 0) {
-      console.warn("No valid supernodes found after connectivity check");
+      browserLogger.warn("No valid supernodes found after connectivity check");
     } else {
-      console.log(`Found ${validSupernodes.length} valid supernodes`);
+      browserLogger.info(`Found ${validSupernodes.length} valid supernodes`);
     }
 
     return validSupernodes;
   } catch (error) {
-    console.error(
+    browserLogger.error(
       `Error in getNClosestSupernodesToPastelIDURLs: ${
         (error as Error).message
       }`
@@ -868,7 +896,7 @@ export async function getNClosestSupernodesToPastelIDURLs(
 }
 
 export async function validateCreditPackTicketMessageData(
-  modelInstance: any
+  modelInstance: Record<string, unknown>
 ): Promise<ValidationError[]> {
   const validationErrors: ValidationError[] = [];
   validateTimestampFields(modelInstance, validationErrors);
@@ -1132,8 +1160,7 @@ export async function filterSupernodes(
   supernodeList: SupernodeInfo[],
   maxResponseTimeInMilliseconds: number = 700,
   minPerformanceRatio: number = 0.75,
-  maxSupernodes: number = 130,
-  totalTimeoutMs: number = 1100
+  maxSupernodes: number = 130
 ): Promise<SupernodeInfo[]> {
   const cacheKey = "filteredSupernodes";
 
@@ -1146,7 +1173,7 @@ export async function filterSupernodes(
   };
 
   const logResults = () => {
-    let USE_VERBOSE_LOGGING = false;
+    const USE_VERBOSE_LOGGING = false;
     const totalRemoved =
       stats.removedDueToPing +
       stats.removedDueToPerformance +
@@ -1156,17 +1183,17 @@ export async function filterSupernodes(
       100
     ).toFixed(2);
     if (USE_VERBOSE_LOGGING) {
-      console.log(`Total supernodes processed: ${stats.totalProcessed}`);
-      console.log(
+      browserLogger.info(`Total supernodes processed: ${stats.totalProcessed}`);
+      browserLogger.info(
         `Total supernodes removed: ${totalRemoved} (${removedPercentage}%)`
       );
-      console.log(`- Removed due to ping: ${stats.removedDueToPing}`);
-      console.log(
+      browserLogger.info(`- Removed due to ping: ${stats.removedDueToPing}`);
+      browserLogger.info(
         `- Removed due to performance: ${stats.removedDueToPerformance}`
       );
-      console.log(`- Removed due to errors: ${stats.removedDueToError}`);
+      browserLogger.info(`- Removed due to errors: ${stats.removedDueToError}`);
       if (stats.timeouts > 0) {
-        console.log(`Total timeouts: ${stats.timeouts}`);
+        browserLogger.info(`Total timeouts: ${stats.timeouts}`);
       }
     }
   };
@@ -1174,7 +1201,7 @@ export async function filterSupernodes(
   const cachedData = await getFromCache<SupernodeInfo[]>(cacheKey);
 
   if (cachedData && cachedData.length >= maxSupernodes) {
-    console.log("Returning cached supernodes.");
+    browserLogger.info("Returning cached supernodes.");
     return cachedData.slice(0, maxSupernodes);
   }
 
@@ -1187,7 +1214,7 @@ export async function filterSupernodes(
   }
 
   const filteredSupernodes: SupernodeInfo[] = [];
-  let completed = false;
+  const completed = false;
 
   const checkSupernode = async (
     supernode: SupernodeInfo
@@ -1210,7 +1237,7 @@ export async function filterSupernodes(
         await fetch(`http://${ipAddress}:7123/ping`, {
           signal: AbortSignal.timeout(maxResponseTimeInMilliseconds),
         });
-      } catch (error) {
+      } catch {
         stats.removedDueToPing++;
         return null;
       }
@@ -1238,7 +1265,7 @@ export async function filterSupernodes(
       };
       await storeInCache(cacheKey, result);
       return result;
-    } catch (error) {
+    } catch {
       stats.removedDueToError++;
       return null;
     }
@@ -1255,11 +1282,19 @@ export async function filterSupernodes(
   return filteredSupernodes.slice(0, maxSupernodes);
 }
 
+type CheckFunction = (...args: unknown[]) => Promise<boolean>;
+
+interface ConfirmationOptions {
+  maxRetries: number;
+  retryDelay: number;
+  actionName: string;
+}
+
 export async function waitForConfirmation(
-  checkFunction: (...args: any[]) => Promise<boolean>,
-  ...checkFunctionArgs: any[]
+  checkFunction: CheckFunction,
+  ...checkFunctionArgs: unknown[]
 ): Promise<boolean> {
-  const options = {
+  const options: ConfirmationOptions = {
     maxRetries: 30,
     retryDelay: 10000,
     actionName: "condition",
@@ -1272,13 +1307,13 @@ export async function waitForConfirmation(
     try {
       const result = await checkFunction(...checkFunctionArgs);
       if (result) {
-        console.log(
+        browserLogger.info(
           `${options.actionName} confirmed after ${attempt} attempt(s).`
         );
         return true;
       }
     } catch (error) {
-      console.warn(
+      browserLogger.warn(
         `Error checking ${options.actionName} (attempt ${attempt}/${
           options.maxRetries
         }): ${(error as Error).message}`
@@ -1286,7 +1321,7 @@ export async function waitForConfirmation(
     }
 
     if (attempt < options.maxRetries) {
-      console.log(
+      browserLogger.info(
         `${options.actionName} not yet confirmed. Attempt ${attempt}/${
           options.maxRetries
         }. Waiting ${options.retryDelay / 1000} seconds before next check...`
@@ -1295,7 +1330,7 @@ export async function waitForConfirmation(
     }
   }
 
-  console.warn(
+  browserLogger.warn(
     `${options.actionName} not confirmed after ${options.maxRetries} attempts.`
   );
   return false;
@@ -1315,9 +1350,13 @@ export async function waitForPastelIDRegistration(
   );
 
   if (isRegistered) {
-    console.log(`PastelID ${pastelID} has been successfully registered.`);
+    browserLogger.info(
+      `PastelID ${pastelID} has been successfully registered.`
+    );
   } else {
-    console.error(`PastelID ${pastelID} registration could not be confirmed.`);
+    browserLogger.error(
+      `PastelID ${pastelID} registration could not be confirmed.`
+    );
   }
 
   return isRegistered;
@@ -1337,9 +1376,11 @@ export async function waitForCreditPackConfirmation(
   );
 
   if (isConfirmed) {
-    console.log(`Credit pack with TXID ${txid} has been confirmed.`);
+    browserLogger.info(`Credit pack with TXID ${txid} has been confirmed.`);
   } else {
-    console.error(`Credit pack with TXID ${txid} could not be confirmed.`);
+    browserLogger.error(
+      `Credit pack with TXID ${txid} could not be confirmed.`
+    );
   }
 
   return isConfirmed;
@@ -1350,14 +1391,14 @@ export async function importPromotionalPack(jsonData: string): Promise<{
   message: string;
   processedPacks?: { pub_key: string; passphrase: string }[];
 }> {
-  console.log(`Starting import of promotional pack`);
+  browserLogger.info(`Starting import of promotional pack`);
   const processedPacks: { pub_key: string; passphrase: string }[] = [];
 
   try {
     // Initialize RPC connection
-    console.log("Initializing RPC connection...");
+    browserLogger.info("Initializing RPC connection...");
     await rpc.initializeRPCConnection();
-    console.log("RPC connection initialized successfully");
+    browserLogger.info("RPC connection initialized successfully");
 
     // Parse the JSON data
     let packData: any[] = JSON.parse(jsonData);
@@ -1369,7 +1410,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
 
     for (let i = 0; i < packData.length; i++) {
       const pack = packData[i];
-      console.log(`Processing pack ${i + 1} of ${packData.length}`);
+      browserLogger.info(`Processing pack ${i + 1} of ${packData.length}`);
 
       // 1. Save the PastelID secure container
       const { rpcport } = await rpc.getLocalRPCSettings();
@@ -1381,14 +1422,14 @@ export async function importPromotionalPack(jsonData: string): Promise<{
           : "devnet";
 
       // Store the secure container in IndexedDB
-      await models.secureContainers.create({
-        pastelID: pack.pastel_id_pubkey,
-        container: pack.secureContainerBase64,
-        network: network,
-      });
+      await storage.storeSecureContainer(
+        pack.pastel_id_pubkey,
+        pack.secureContainerBase64,
+        network
+      );
 
       // 2. Import the tracking address private key
-      console.log(
+      browserLogger.info(
         `Importing private key for tracking address: ${pack.psl_credit_usage_tracking_address}`
       );
 
@@ -1400,17 +1441,19 @@ export async function importPromotionalPack(jsonData: string): Promise<{
         startingBlockHeight
       );
       if (importResult) {
-        console.log(
+        browserLogger.info(
           `Private key imported successfully for tracking address: ${importResult}`
         );
       } else {
-        console.warn("Failed to import private key");
+        browserLogger.warn("Failed to import private key");
       }
 
       // 3. Log other important information
-      console.log(`PastelID: ${pack.pastel_id_pubkey}`);
-      console.log(`Passphrase: ${pack.pastel_id_passphrase}`);
-      console.log(`Credit Pack Ticket: ${JSON.stringify(pack, null, 2)}`);
+      browserLogger.info(`PastelID: ${pack.pastel_id_pubkey}`);
+      browserLogger.info(`Passphrase: ${pack.pastel_id_passphrase}`);
+      browserLogger.info(
+        `Credit Pack Ticket: ${JSON.stringify(pack, null, 2)}`
+      );
 
       // Add the processed pack info to our array
       processedPacks.push({
@@ -1418,7 +1461,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
         passphrase: pack.pastel_id_passphrase,
       });
 
-      console.log(`Pack ${i + 1} processed successfully`);
+      browserLogger.info(`Pack ${i + 1} processed successfully`);
     }
 
     // Wait for RPC connection to be re-established
@@ -1427,12 +1470,12 @@ export async function importPromotionalPack(jsonData: string): Promise<{
     // Verify PastelID import and wait for blockchain confirmation
     for (let i = 0; i < packData.length; i++) {
       const pack = packData[i];
-      console.log(`Verifying PastelID import for pack ${i + 1}`);
+      browserLogger.info(`Verifying PastelID import for pack ${i + 1}`);
 
       try {
         // Wait for PastelID to be confirmed in the blockchain
         await waitForPastelIDRegistration(pack.pastel_id_pubkey);
-        console.log(
+        browserLogger.info(
           `PastelID ${pack.pastel_id_pubkey} confirmed in blockchain`
         );
 
@@ -1443,7 +1486,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
           testMessage,
           pack.pastel_id_passphrase
         );
-        console.log(
+        browserLogger.info(
           `Signature created successfully for PastelID: ${pack.pastel_id_pubkey}`
         );
 
@@ -1454,33 +1497,37 @@ export async function importPromotionalPack(jsonData: string): Promise<{
         );
 
         if (verificationResult) {
-          console.log(
+          browserLogger.info(
             `PastelID ${pack.pastel_id_pubkey} verified successfully`
           );
         } else {
-          console.warn(`PastelID ${pack.pastel_id_pubkey} verification failed`);
+          browserLogger.warn(
+            `PastelID ${pack.pastel_id_pubkey} verification failed`
+          );
         }
 
         // Verify Credit Pack Ticket
         await waitForCreditPackConfirmation(pack.credit_pack_registration_txid);
-        console.log(
+        browserLogger.info(
           `Credit Pack Ticket ${pack.credit_pack_registration_txid} confirmed in blockchain`
         );
       } catch (error) {
-        console.error(
+        browserLogger.error(
           `Error verifying pack ${i + 1}: ${(error as Error).message}`
         );
       }
     }
 
-    console.log("All promo packs in the file have been processed and verified");
+    browserLogger.info(
+      "All promo packs in the file have been processed and verified"
+    );
     return {
       success: true,
       message: "Promotional pack(s) imported and verified successfully",
       processedPacks: processedPacks,
     };
   } catch (error) {
-    console.error(
+    browserLogger.error(
       `Error importing promotional pack: ${(error as Error).message}`
     );
     return {
@@ -1489,3 +1536,51 @@ export async function importPromotionalPack(jsonData: string): Promise<{
     };
   }
 }
+
+// Export all functions
+export default {
+  safeStringify,
+  clearOldCache,
+  storeInCache,
+  getFromCache,
+  fetchCurrentPSLMarketPrice,
+  estimatedMarketPriceOfInferenceCreditsInPSLTerms,
+  parseAndFormat,
+  prettyJSON,
+  abbreviateJSON,
+  logActionWithPayload,
+  transformCreditPackPurchaseRequestResponse,
+  computeSHA3256Hexdigest,
+  getSHA256HashOfInputData,
+  compressDataWithZstd,
+  decompressDataWithZstd,
+  calculateXORDistance,
+  adjustJSONSpacing,
+  escapeJsonString,
+  pythonCompatibleStringify,
+  base64EncodeJson,
+  extractResponseFieldsFromCreditPackTicketMessageDataAsJSON,
+  computeSHA3256HashOfSQLModelResponseFields,
+  prepareModelForEndpoint,
+  removeSequelizeFields,
+  prepareModelForValidation,
+  compareDatetimes,
+  validateTimestampFields,
+  validatePastelBlockHeightFields,
+  validateHashFields,
+  getClosestSupernodePastelIDFromList,
+  checkIfPastelIDIsValid,
+  getSupernodeUrlFromPastelID,
+  validatePastelIDSignatureFields,
+  getClosestSupernodeToPastelIDURL,
+  getNClosestSupernodesToPastelIDURLs,
+  validateCreditPackTicketMessageData,
+  validateInferenceResponseFields,
+  validateInferenceResultFields,
+  validateInferenceData,
+  filterSupernodes,
+  waitForConfirmation,
+  waitForPastelIDRegistration,
+  waitForCreditPackConfirmation,
+  importPromotionalPack,
+};

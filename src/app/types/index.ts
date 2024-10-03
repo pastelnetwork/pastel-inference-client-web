@@ -1,12 +1,12 @@
 // src/app/types/index.ts
 
 export interface LogEntry {
-  level: string;
-  msg: string;
-  meta: any;
-  timestamp: string;
-}
-
+    level: string;
+    msg: string;
+    meta: unknown;
+    timestamp: string;
+  }
+  
 export interface LoggerListener {
   (data: string): void;
 }
@@ -15,15 +15,15 @@ export interface BrowserLogger {
   logBuffer: string[];
   MAX_LOG_ENTRIES: number;
   listeners: Map<string, Set<LoggerListener>>;
-  log(level: string, msg: string, meta?: any): void;
-  error(msg: string, meta?: any): void;
-  warn(msg: string, meta?: any): void;
-  info(msg: string, meta?: any): void;
-  debug(msg: string, meta?: any): void;
+  log(level: string, msg: string, meta?: unknown): void;
+  error(msg: string, meta?: unknown): void;
+  warn(msg: string, meta?: unknown): void;
+  info(msg: string, meta?: unknown): void;
+  debug(msg: string, meta?: unknown): void;
+  safeStringify(obj: unknown): string;
   on(eventName: string, listener: LoggerListener): void;
   off(eventName: string, listener: LoggerListener): void;
   emit(eventName: string, data: string): void;
-  safeStringify(obj: any): string;
 }
 
 export interface PastelGlobals {
@@ -124,25 +124,45 @@ export interface ValidationError {
   message: string;
 }
 
-export interface AuditResult {
-  // Define properties based on your actual audit result structure
-  [key: string]: any;
-}
+export interface SupernodeListResult {
+    validMasternodeListFullDF: SupernodeInfo[];
+    filter: (predicate: (supernode: SupernodeInfo) => boolean) => SupernodeInfo[];
+  }
+
+  export interface AuditResult {
+    inference_response_id: string;
+    inference_request_id: string;
+    inference_result_id: string;
+    proposed_cost_of_request_in_inference_credits: number;
+    remaining_credits_in_pack_after_request_processed: number;
+    credit_usage_tracking_psl_address: string;
+    request_confirmation_message_amount_in_patoshis: number;
+    max_block_height_to_include_confirmation_transaction: number;
+    supernode_pastelid_and_signature_on_inference_request_response_hash: string;
+    responding_supernode_pastelid: string;
+    inference_result_json_base64: string;
+    inference_result_file_type_strings: string;
+    responding_supernode_signature_on_inference_result_id: string;
+  }
 
 export interface InferenceResultDict {
-  supernode_url: string;
-  request_data: InferenceAPIUsageRequest;
-  usage_request_response: InferenceAPIUsageResponse;
-  model_input_data_json: any;
-  output_results: InferenceAPIOutputResult;
-  generated_image_decoded?: string;
-  zip_file_data?: string;
-  inference_result_decoded?: string;
-}
+    supernode_url: string;
+    request_data: InferenceAPIUsageRequest;
+    usage_request_response: InferenceAPIUsageResponse;
+    model_input_data_json: unknown;
+    output_results: InferenceAPIOutputResult;
+    generated_image_decoded?: string;
+    zip_file_data?: string;
+    inference_result_decoded?: string;
+  }
 
 export interface CreditPackTicketInfo {
-  creditPackPurchaseRequestResponse: CreditPackPurchaseRequestResponse;
-  creditPackPurchaseRequestConfirmation: CreditPackPurchaseRequestConfirmation;
+  requestResponse: CreditPackPurchaseRequestResponse;
+  requestConfirmation: CreditPackPurchaseRequestConfirmation;
+  balanceInfo: {
+    credit_pack_current_credit_balance: number;
+    balance_as_of_datetime: string;
+  };
 }
 
 export interface PreliminaryPriceQuote {
@@ -175,15 +195,6 @@ export interface InferenceConfirmationData {
   };
 }
 
-export interface CreditPackTicketInfo {
-  requestResponse: CreditPackPurchaseRequestResponse;
-  requestConfirmation: CreditPackPurchaseRequestConfirmation;
-  balanceInfo: {
-    credit_pack_current_credit_balance: number;
-    balance_as_of_datetime: string;
-  };
-}
-
 export interface CreditPackEstimation {
   desiredNumberOfCredits: number;
   creditPriceCushionPercentage: number;
@@ -191,10 +202,10 @@ export interface CreditPackEstimation {
 
 export interface InferenceRequestParams {
   creditPackTicketPastelTxid: string;
-  modelInputData: any;
+  modelInputData: unknown;
   requestedModelCanonicalString: string;
   modelInferenceTypeString: string;
-  modelParameters: any;
+  modelParameters: unknown;
   maximumInferenceCostInCredits: number;
 }
 
@@ -203,13 +214,13 @@ export interface PreliminaryPriceQuote {
   preliminary_total_cost_of_credit_pack_in_psl: number;
   credit_pack_purchase_request_fields_json_b64: string;
   credit_usage_tracking_psl_address: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface CreditPackCreationResult {
   creditPackRequest: CreditPackPurchaseRequest;
   creditPackPurchaseRequestConfirmation: CreditPackPurchaseRequestConfirmation;
-  creditPackStorageRetryRequestResponse?: any;
+  creditPackStorageRetryRequestResponse?: unknown;
   creditPackPurchaseRequestConfirmationResponse?: CreditPackPurchaseRequestConfirmationResponse;
 }
 
@@ -259,17 +270,17 @@ export interface CreditPack {
 
 export interface InferenceRequest {
   creditPackTicketPastelTxid: string;
-  modelInputData: any;
+  modelInputData: unknown;
   requestedModelCanonicalString: string;
   modelInferenceTypeString: string;
-  modelParameters: any;
+  modelParameters: unknown;
   maximumInferenceCostInCredits: number;
 }
 
 export interface InferenceResult {
-  inferenceResultDict: any;
-  auditResults: any;
-  validationResults: any;
+  inferenceResultDict: unknown;
+  auditResults: unknown;
+  validationResults: unknown;
 }
 
 export interface PastelIDTicket {
@@ -402,7 +413,7 @@ export interface BlockSubsidy {
 export interface BlockTemplate {
   version: number;
   previousblockhash: string;
-  transactions: any[];
+  transactions: unknown[];
   coinbaseaux: {
     flags: string;
   };
@@ -563,14 +574,13 @@ export interface Message {
 }
 
 export interface UserMessage {
-  id?: number;
+  id?: number | string;
   from_pastelid: string;
   to_pastelid: string;
   message_body: string;
   message_signature: string;
   timestamp: string;
 }
-
 export interface CreditPackPurchaseRequest {
   id?: number;
   requesting_end_user_pastelid: string;
@@ -642,7 +652,7 @@ export interface CreditPackPurchaseRequestResponseTermination {
 }
 
 export interface CreditPackPurchaseRequestResponse {
-  id?: number;
+  id?: number | string;
   sha3_256_hash_of_credit_pack_purchase_request_fields: string;
   credit_pack_purchase_request_fields_json_b64: string;
   psl_cost_per_credit: number;
@@ -693,11 +703,10 @@ export interface CreditPackPurchaseRequestConfirmationResponse {
 }
 
 export interface CreditPackRequestStatusCheck {
-  id?: number;
-  sha3_256_hash_of_credit_pack_purchase_request_fields: string;
-  requesting_end_user_pastelid: string;
-  requesting_end_user_pastelid_signature_on_sha3_256_hash_of_credit_pack_purchase_request_fields: string;
-}
+    sha3_256_hash_of_credit_pack_purchase_request_fields: string;
+    requesting_end_user_pastelid: string;
+    requesting_end_user_pastelid_signature_on_sha3_256_hash_of_credit_pack_purchase_request_fields: string;
+  }
 
 export interface CreditPackPurchaseRequestStatus {
   id?: number;
@@ -799,13 +808,17 @@ export interface InferenceConfirmation {
 }
 
 export interface ValidationResult {
-  inference_response_id: boolean;
-  inference_request_id: boolean;
+  inference_result_id: string;
+  inference_response_id: string;
+  inference_request_id: string;
   proposed_cost_in_credits: boolean;
   remaining_credits_after_request: boolean;
   credit_usage_tracking_psl_address: boolean;
   request_confirmation_message_amount_in_patoshis: boolean;
   max_block_height_to_include_confirmation_transaction: boolean;
   supernode_pastelid_and_signature_on_inference_response_id: boolean;
+  responding_supernode_pastelid: boolean;
+  inference_result_json_base64: boolean;
+  inference_result_file_type_strings: boolean;
+  responding_supernode_signature_on_inference_result_id: boolean;
 }
-

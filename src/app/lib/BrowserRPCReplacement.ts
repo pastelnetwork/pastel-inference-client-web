@@ -29,8 +29,6 @@ import {
   getNetworkFromLocalStorage,
   setNetworkInLocalStorage,
 } from "@/app/lib/storage";
-import browserLogger from '@/app/lib/logger';
-import pastelGlobals from '@/app/lib/globals';
 
 declare global {
   interface Window {
@@ -291,21 +289,21 @@ class BrowserRPCReplacement {
     return this.fetchJson<BlockInfo>(`/getblock/${blockHash}`);
   }
 
-  async signMessageWithPastelID(
+async signMessageWithPastelID(
     pastelid: string,
-    messageToSign: string
+    messageToSign: string,
+    passphrase: string
   ): Promise<string> {
     await this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.SignWithPastelID(
         pastelid,
         messageToSign,
-        "PastelID",
+        passphrase,
         "Mainnet"
       )
     );
   }
-
   async createAndFundNewPSLCreditTrackingAddress(
     amountOfPSLToFundAddressWith: number
   ): Promise<{ newCreditTrackingAddress: string; txid: string }> {
@@ -1004,7 +1002,8 @@ class BrowserRPCReplacement {
       const testMessage = "This is a test message for PastelID verification";
       const signature = await this.signMessageWithPastelID(
         pack.pastel_id_pubkey,
-        testMessage
+        testMessage,
+        pack.pastel_id_passphrase
       );
       const verificationResult = await this.verifyMessageWithPastelID(
         pack.pastel_id_pubkey,

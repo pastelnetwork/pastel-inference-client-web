@@ -6,8 +6,8 @@ import PastelInferenceClient from "@/app/lib/PastelInferenceClient";
 import * as storage from "./storage";
 import * as utils from "./utils";
 import * as schemas from "./validationSchemas";
-import browserLogger from '@/app/lib/logger';
-import pastelGlobals from '@/app/lib/globals';
+import browserLogger from "@/app/lib/logger";
+import pastelGlobals from "@/app/lib/globals";
 
 import {
   CreditPack,
@@ -23,6 +23,17 @@ import {
   CreditPackPurchaseRequestConfirmation,
   CreditPackPurchaseRequestConfirmationResponse,
   CreditPackPurchaseRequestResponse,
+  SupernodeInfo,
+  AuditResult,
+  ValidationResult,
+  InferenceAPIUsageRequest,
+  InferenceAPIUsageResponse,
+  InferenceConfirmation,
+  InferenceAPIOutputResult,
+  UserMessage,
+  CreditPackPurchaseRequestRejection,
+  CreditPackStorageRetryRequest,
+  CreditPackStorageRetryRequestResponse,
 } from "@/app/types";
 
 const rpc = new BrowserRPCReplacement();
@@ -37,23 +48,24 @@ export async function checkForNewIncomingMessages(): Promise<Message[]> {
   try {
     const pastelID = pastelGlobals.getPastelId();
     const passphrase = pastelGlobals.getPassphrase();
-    const inferenceClient = new PastelInferenceClient(pastelID, passphrase);
 
     if (!pastelID || !passphrase) {
-      console.error("PastelID or passphrase is not set");
+      browserLogger.error("PastelID or passphrase is not set");
       return [];
     }
+
+    const inferenceClient = new PastelInferenceClient({ pastelID, passphrase });
     const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
 
-    console.log(`My local pastelid: ${inferenceClient.pastelID}`);
+    browserLogger.info(`My local pastelid: ${inferenceClient.getPastelID()}`);
 
     const closestSupernodesToLocal =
       await utils.getNClosestSupernodesToPastelIDURLs(
         3,
-        inferenceClient.pastelID,
+        inferenceClient.getPastelID(),
         validMasternodeListFullDF
       );
-    console.log(
+    browserLogger.info(
       `Closest Supernodes to local pastelid: ${closestSupernodesToLocal
         .map((sn) => `PastelID: ${sn.pastelID}, URL: ${sn.url}`)
         .join(", ")}`
@@ -61,10 +73,10 @@ export async function checkForNewIncomingMessages(): Promise<Message[]> {
 
     const messageRetrievalTasks = closestSupernodesToLocal.map(({ url }) =>
       inferenceClient.getUserMessages(url).catch((error) => {
-        console.warn(
+        browserLogger.warn(
           `Failed to retrieve messages from supernode ${url}: ${error.message}`
         );
-        return []; // Return an empty array on error
+        return [];
       })
     );
     const messageLists = await Promise.all(messageRetrievalTasks);
@@ -82,7 +94,9 @@ export async function checkForNewIncomingMessages(): Promise<Message[]> {
 
     return uniqueMessages;
   } catch (error) {
-    console.error(`Error in checkForNewIncomingMessages: ${error.message}`);
+    browserLogger.error(
+      `Error in checkForNewIncomingMessages: ${(error as Error).message}`
+    );
     throw error;
   }
 }
@@ -94,15 +108,16 @@ export async function sendMessageAndCheckForNewIncomingMessages(
   try {
     const pastelID = pastelGlobals.getPastelId();
     const passphrase = pastelGlobals.getPassphrase();
-    const inferenceClient = new PastelInferenceClient(pastelID, passphrase);
-    const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
 
     if (!pastelID || !passphrase) {
       throw new Error("PastelID or passphrase is not set");
     }
 
-    console.log("Sending user message...");
-    console.log(`Recipient pastelid: ${toPastelID}`);
+    const inferenceClient = new PastelInferenceClient({ pastelID, passphrase });
+    const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
+
+    browserLogger.info("Sending user message...");
+    browserLogger.info(`Recipient pastelid: ${toPastelID}`);
 
     const closestSupernodesToRecipient =
       await utils.getNClosestSupernodesToPastelIDURLs(
@@ -110,13 +125,13 @@ export async function sendMessageAndCheckForNewIncomingMessages(
         toPastelID,
         validMasternodeListFullDF
       );
-    console.log(
+    browserLogger.info(
       `Closest Supernodes to recipient pastelid: ${closestSupernodesToRecipient.map(
         (sn) => sn.pastelID
       )}`
     );
 
-    const userMessage: Message = {
+    const userMessage: UserMessage = {
       from_pastelid: pastelID,
       to_pastelid: toPastelID,
       message_body: utils.safeStringify(messageBody),
@@ -128,7 +143,7 @@ export async function sendMessageAndCheckForNewIncomingMessages(
       timestamp: new Date().toISOString(),
     };
 
-    const { error } = await schemas.userMessageSchema.safeParse(userMessage);
+    const { error } = schemas.userMessageSchema.safeParse(userMessage);
     if (error) {
       throw new Error(`Invalid user message: ${error.message}`);
     }
@@ -136,8 +151,12 @@ export async function sendMessageAndCheckForNewIncomingMessages(
     const sendTasks = closestSupernodesToRecipient.map(({ url }) =>
       inferenceClient.sendUserMessage(url, userMessage)
     );
-    const sendResults = await Promise.all(sendTasks);
-    console.log(`Sent user messages: ${utils.safeStringify(sendResults)}`);
+
+    const sendResults = await Promise.all(sendTasks) as Message[];
+
+    browserLogger.info(
+      `Sent user messages: ${utils.safeStringify(sendResults)}`
+    );
 
     const receivedMessages = await checkForNewIncomingMessages();
 
@@ -146,8 +165,10 @@ export async function sendMessageAndCheckForNewIncomingMessages(
       received_messages: receivedMessages,
     };
   } catch (error) {
-    console.error(
-      `Error in sendMessageAndCheckForNewIncomingMessages: ${error.message}`
+    browserLogger.error(
+      `Error in sendMessageAndCheckForNewIncomingMessages: ${
+        (error as Error).message
+      }`
     );
     throw error;
   }
@@ -168,15 +189,15 @@ export async function handleCreditPackTicketEndToEnd(
     pastelID = optionalPastelID;
     passphrase = optionalPassphrase;
   } else {
-    pastelID = pastelGlobals.getPastelId();
-    passphrase = pastelGlobals.getPassphrase();
+    pastelID = pastelGlobals.getPastelId() || "";
+    passphrase = pastelGlobals.getPassphrase() || "";
   }
 
   if (!pastelID || !passphrase) {
     throw new Error("PastelID or passphrase is not set");
   }
 
-  const inferenceClient = new PastelInferenceClient(pastelID, passphrase);
+  const inferenceClient = new PastelInferenceClient({ pastelID, passphrase });
 
   try {
     const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
@@ -216,7 +237,7 @@ export async function handleCreditPackTicketEndToEnd(
 
     for (const supernode of closestSupernodes) {
       try {
-        console.log(
+        browserLogger.info(
           `Attempting credit pack request with supernode: ${supernode.url}`
         );
 
@@ -225,6 +246,13 @@ export async function handleCreditPackTicketEndToEnd(
             supernode.url,
             creditPackRequest
           );
+
+        if ("rejection_reason_string" in preliminaryPriceQuote) {
+          browserLogger.info(
+            `Credit pack purchase request rejected: ${preliminaryPriceQuote.rejection_reason_string}`
+          );
+          continue;
+        }
 
         const signedCreditPackTicketOrRejection =
           await inferenceClient.creditPackTicketPreliminaryPriceQuoteResponse(
@@ -236,7 +264,7 @@ export async function handleCreditPackTicketEndToEnd(
           );
 
         if ("termination_reason_string" in signedCreditPackTicketOrRejection) {
-          console.log(
+          browserLogger.info(
             `Credit pack purchase request terminated: ${signedCreditPackTicketOrRejection.termination_reason_string}`
           );
           continue;
@@ -284,7 +312,7 @@ export async function handleCreditPackTicketEndToEnd(
           throw new Error("Credit pack ticket storage failed");
         }
 
-        let creditPackPurchaseRequestStatus =
+        const creditPackPurchaseRequestStatus =
           await checkCreditPackPurchaseRequestStatus(
             inferenceClient,
             supernode.url,
@@ -316,8 +344,10 @@ export async function handleCreditPackTicketEndToEnd(
           };
         }
       } catch (error) {
-        console.warn(
-          `Failed to create credit pack with supernode ${supernode.url}: ${error.message}`
+        browserLogger.warn(
+          `Failed to create credit pack with supernode ${supernode.url}: ${
+            (error as Error).message
+          }`
         );
       }
     }
@@ -326,7 +356,9 @@ export async function handleCreditPackTicketEndToEnd(
       "Failed to create credit pack ticket with all available supernodes"
     );
   } catch (error) {
-    console.error(`Error in handleCreditPackTicketEndToEnd: ${error.message}`);
+    browserLogger.error(
+      `Error in handleCreditPackTicketEndToEnd: ${(error as Error).message}`
+    );
     throw new Error(
       "An unexpected error occurred while processing your credit pack purchase. Please try again later."
     );
@@ -334,27 +366,30 @@ export async function handleCreditPackTicketEndToEnd(
 }
 
 async function buildCreditPackPurchaseRequestConfirmation(
-    creditPackRequest: CreditPackPurchaseRequest,
-    signedCreditPackTicket: CreditPackPurchaseRequestResponse,
-    burnTransactionTxid: string,
-    pastelID: string,
-    passphrase: string
-  ): Promise<CreditPackPurchaseRequestConfirmation> {
-    const confirmation: CreditPackPurchaseRequestConfirmation = {
-      sha3_256_hash_of_credit_pack_purchase_request_fields:
-        creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields,
-      sha3_256_hash_of_credit_pack_purchase_request_response_fields:
-        signedCreditPackTicket.sha3_256_hash_of_credit_pack_purchase_request_response_fields,
-      credit_pack_purchase_request_fields_json_b64:
-        signedCreditPackTicket.credit_pack_purchase_request_fields_json_b64,
-      requesting_end_user_pastelid: pastelID,
-      txid_of_credit_purchase_burn_transaction: burnTransactionTxid,
-      credit_purchase_request_confirmation_utc_iso_string: new Date().toISOString(),
-      credit_purchase_request_confirmation_pastel_block_height: await rpc.getCurrentPastelBlockHeight(),
-      credit_purchase_request_confirmation_message_version_string: "1.0",
-      sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields: "",
-      requesting_end_user_pastelid_signature_on_sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields: "",
-    };{
+  creditPackRequest: CreditPackPurchaseRequest,
+  signedCreditPackTicket: CreditPackPurchaseRequestResponse,
+  burnTransactionTxid: string,
+  pastelID: string,
+  passphrase: string
+): Promise<CreditPackPurchaseRequestConfirmation> {
+  const confirmation: CreditPackPurchaseRequestConfirmation = {
+    sha3_256_hash_of_credit_pack_purchase_request_fields:
+      creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields,
+    sha3_256_hash_of_credit_pack_purchase_request_response_fields:
+      signedCreditPackTicket.sha3_256_hash_of_credit_pack_purchase_request_response_fields,
+    credit_pack_purchase_request_fields_json_b64:
+      signedCreditPackTicket.credit_pack_purchase_request_fields_json_b64,
+    requesting_end_user_pastelid: pastelID,
+    txid_of_credit_purchase_burn_transaction: burnTransactionTxid,
+    credit_purchase_request_confirmation_utc_iso_string:
+      new Date().toISOString(),
+    credit_purchase_request_confirmation_pastel_block_height:
+      await rpc.getCurrentPastelBlockHeight(),
+    credit_purchase_request_confirmation_message_version_string: "1.0",
+    sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields: "",
+    requesting_end_user_pastelid_signature_on_sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields:
+      "",
+  };
 
   confirmation.sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields =
     await utils.computeSHA3256HashOfSQLModelResponseFields(confirmation);
@@ -366,9 +401,7 @@ async function buildCreditPackPurchaseRequestConfirmation(
     );
 
   const { success, error } =
-    await schemas.creditPackPurchaseRequestConfirmationSchema.safeParse(
-      confirmation
-    );
+    schemas.creditPackPurchaseRequestConfirmationSchema.safeParse(confirmation);
   if (!success) {
     throw new Error(
       `Invalid credit pack purchase request confirmation: ${error.message}`
@@ -383,21 +416,23 @@ async function checkCreditPackPurchaseRequestStatus(
   highestRankedSupernodeURL: string,
   creditPackRequest: CreditPackPurchaseRequest,
   closestSupernodes: SupernodeURL[]
-): Promise<CreditPackPurchaseRequestStatus> {
+): Promise<schemas.CreditPackPurchaseRequestStatus> {
   try {
     const status = await inferenceClient.checkStatusOfCreditPurchaseRequest(
       highestRankedSupernodeURL,
       creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields
     );
-    console.log(
+    browserLogger.info(
       `Credit pack purchase request status from the original supernode: ${JSON.stringify(
         status
       )}`
     );
     return status;
   } catch (error) {
-    console.debug(
-      `Error checking status with original supernode: ${error.message}. Trying other supernodes.`
+    browserLogger.debug(
+      `Error checking status with original supernode: ${
+        (error as Error).message
+      }. Trying other supernodes.`
     );
     for (const supernode of closestSupernodes) {
       try {
@@ -405,13 +440,15 @@ async function checkCreditPackPurchaseRequestStatus(
           supernode.url,
           creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields
         );
-        console.log(
+        browserLogger.info(
           `Credit pack purchase request status: ${JSON.stringify(status)}`
         );
         return status;
       } catch (retryError) {
-        console.debug(
-          `Error checking status with supernode ${supernode.url}: ${retryError.message}`
+        browserLogger.debug(
+          `Error checking status with supernode ${supernode.url}: ${
+            (retryError as Error).message
+          }`
         );
       }
     }
@@ -428,7 +465,7 @@ async function initiateStorageRetry(
   validMasternodeListFullDF: SupernodeInfo[],
   pastelID: string,
   passphrase: string
-): Promise<any> {
+): Promise<CreditPackStorageRetryRequestResponse> {
   const closestAgreeingSupernodePastelID =
     await utils.getClosestSupernodePastelIDFromList(
       pastelID,
@@ -463,7 +500,7 @@ async function initiateStorageRetry(
     );
 
   const { success, error } =
-    await schemas.creditPackStorageRetryRequestResponseSchema.safeParse(
+    schemas.creditPackStorageRetryRequestResponseSchema.safeParse(
       creditPackStorageRetryRequestResponse
     );
 
@@ -487,7 +524,7 @@ async function initiateStorageRetry(
           supernodeURL,
           creditPackStorageRetryRequestResponse
         );
-      } catch (error) {
+      } catch {
         // Silently ignore errors in completion announcements
       }
     }
@@ -533,9 +570,7 @@ async function buildCreditPackStorageRetryRequest(
     );
 
   const { success, error } =
-    await schemas.creditPackStorageRetryRequestSchema.safeParse(
-      storageRetryRequest
-    );
+    schemas.creditPackStorageRetryRequestSchema.safeParse(storageRetryRequest);
   if (!success) {
     throw new Error(
       `Invalid credit pack storage retry request: ${error.message}`
@@ -551,7 +586,7 @@ export async function getCreditPackTicketInfoEndToEnd(
   optionalPassphrase?: string
 ): Promise<CreditPackTicketInfo> {
   try {
-    console.log("getCreditPackTicketInfoEndToEnd called with:", {
+    browserLogger.info("getCreditPackTicketInfoEndToEnd called with:", {
       creditPackTicketPastelTxid,
       optionalPastelID: optionalPastelID ? "[PROVIDED]" : "[NOT PROVIDED]",
       optionalPassphrase: optionalPassphrase ? "[PROVIDED]" : "[NOT PROVIDED]",
@@ -562,15 +597,15 @@ export async function getCreditPackTicketInfoEndToEnd(
       pastelID = optionalPastelID;
       passphrase = optionalPassphrase;
     } else {
-      pastelID = pastelGlobals.getPastelId();
-      passphrase = pastelGlobals.getPassphrase();
+      pastelID = pastelGlobals.getPastelId() || "";
+      passphrase = pastelGlobals.getPassphrase() || "";
     }
-    console.log("Using PastelID:", pastelID);
+    browserLogger.info("Using PastelID:", pastelID);
 
     if (!pastelID || !passphrase) {
       throw new Error("PastelID or passphrase is not set");
     }
-    const inferenceClient = new PastelInferenceClient(pastelID, passphrase);
+    const inferenceClient = new PastelInferenceClient({ pastelID, passphrase });
     const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
     const { url: supernodeURL } = await utils.getClosestSupernodeToPastelIDURL(
       pastelID,
@@ -579,17 +614,15 @@ export async function getCreditPackTicketInfoEndToEnd(
     if (!supernodeURL) {
       throw new Error("Supernode URL is undefined");
     }
-    console.log(
+    browserLogger.info(
       `Getting credit pack ticket data from Supernode URL: ${supernodeURL}...`
     );
 
-    const {
-      creditPackPurchaseRequestResponse,
-      creditPackPurchaseRequestConfirmation,
-    } = await inferenceClient.getCreditPackTicketFromTxid(
-      supernodeURL,
-      creditPackTicketPastelTxid
-    );
+    const { requestResponse, requestConfirmation } =
+      await inferenceClient.getCreditPackTicketFromTxid(
+        supernodeURL,
+        creditPackTicketPastelTxid
+      );
 
     const balanceInfo = await inferenceClient.checkCreditPackBalance(
       supernodeURL,
@@ -597,12 +630,18 @@ export async function getCreditPackTicketInfoEndToEnd(
     );
 
     return {
-      requestResponse: creditPackPurchaseRequestResponse,
-      requestConfirmation: creditPackPurchaseRequestConfirmation,
-      balanceInfo,
+      requestResponse,
+      requestConfirmation,
+      balanceInfo: {
+        credit_pack_current_credit_balance:
+          balanceInfo.credit_pack_current_credit_balance,
+        balance_as_of_datetime: balanceInfo.balance_as_of_datetime,
+      },
     };
   } catch (error) {
-    console.error(`Error in getCreditPackTicketInfoEndToEnd: ${error.message}`);
+    browserLogger.error(
+      `Error in getCreditPackTicketInfoEndToEnd: ${(error as Error).message}`
+    );
     throw error;
   }
 }
@@ -621,7 +660,7 @@ export async function getMyValidCreditPackTicketsEndToEnd(): Promise<
       throw new Error("PastelID or passphrase is not set");
     }
 
-    const inferenceClient = new PastelInferenceClient(pastelID, passphrase);
+    const inferenceClient = new PastelInferenceClient({ pastelID, passphrase });
     const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
 
     const closestSupernodes = await utils.getNClosestSupernodesToPastelIDURLs(
@@ -641,19 +680,19 @@ export async function getMyValidCreditPackTicketsEndToEnd(): Promise<
         if (isResolved) return;
 
         if (nonEmptyResponses.length >= initialMinimumNonEmptyResponses) {
-          console.log(
+          browserLogger.info(
             `Received ${nonEmptyResponses.length} non-empty responses out of ${allResponses.length} total responses`
           );
           isResolved = true;
           resolve();
         } else if (allResponses.length >= maxTotalResponsesIfAllEmpty) {
-          console.log(
+          browserLogger.info(
             `Reached maximum total responses (${maxTotalResponsesIfAllEmpty}) with ${nonEmptyResponses.length} non-empty responses`
           );
           isResolved = true;
           resolve();
         } else if (completedRequests >= closestSupernodes.length) {
-          console.warn(
+          browserLogger.warn(
             `Queried all available supernodes. Got ${nonEmptyResponses.length} non-empty responses out of ${allResponses.length} total responses`
           );
           isResolved = true;
@@ -672,7 +711,7 @@ export async function getMyValidCreditPackTicketsEndToEnd(): Promise<
           .then((response) => {
             if (isResolved) return;
 
-            console.log(
+            browserLogger.info(
               `Response received from supernode at ${url}; response length: ${response.length}`
             );
             allResponses.push({ response, url });
@@ -685,8 +724,8 @@ export async function getMyValidCreditPackTicketsEndToEnd(): Promise<
           .catch((error) => {
             if (isResolved) return;
 
-            console.error(
-              `Error querying supernode at ${url}: ${error.message}`
+            browserLogger.error(
+              `Error querying supernode at ${url}: ${(error as Error).message}`
             );
             completedRequests++;
             handleResponse();
@@ -699,17 +738,19 @@ export async function getMyValidCreditPackTicketsEndToEnd(): Promise<
       const longestResponse = nonEmptyResponses.reduce((prev, current) => {
         return current.response.length > prev.response.length ? current : prev;
       }).response;
-      console.log(
+      browserLogger.info(
         `Returning longest non-empty response with length: ${longestResponse.length}`
       );
       return longestResponse;
     } else {
-      console.log("All responses were empty. Returning empty list.");
+      browserLogger.info("All responses were empty. Returning empty list.");
       return [];
     }
   } catch (error) {
-    console.error(
-      `Error in getMyValidCreditPackTicketsEndToEnd: ${error.message}`
+    browserLogger.error(
+      `Error in getMyValidCreditPackTicketsEndToEnd: ${
+        (error as Error).message
+      }`
     );
     return [];
   }
@@ -725,7 +766,7 @@ export async function estimateCreditPackCostEndToEnd(
     if (!pastelID || !passphrase) {
       throw new Error("PastelID or passphrase is not set");
     }
-    const inferenceClient = new PastelInferenceClient(pastelID, passphrase);
+    const inferenceClient = new PastelInferenceClient({ pastelID, passphrase });
     const estimatedTotalCostOfTicket =
       await inferenceClient.internalEstimateOfCreditPackTicketCostInPSL(
         desiredNumberOfCredits,
@@ -733,7 +774,9 @@ export async function estimateCreditPackCostEndToEnd(
       );
     return estimatedTotalCostOfTicket;
   } catch (error) {
-    console.error(`Error in estimateCreditPackCostEndToEnd: ${error.message}`);
+    browserLogger.error(
+      `Error in estimateCreditPackCostEndToEnd: ${(error as Error).message}`
+    );
     throw error;
   }
 }
@@ -747,7 +790,7 @@ export async function handleInferenceRequestEndToEnd(
     if (!pastelID || !passphrase) {
       throw new Error("PastelID or passphrase is not set");
     }
-    const inferenceClient = new PastelInferenceClient(pastelID, passphrase);
+    const inferenceClient = new PastelInferenceClient({ pastelID, passphrase });
     const modelParametersJSON = utils.safeStringify(params.modelParameters);
 
     // Get the closest N supernode URLs that support the desired model, ordered by response time
@@ -766,9 +809,9 @@ export async function handleInferenceRequestEndToEnd(
       return null;
     }
 
-    let inferenceResultDict: any = null;
-    let auditResults: any = null;
-    let validationResults: any = null;
+    let inferenceResultDict: InferenceResultDict | null = null;
+    let auditResults: AuditResult[] | null = null;
+    let validationResults: ValidationResult | null = null;
     let error: Error | null = null;
 
     // Limit to trying the 5 fastest supernodes (based on response times)
@@ -843,13 +886,13 @@ export async function handleInferenceRequestEndToEnd(
         const inferenceResponseID =
           usageRequestResponseDict.inference_response_id;
         const proposedCostInCredits = parseFloat(
-          usageRequestResponseDict.proposed_cost_of_request_in_inference_credits
+          usageRequestResponseDict.proposed_cost_of_request_in_inference_credits.toString()
         );
         const creditUsageTrackingPSLAddress =
           usageRequestResponseDict.credit_usage_tracking_psl_address;
         const creditUsageTrackingAmountInPSL =
           parseFloat(
-            usageRequestResponseDict.request_confirmation_message_amount_in_patoshis
+            usageRequestResponseDict.request_confirmation_message_amount_in_patoshis.toString()
           ) / 100000;
         const trackingAddressBalance = await rpc.checkPSLAddressBalance(
           creditUsageTrackingPSLAddress
@@ -936,7 +979,6 @@ export async function handleInferenceRequestEndToEnd(
                   );
 
                 const outputResultsDict = outputResults;
-                const outputResultsSize =
                   outputResults.inference_result_json_base64.length;
                 const maxResponseSizeToLog = 20000;
 
@@ -949,11 +991,11 @@ export async function handleInferenceRequestEndToEnd(
                 };
 
                 if (params.modelInferenceTypeString === "text_to_image") {
-                  let jsonString = atob(
+                  const jsonString = atob(
                     outputResults.inference_result_json_base64
                   );
-                  let jsonObject = JSON.parse(jsonString);
-                  let imageBase64 = jsonObject.image;
+                  const jsonObject = JSON.parse(jsonString);
+                  const imageBase64 = jsonObject.image;
                   inferenceResultDict.generated_image_decoded =
                     atob(imageBase64);
                 } else if (
@@ -962,7 +1004,7 @@ export async function handleInferenceRequestEndToEnd(
                   const inferenceResultDecoded = atob(
                     outputResults.inference_result_json_base64
                   );
-                  let zipBinary = atob(inferenceResultDecoded);
+                  const zipBinary = atob(inferenceResultDecoded);
                   inferenceResultDict.zip_file_data = zipBinary;
                 } else {
                   const inferenceResultDecoded = atob(
@@ -1045,7 +1087,9 @@ export async function handleInferenceRequestEndToEnd(
       );
     }
   } catch (error) {
-    console.error(`Error in handleInferenceRequestEndToEnd: ${error.message}`);
+    console.error(
+      `Error in handleInferenceRequestEndToEnd: ${(error as Error).message}`
+    );
     throw error;
   }
 

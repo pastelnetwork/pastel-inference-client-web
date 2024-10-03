@@ -126,3 +126,12 @@ export async function getNetworkFromLocalStorage(): Promise<string> {
 export async function setNetworkInLocalStorage(network: string): Promise<void> {
   return browserStorage.setNetworkInLocalStorage(network);
 }
+
+export async function storeSecureContainer(
+    pastelID: string,
+    secureContainer: string,
+    network: string
+  ): Promise<void> {
+    const key = `secureContainer_${pastelID}_${network}`;
+    localStorage.setItem(key, secureContainer);
+  }

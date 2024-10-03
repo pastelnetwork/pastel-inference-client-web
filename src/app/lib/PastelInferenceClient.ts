@@ -1,12 +1,10 @@
 // src/app/lib/PastelInferenceClient.ts
 
-import BrowserRPCReplacement from './BrowserRPCReplacement';
-import { BrowserDatabase } from './BrowserDatabase';
-import * as storage from './storage';
-import * as utils from './utils';
-import * as validationSchemas from './validationSchemas';
-import browserLogger from '@/app/lib/logger';
-import pastelGlobals from '@/app/lib/globals';
+import BrowserRPCReplacement from "./BrowserRPCReplacement";
+import { BrowserDatabase } from "./BrowserDatabase";
+import * as utils from "./utils";
+import * as validationSchemas from "./validationSchemas";
+import browserLogger from "@/app/lib/logger";
 import {
   PastelInferenceClientConfig,
   ChallengeResponse,
@@ -22,57 +20,80 @@ import {
   CreditPackPurchaseRequestConfirmation,
   CreditPackStorageRetryRequest,
   CreditPackStorageRetryRequestResponse,
+  CreditPackPurchaseRequestConfirmationResponse,
+  CreditPackRequestStatusCheck,
   InferenceRequestData,
   InferenceAPIUsageResponse,
   InferenceAPIOutputResult,
   InferenceConfirmationData,
-} from '@/app/types';
+  CreditPackPurchaseRequestRejection,
+  CreditPackPurchaseRequestResponseTermination,
+  CreditPackPurchaseRequestStatus,
+} from "@/app/types";
 
 const rpc = new BrowserRPCReplacement();
 const db = new BrowserDatabase();
 
 class PastelInferenceClient {
-    private pastelID: string;
-    private passphrase: string;
+  private pastelID: string;
+  private passphrase: string;
+
+  constructor(config: PastelInferenceClientConfig) {
+    this.pastelID = config.pastelID;
+    this.passphrase = config.passphrase;
+  }
+
+  public getPastelID(): string {
+    return this.pastelID;
+  }
   
-    constructor(config: PastelInferenceClientConfig) {
-      this.pastelID = config.pastelID;
-      this.passphrase = config.passphrase;
-    }
-  
-    private async requestAndSignChallenge(supernodeURL: string): Promise<ChallengeResponse> {
-      try {
-        const response = await fetch(`${supernodeURL}/request_challenge/${this.pastelID}`);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const { challenge, challenge_id } = await response.json();
-        const challenge_signature = await rpc.signMessageWithPastelID(
-          this.pastelID,
-          challenge,
-          this.passphrase
-        );
-        return {
-          challenge,
-          challenge_id,
-          challenge_signature,
-        };
-      } catch (error) {
-        browserLogger.error(`Error requesting and signing challenge: ${utils.safeStringify(error)}`);
-        throw error;
-      }
-    }
-  
-  async sendUserMessage(supernodeURL: string, userMessage: UserMessage): Promise<UserMessage> {
+  private async requestAndSignChallenge(
+    supernodeURL: string
+  ): Promise<ChallengeResponse> {
     try {
-      const { error } = await validationSchemas.userMessageSchema.validate(userMessage);
-      if (error) {
-        throw new Error(`Invalid user message: ${error.message}`);
+      const response = await fetch(
+        `${supernodeURL}/request_challenge/${this.pastelID}`
+      );
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const { challenge, challenge_id } = await response.json();
+      const challenge_signature = await rpc.signMessageWithPastelID(
+        this.pastelID,
+        challenge,
+        this.passphrase
+      );
+      return {
+        challenge,
+        challenge_id,
+        challenge_signature,
+      };
+    } catch (error) {
+      browserLogger.error(
+        `Error requesting and signing challenge: ${utils.safeStringify(error)}`
+      );
+      throw error;
+    }
+  }
+
+  async sendUserMessage(
+    supernodeURL: string,
+    userMessage: UserMessage
+  ): Promise<UserMessage> {
+    try {
+      const validationResult =
+        validationSchemas.userMessageSchema.safeParse(userMessage);
+      if (!validationResult.success) {
+        throw new Error(
+          `Invalid user message: ${validationResult.error.message}`
+        );
       }
-      const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
 
       const payload = userMessage;
       const response = await fetch(`${supernodeURL}/send_user_message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_message: payload,
           challenge,
@@ -80,39 +101,53 @@ class PastelInferenceClient {
           challenge_signature,
         }),
       });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
-      const { resultError, value: validatedResult } = await validationSchemas.userMessageSchema.validate(result);
-      if (resultError) {
-        throw new Error(`Invalid user message: ${resultError.message}`);
-      }
-      await db.addData('UserMessage', validatedResult);
+      const validatedResult = validationSchemas.userMessageSchema.parse(result);
+      await db.addData("UserMessage", validatedResult);
       return validatedResult;
     } catch (error) {
-      console.error(`Error sending user message: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `Error sending user message: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       throw error;
     }
   }
 
   async getUserMessages(supernodeURL: string): Promise<UserMessage[]> {
     try {
-      const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
       const params = new URLSearchParams({
         pastelid: this.pastelID,
         challenge,
         challenge_id,
         challenge_signature,
       });
-      const response = await fetch(`${supernodeURL}/get_user_messages?${params}`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const result = await response.json();
-      const validatedResults = await Promise.all(
-        result.map((messageData: unknown) => validationSchemas.userMessageSchema.validate(messageData))
+      const response = await fetch(
+        `${supernodeURL}/get_user_messages?${params}`
       );
-      await Promise.all(validatedResults.map((message) => db.addData('UserMessage', message)));
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+      const validatedResults = result.map((messageData: unknown) =>
+        validationSchemas.userMessageSchema.parse(messageData)
+      );
+      await Promise.all(
+        validatedResults.map((message: UserMessage) =>
+          db.addData("UserMessage", message)
+        )
+      );
       return validatedResults;
     } catch (error) {
-      console.error(`Error retrieving user messages: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `Error retrieving user messages: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       throw error;
     }
   }
@@ -127,7 +162,7 @@ class PastelInferenceClient {
         this.pastelID,
         validMasternodeListFullDF
       );
-      let validResponses: SupernodeResponse[] = [];
+      const validResponses: SupernodeResponse[] = [];
 
       await new Promise<void>((resolve, reject) => {
         let completedRequests = 0;
@@ -137,44 +172,73 @@ class PastelInferenceClient {
             retryLimit
           )
             .then((response) => {
-              console.info(`Successful model menu response received from supernode at ${url}`);
+              console.info(
+                `Successful model menu response received from supernode at ${url}`
+              );
               validResponses.push({ response, url });
               if (validResponses.length >= minimumNumberOfResponses) {
                 resolve();
               }
             })
             .catch((error) => {
-              console.error(`Error querying supernode at ${url}: ${error instanceof Error ? error.message : String(error)}`);
+              console.error(
+                `Error querying supernode at ${url}: ${
+                  error instanceof Error ? error.message : String(error)
+                }`
+              );
               completedRequests++;
-              if (completedRequests > closestSupernodes.length - minimumNumberOfResponses + validResponses.length) {
-                reject(new Error('Insufficient valid responses received from supernodes'));
+              if (
+                completedRequests >
+                closestSupernodes.length -
+                  minimumNumberOfResponses +
+                  validResponses.length
+              ) {
+                reject(
+                  new Error(
+                    "Insufficient valid responses received from supernodes"
+                  )
+                );
               }
             });
         });
       });
 
       const largestResponse = validResponses.reduce((prev, current) => {
-        return JSON.stringify(current.response).length > JSON.stringify(prev.response).length ? current : prev;
+        return JSON.stringify(current.response).length >
+          JSON.stringify(prev.response).length
+          ? current
+          : prev;
       }).response as ModelMenu;
 
       return largestResponse;
     } catch (error) {
-      console.error(`Error in getModelMenu: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `Error in getModelMenu: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       throw error;
     }
   }
 
-  private async getModelMenuFromSupernode(supernodeURL: string): Promise<ModelMenu | null> {
+  private async getModelMenuFromSupernode(
+    supernodeURL: string
+  ): Promise<ModelMenu | null> {
     try {
       const response = await fetch(`${supernodeURL}/get_inference_model_menu`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
-    } catch (error) {
+    } catch {
       return null;
     }
   }
 
-  private async retryPromise<T>(promiseFunc: () => Promise<T>, limit: number, count = 0): Promise<T> {
+  private async retryPromise<T>(
+    promiseFunc: () => Promise<T>,
+    limit: number,
+    count = 0
+  ): Promise<T> {
     try {
       return await promiseFunc();
     } catch (error) {
@@ -186,13 +250,16 @@ class PastelInferenceClient {
     }
   }
 
-  async getValidCreditPackTicketsForPastelID(supernodeURL: string): Promise<ValidCreditPackTicket[]> {
+  async getValidCreditPackTicketsForPastelID(
+    supernodeURL: string
+  ): Promise<ValidCreditPackTicket[]> {
     const useVerbose = false;
     try {
       if (!this.pastelID) {
         return [];
       }
-      const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
       const payload = {
         pastelid: this.pastelID,
         challenge,
@@ -200,28 +267,42 @@ class PastelInferenceClient {
         challenge_signature,
       };
       if (useVerbose) {
-        utils.logActionWithPayload('retrieving', 'valid credit pack tickets for PastelID', payload);
+        utils.logActionWithPayload(
+          "retrieving",
+          "valid credit pack tickets for PastelID",
+          payload
+        );
       }
-      const response = await fetch(`${supernodeURL}/get_valid_credit_pack_tickets_for_pastelid`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        `${supernodeURL}/get_valid_credit_pack_tickets_for_pastelid`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
       if (!response.ok) {
         if (useVerbose) {
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
         return [];
       }
-      const validCreditPackTickets: ValidCreditPackTicket[] = await response.json();
+      const validCreditPackTickets: ValidCreditPackTicket[] =
+        await response.json();
       if (useVerbose && validCreditPackTickets.length) {
-        console.info(`Received ${validCreditPackTickets.length} valid credit pack tickets for PastelID ${this.pastelID}`);
+        console.info(
+          `Received ${validCreditPackTickets.length} valid credit pack tickets for PastelID ${this.pastelID}`
+        );
       }
 
       return validCreditPackTickets;
     } catch (error) {
       if (useVerbose) {
-        console.error(`Error retrieving valid credit pack tickets for PastelID: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(
+          `Error retrieving valid credit pack tickets for PastelID: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
       }
       if (useVerbose) {
         throw error;
@@ -230,39 +311,58 @@ class PastelInferenceClient {
     }
   }
 
-  async checkCreditPackBalance(supernodeURL: string, txid: string): Promise<BalanceInfo> {
+  async checkCreditPackBalance(
+    supernodeURL: string,
+    txid: string
+  ): Promise<BalanceInfo> {
     try {
-      const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
       const payload = {
         credit_pack_ticket_txid: txid,
         challenge,
         challenge_id,
         challenge_signature,
       };
-      utils.logActionWithPayload('checking', 'credit pack balance', payload);
+      utils.logActionWithPayload("checking", "credit pack balance", payload);
 
-      const response = await fetch(`${supernodeURL}/check_credit_pack_balance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        `${supernodeURL}/check_credit_pack_balance`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
 
       const balanceInfo: BalanceInfo = await response.json();
-      console.info(`Received credit pack balance info for txid ${txid}: ${JSON.stringify(balanceInfo)}`);
+      console.info(
+        `Received credit pack balance info for txid ${txid}: ${JSON.stringify(
+          balanceInfo
+        )}`
+      );
       return balanceInfo;
     } catch (error) {
-      console.error(`Error checking credit pack balance for txid ${txid}: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `Error checking credit pack balance for txid ${txid}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       throw error;
     }
   }
 
-  async getCreditPackTicketFromTxid(supernodeURL: string, txid: string): Promise<CreditPackTicketInfo> {
+  async getCreditPackTicketFromTxid(
+    supernodeURL: string,
+    txid: string
+  ): Promise<CreditPackTicketInfo> {
     try {
-      const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
       const params = new URLSearchParams({
         txid,
         pastelid: this.pastelID,
@@ -270,9 +370,15 @@ class PastelInferenceClient {
         challenge_id,
         challenge_signature,
       });
-      utils.logActionWithPayload('retrieving', 'credit pack ticket from txid', params);
+      utils.logActionWithPayload(
+        "retrieving",
+        "credit pack ticket from txid",
+        params
+      );
 
-      const response = await fetch(`${supernodeURL}/get_credit_pack_ticket_from_txid?${params}`);
+      const response = await fetch(
+        `${supernodeURL}/get_credit_pack_ticket_from_txid?${params}`
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
@@ -283,641 +389,905 @@ class PastelInferenceClient {
         credit_pack_purchase_request_confirmation,
       } = await response.json();
 
-      utils.logActionWithPayload('received', 'credit pack ticket from Supernode', {
-        credit_pack_purchase_request_response,
-        credit_pack_purchase_request_confirmation,
-      });
+      utils.logActionWithPayload(
+        "received",
+        "credit pack ticket from Supernode",
+        {
+          credit_pack_purchase_request_response,
+          credit_pack_purchase_request_confirmation,
+        }
+      );
 
-      const { errorRequestResponse, value: validatedRequestResponse } =
-        await validationSchemas.creditPackPurchaseRequestResponseSchema.validate(credit_pack_purchase_request_response);
-      if (errorRequestResponse) {
-        throw new Error(`Invalid credit pack request response: ${errorRequestResponse.message}`);
-      }
-      const { errorRequestConfirmation, value: validatedRequestConfirmation } =
-        await validationSchemas.creditPackPurchaseRequestConfirmationSchema.validate(credit_pack_purchase_request_confirmation);
-      if (errorRequestConfirmation) {
-        throw new Error(`Invalid credit pack request confirmation: ${errorRequestConfirmation.message}`);
-      }
+      const validatedRequestResponse =
+        validationSchemas.creditPackPurchaseRequestResponseSchema.parse(
+          credit_pack_purchase_request_response
+        );
+        const validatedRequestConfirmation = validationSchemas.creditPackPurchaseRequestConfirmationSchema.parse(
+            credit_pack_purchase_request_confirmation
+          ) as CreditPackPurchaseRequestConfirmation;
+
       return {
-        creditPackPurchaseRequestResponse: validatedRequestResponse,
-        creditPackPurchaseRequestConfirmation: validatedRequestConfirmation,
+        requestResponse:
+          validatedRequestResponse as CreditPackPurchaseRequestResponse,
+        requestConfirmation:
+          validatedRequestConfirmation as CreditPackPurchaseRequestConfirmation,
+        balanceInfo: {
+          credit_pack_current_credit_balance: 0,
+          balance_as_of_datetime: new Date().toISOString(),
+        },
       };
     } catch (error) {
-      console.error(`Error retrieving credit pack ticket from txid: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `Error retrieving credit pack ticket from txid: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
     }
+  }
 
-
-    async creditPackTicketInitialPurchaseRequest(
-        supernodeURL: string,
-        creditPackRequest: CreditPackPurchaseRequest
-      ): Promise<PreliminaryPriceQuote | CreditPackPurchaseRequestRejection> {
-        try {
-          const { error, value: validatedCreditPackRequest } =
-            await validationSchemas.creditPackPurchaseRequestSchema.validate(creditPackRequest);
-          if (error) {
-            throw new Error(`Invalid credit pack request: ${error.message}`);
-          }
-          await db.addData('CreditPackPurchaseRequest', validatedCreditPackRequest);
-          utils.logActionWithPayload('requesting', 'a new Pastel credit pack ticket', validatedCreditPackRequest);
-          const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
-          let preparedCreditPackRequest = await utils.prepareModelForEndpoint(creditPackRequest);
-          const response = await fetch(`${supernodeURL}/credit_purchase_initial_request`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              challenge,
-              challenge_id,
-              challenge_signature,
-              credit_pack_request: preparedCreditPackRequest,
-            }),
-          });
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const result = await response.json();
-    
-          if ('rejection_reason_string' in result) {
-            console.error(`Credit pack purchase request rejected: ${result.rejection_reason_string}`);
-            let rejectionResponse = await utils.prepareModelForValidation(result);
-            const { rejectionError, value: validatedRejection } =
-              await validationSchemas.creditPackPurchaseRequestRejectionSchema.validate(rejectionResponse);
-            if (rejectionError) {
-              throw new Error(`Invalid credit pack purchase request rejection: ${rejectionError.message}`);
-            }
-            await db.addData('CreditPackPurchaseRequestRejection', validatedRejection);
-            return validatedRejection;
-          } else {
-            utils.logActionWithPayload('receiving', 'response to credit pack purchase request', result);
-            let preparedResult = await utils.prepareModelForValidation(result);
-            const { priceQuoteError, value: validatedPriceQuote } =
-              await validationSchemas.creditPackPurchaseRequestPreliminaryPriceQuoteSchema.validate(preparedResult);
-            if (priceQuoteError) {
-              throw new Error(`Invalid credit pack request: ${priceQuoteError.message}`);
-            }
-            await db.addData('CreditPackPurchaseRequestPreliminaryPriceQuote', validatedPriceQuote);
-            return validatedPriceQuote;
-          }
-        } catch (error) {
-          console.error(`Error initiating credit pack ticket purchase: ${utils.safeStringify(error)}`);
-          throw error;
-        }
-      }
-    
-      private async calculatePriceDifferencePercentage(quotedPrice: number, estimatedPrice: number): Promise<number> {
-        if (estimatedPrice === 0) {
-          throw new Error('Estimated price cannot be zero.');
-        }
-        return Math.abs(quotedPrice - estimatedPrice) / estimatedPrice;
-      }
-    
-      private async confirmPreliminaryPriceQuote(
-        preliminaryPriceQuote: PreliminaryPriceQuote,
-        maximumTotalCreditPackPriceInPSL: number,
-        maximumPerCreditPriceInPSL: number
-      ): Promise<boolean> {
-        if (!maximumTotalCreditPackPriceInPSL && !maximumPerCreditPriceInPSL) {
-          maximumPerCreditPriceInPSL = parseFloat(
-            localStorage.getItem('MAXIMUM_PER_CREDIT_PRICE_IN_PSL_FOR_CLIENT') || '0.1'
-          );
-        }
-        const {
-          preliminary_quoted_price_per_credit_in_psl: quotedPricePerCredit,
-          preliminary_total_cost_of_credit_pack_in_psl: quotedTotalPrice,
-          credit_pack_purchase_request_fields_json_b64: requestFieldsB64,
-        } = preliminaryPriceQuote;
-        let requestFields = JSON.parse(atob(requestFieldsB64));
-        const { requested_initial_credits_in_credit_pack: requestedCredits } = requestFields;
-        if (!maximumTotalCreditPackPriceInPSL) {
-          maximumTotalCreditPackPriceInPSL = maximumPerCreditPriceInPSL * requestedCredits;
-        } else if (!maximumPerCreditPriceInPSL) {
-          maximumPerCreditPriceInPSL = maximumTotalCreditPackPriceInPSL / requestedCredits;
-        }
-        const estimatedPricePerCredit = await utils.estimatedMarketPriceOfInferenceCreditsInPSLTerms();
-        const priceDifferencePercentage = await this.calculatePriceDifferencePercentage(
-          quotedPricePerCredit,
-          estimatedPricePerCredit
+  async creditPackTicketInitialPurchaseRequest(
+    supernodeURL: string,
+    creditPackRequest: CreditPackPurchaseRequest
+  ): Promise<PreliminaryPriceQuote | CreditPackPurchaseRequestRejection> {
+    try {
+      const validatedCreditPackRequest =
+        validationSchemas.creditPackPurchaseRequestSchema.parse(
+          creditPackRequest
         );
-    
-        const MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING = parseFloat(
-          localStorage.getItem('MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING') || '0.001'
+      await db.addData("CreditPackPurchaseRequest", validatedCreditPackRequest);
+      utils.logActionWithPayload(
+        "requesting",
+        "a new Pastel credit pack ticket",
+        validatedCreditPackRequest
+      );
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
+      const preparedCreditPackRequest = await utils.prepareModelForEndpoint(
+        creditPackRequest
+      );
+      const response = await fetch(
+        `${supernodeURL}/credit_purchase_initial_request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            challenge,
+            challenge_id,
+            challenge_signature,
+            credit_pack_request: preparedCreditPackRequest,
+          }),
+        }
+      );
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+
+      if ("rejection_reason_string" in result) {
+        console.error(
+          `Credit pack purchase request rejected: ${result.rejection_reason_string}`
         );
-    
-        const numberFormat = new Intl.NumberFormat('en-US');
-        const percentageFormat = (value: number) => value.toFixed(2);
-    
-        if (
-          quotedPricePerCredit <= maximumPerCreditPriceInPSL &&
-          quotedTotalPrice <= maximumTotalCreditPackPriceInPSL &&
-          priceDifferencePercentage <= MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING
-        ) {
-          console.info(
-            `Preliminary price quote is within the acceptable range: ${numberFormat.format(
-              quotedPricePerCredit
-            )} PSL per credit, ${numberFormat.format(
-              quotedTotalPrice
-            )} PSL total, which is within the maximum of ${numberFormat.format(
-              maximumPerCreditPriceInPSL
-            )} PSL per credit and ${numberFormat.format(
-              maximumTotalCreditPackPriceInPSL
-            )} PSL total. The price difference from the estimated fair market price is ${percentageFormat(
-              priceDifferencePercentage * 100
-            )}%, which is within the allowed maximum of ${percentageFormat(
-              MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING * 100
-            )}%. Please be patient while the new credit pack request is initialized.`
+        const rejectionResponse = await utils.prepareModelForValidation(result);
+        const validatedRejection =
+          validationSchemas.creditPackPurchaseRequestRejectionSchema.parse(
+            rejectionResponse
           );
-          return true;
-        } else {
-          console.warn(
-            `Preliminary price quote exceeds the maximum acceptable price or the price difference from the estimated fair price is too high! Quoted price: ${numberFormat.format(
-              quotedPricePerCredit
-            )} PSL per credit, ${numberFormat.format(
-              quotedTotalPrice
-            )} PSL total, maximum price: ${numberFormat.format(
-              maximumPerCreditPriceInPSL
-            )} PSL per credit, ${numberFormat.format(
-              maximumTotalCreditPackPriceInPSL
-            )} PSL total. The price difference from the estimated fair market price is ${percentageFormat(
-              priceDifferencePercentage * 100
-            )}%, which exceeds the allowed maximum of ${percentageFormat(
-              MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING * 100
-            )}%.`
+        await db.addData(
+          "CreditPackPurchaseRequestRejection",
+          validatedRejection
+        );
+        return validatedRejection;
+      } else {
+        utils.logActionWithPayload(
+          "receiving",
+          "response to credit pack purchase request",
+          result
+        );
+        const preparedResult = await utils.prepareModelForValidation(result);
+        const validatedPriceQuote =
+          validationSchemas.creditPackPurchaseRequestPreliminaryPriceQuoteSchema.parse(
+            preparedResult
           );
-          return false;
-        }
+        await db.addData(
+          "CreditPackPurchaseRequestPreliminaryPriceQuote",
+          validatedPriceQuote
+        );
+        return validatedPriceQuote;
       }
-    
-      async internalEstimateOfCreditPackTicketCostInPSL(
-        desiredNumberOfCredits: number,
-        priceCushionPercentage: number
-      ): Promise<number> {
-        const estimatedPricePerCredit = await utils.estimatedMarketPriceOfInferenceCreditsInPSLTerms();
-        return Math.round(desiredNumberOfCredits * estimatedPricePerCredit * (1 + priceCushionPercentage) * 100) / 100;
-      }
-    
-      async creditPackTicketPreliminaryPriceQuoteResponse(
-        supernodeURL: string,
-        creditPackRequest: CreditPackPurchaseRequest,
-        preliminaryPriceQuote: PreliminaryPriceQuote,
-        maximumTotalCreditPackPriceInPSL: number,
-        maximumPerCreditPriceInPSL: number
-      ): Promise<CreditPackPurchaseRequestResponse | CreditPackPurchaseRequestResponseTermination> {
-        try {
-          if ('rejection_reason_string' in preliminaryPriceQuote) {
-            console.error(`Credit pack purchase request rejected: ${preliminaryPriceQuote.rejection_reason_string}`);
-            return preliminaryPriceQuote as CreditPackPurchaseRequestResponseTermination;
-          }
-    
-          const agreeWithPriceQuote = await this.confirmPreliminaryPriceQuote(
-            preliminaryPriceQuote,
-            maximumTotalCreditPackPriceInPSL,
-            maximumPerCreditPriceInPSL
-          );
-    
-          console.info(`Agree with price quote: ${agreeWithPriceQuote}; responding to preliminary price quote to Supernode at ${supernodeURL}...`);
-          const priceQuoteResponse = {
-            sha3_256_hash_of_credit_pack_purchase_request_fields: creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields,
-            sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_fields: preliminaryPriceQuote.sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_fields,
-            credit_pack_purchase_request_fields_json_b64: preliminaryPriceQuote.credit_pack_purchase_request_fields_json_b64,
-            agree_with_preliminary_price_quote: agreeWithPriceQuote,
-            credit_usage_tracking_psl_address: preliminaryPriceQuote.credit_usage_tracking_psl_address,
-            preliminary_quoted_price_per_credit_in_psl: parseFloat(preliminaryPriceQuote.preliminary_quoted_price_per_credit_in_psl.toString()),
-            preliminary_price_quote_response_timestamp_utc_iso_string: new Date().toISOString(),
-            preliminary_price_quote_response_pastel_block_height: await rpc.getCurrentPastelBlockHeight(),
-            preliminary_price_quote_response_message_version_string: '1.0',
-            requesting_end_user_pastelid: creditPackRequest.requesting_end_user_pastelid,
-            sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_response_fields: '',
-            requesting_end_user_pastelid_signature_on_preliminary_price_quote_response_hash: '',
-          };
-    
-          // Compute hashes and signatures
-          priceQuoteResponse.sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_response_fields =
-            await utils.computeSHA3256HashOfSQLModelResponseFields(priceQuoteResponse);
-          priceQuoteResponse.requesting_end_user_pastelid_signature_on_preliminary_price_quote_response_hash =
-            await rpc.signMessageWithPastelID(
-              creditPackRequest.requesting_end_user_pastelid,
-              priceQuoteResponse.sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_response_fields,
-              this.passphrase
-            );
-    
-          // Validate the price quote response
-          const { error: priceQuoteValidationError, value: validatedPriceQuoteResponse } =
-            await validationSchemas.creditPackPurchaseRequestPreliminaryPriceQuoteResponseSchema.validate(priceQuoteResponse);
-          if (priceQuoteValidationError) {
-            throw new Error(`Invalid price quote response: ${priceQuoteValidationError.message}`);
-          }
-    
-          // Prepare model for endpoint before sending
-          let preparedPriceQuoteResponse = await utils.prepareModelForEndpoint(validatedPriceQuoteResponse);
-    
-          delete preparedPriceQuoteResponse.id;
-          preparedPriceQuoteResponse.agree_with_preliminary_price_quote =
-            preparedPriceQuoteResponse.agree_with_preliminary_price_quote ? 1 : 0;
-    
-          // Prepare and send the payload to the supernode
-          const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
-          const completePriceQuoteResponse = {
-            challenge,
-            challenge_id,
-            challenge_signature,
-            preliminary_price_quote_response: preparedPriceQuoteResponse,
-          };
-    
-          const response = await fetch(`${supernodeURL}/credit_purchase_preliminary_price_quote_response`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(completePriceQuoteResponse),
-          });
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const result = await response.json();
-    
-          if ('termination_reason_string' in result) {
-            console.error(`Credit pack purchase request response terminated: ${result.termination_reason_string}`);
-            const terminationResponse = await utils.prepareModelForValidation(result);
-            const { error: terminationError, value: validatedTermination } =
-              await validationSchemas.creditPackPurchaseRequestResponseTerminationSchema.validate(terminationResponse);
-            if (terminationError) {
-              throw new Error(`Invalid credit pack purchase request response termination: ${terminationError.message}`);
-            }
-            await db.addData('CreditPackPurchaseRequestResponseTermination', validatedTermination);
-            return validatedTermination;
-          } else {
-            let transformedResult = utils.transformCreditPackPurchaseRequestResponse(
-              await utils.prepareModelForValidation(result)
-            );
-            utils.logActionWithPayload('receiving', 'response to credit pack purchase request', transformedResult);
-            const { error: resultError, value: validatedResponse } =
-              await validationSchemas.creditPackPurchaseRequestResponseSchema.validate(transformedResult);
-            if (resultError) {
-              throw new Error(`Invalid credit pack purchase request response: ${resultError.message}`);
-            }
-            await db.addData('CreditPackPurchaseRequestResponse', validatedResponse);
-            return validatedResponse;
-          }
-        } catch (error) {
-          console.error(`Error responding to preliminary price quote: ${utils.safeStringify(error)}`);
-          throw error;
-        }
-      }
-    
-      async confirmCreditPurchaseRequest(
-        supernodeURL: string,
-        creditPackPurchaseRequestConfirmation: CreditPackPurchaseRequestConfirmation
-      ): Promise<CreditPackPurchaseRequestConfirmationResponse> {
-        try {
-          const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
-          const payload = await utils.prepareModelForEndpoint(creditPackPurchaseRequestConfirmation);
-          utils.logActionWithPayload('confirming', 'credit pack purchase request', payload);
-          const response = await fetch(`${supernodeURL}/confirm_credit_purchase_request`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              confirmation: payload,
-              challenge,
-              challenge_id,
-
-              challenge_signature,
-            }),
-          });
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const result = await response.json();
-          utils.logActionWithPayload('receiving', 'response to credit pack purchase confirmation', result);
-          const { error: validationError, value: validatedResult } =
-            await validationSchemas.creditPackPurchaseRequestConfirmationResponseSchema.validate(result);
-          if (validationError) {
-            throw new Error(`Invalid credit pack purchase request confirmation response: ${validationError.message}`);
-          }
-          await db.addData('CreditPackPurchaseRequestConfirmationResponse', validatedResult);
-          return validatedResult;
-        } catch (error) {
-          console.error(`Error confirming credit pack purchase request: ${utils.safeStringify(error)}`);
-          throw error;
-        }
-      }
-    
-      async checkStatusOfCreditPurchaseRequest(
-        supernodeURL: string,
-        creditPackPurchaseRequestHash: string
-      ): Promise<CreditPackPurchaseRequestStatus> {
-        try {
-          const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
-          const statusCheck = {
-            sha3_256_hash_of_credit_pack_purchase_request_fields: creditPackPurchaseRequestHash,
-            requesting_end_user_pastelid: this.pastelID,
-            requesting_end_user_pastelid_signature_on_sha3_256_hash_of_credit_pack_purchase_request_fields:
-              await rpc.signMessageWithPastelID(
-                this.pastelID,
-                creditPackPurchaseRequestHash,
-                this.passphrase
-              ),
-          };
-          const { error: validationError, value: validatedStatusCheck } =
-            await validationSchemas.creditPackRequestStatusCheckSchema.validate(statusCheck);
-          if (validationError) {
-            console.error(`Invalid credit pack request status check: ${validationError.message}`);
-            throw new Error(`Invalid credit pack request status check: ${validationError.message}`);
-          }
-          delete (validatedStatusCheck as any).id;
-          utils.logActionWithPayload('checking', 'status of credit pack purchase request', validatedStatusCheck);
-          const response = await fetch(`${supernodeURL}/check_status_of_credit_purchase_request`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              credit_pack_request_status_check: validatedStatusCheck,
-              challenge,
-              challenge_id,
-              challenge_signature,
-            }),
-          });
-          if (!response.ok) {
-            throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-          }
-          const responseData = await response.json();
-          utils.logActionWithPayload('receiving', 'credit pack purchase request response from Supernode', responseData);
-          let transformedResult = await utils.prepareModelForValidation(responseData);
-          delete (transformedResult as any).id;
-          const { error: resultError, value: validatedResult } =
-            await validationSchemas.creditPackPurchaseRequestStatusSchema.validate(transformedResult);
-          if (resultError) {
-            throw new Error(`Invalid credit pack purchase request status: ${resultError.message}`);
-          }
-          await db.addData('CreditPackPurchaseRequestStatus', validatedResult);
-          return validatedResult;
-        } catch (error) {
-          console.error(`Error checking status of credit purchase request: ${utils.safeStringify(error)}`);
-          throw error;
-        }
-      }
-    
-      async creditPackPurchaseCompletionAnnouncement(
-        supernodeURL: string,
-        creditPackPurchaseRequestConfirmation: CreditPackPurchaseRequestConfirmation
-      ): Promise<void> {
-        try {
-          const { error, value: validatedConfirmation } =
-            await validationSchemas.creditPackPurchaseRequestConfirmationSchema.validate(creditPackPurchaseRequestConfirmation);
-          if (error) {
-            console.error(`Invalid credit pack purchase request confirmation: ${error.message}`);
-            return;
-          }
-    
-          const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
-    
-          let payload = validatedConfirmation;
-          delete (payload as any).id;
-    
-          const response = await fetch(`${supernodeURL}/credit_pack_purchase_completion_announcement`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              confirmation: payload,
-              challenge,
-              challenge_id,
-              challenge_signature,
-            }),
-          });
-    
-          if (!response.ok) {
-            console.error(`HTTP error ${response.status}: ${response.statusText}`);
-          } else {
-            console.info(`Credit pack purchase completion announcement sent successfully to ${supernodeURL}`);
-          }
-        } catch (error) {
-          if (error instanceof Error && error.name === 'AbortError') {
-            console.error(`Timeout error sending credit pack purchase completion announcement to ${supernodeURL}: ${error.message}`);
-          } else {
-            console.error(`Error sending credit pack purchase completion announcement to ${supernodeURL}: ${error instanceof Error ? error.message : String(error)}`);
-          }
-        }
-      }
-    
-      async creditPackStorageRetryRequest(
-        supernodeURL: string,
-        creditPackStorageRetryRequest: CreditPackStorageRetryRequest
-      ): Promise<CreditPackStorageRetryRequestResponse> {
-        try {
-          const { error, value: validatedRequest } =
-            await validationSchemas.creditPackStorageRetryRequestSchema.validate(creditPackStorageRetryRequest);
-          if (error) {
-            throw new Error(`Invalid credit pack storage retry request: ${error.message}`);
-          }
-    
-          await db.addData('CreditPackStorageRetryRequest', validatedRequest);
-    
-          const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
-    
-          const payload = await utils.prepareModelForEndpoint(validatedRequest);
-          utils.logActionWithPayload('sending', 'credit pack storage retry request', payload);
-    
-          const response = await fetch(`${supernodeURL}/credit_pack_storage_retry_request`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              request: payload,
-              challenge,
-              challenge_id,
-              challenge_signature,
-            }),
-          });
-    
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const result = await response.json();
-          utils.logActionWithPayload('receiving', 'response to credit pack storage retry request', result);
-    
-          let transformedResult = await utils.prepareModelForValidation(result);
-          const { error: responseError, value: validatedResponse } =
-            await validationSchemas.creditPackStorageRetryRequestResponseSchema.validate(transformedResult);
-          if (responseError) {
-            throw new Error(`Invalid credit pack storage retry request response: ${responseError.message}`);
-          }
-    
-          await db.addData('CreditPackStorageRetryRequestResponse', validatedResponse);
-          return validatedResponse;
-        } catch (error) {
-          console.error(`Error sending credit pack storage retry request: ${utils.safeStringify(error)}`);
-          throw error;
-        }
-      }
-    
-      async creditPackStorageRetryCompletionAnnouncement(
-        supernodeURL: string,
-        creditPackStorageRetryRequestResponse: CreditPackStorageRetryRequestResponse
-      ): Promise<void> {
-        try {
-          const { error, value: validatedResponse } =
-            await validationSchemas.creditPackStorageRetryRequestResponseSchema.validate(creditPackStorageRetryRequestResponse);
-          if (error) {
-            throw new Error(`Invalid credit pack storage retry request response: ${error.message}`);
-          }
-    
-          await db.addData('CreditPackStorageRetryRequestResponse', validatedResponse);
-    
-          const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
-    
-          const payload = await utils.prepareModelForEndpoint(validatedResponse);
-          utils.logActionWithPayload('sending', 'storage retry completion announcement message', payload);
-    
-          const response = await fetch(`${supernodeURL}/credit_pack_storage_retry_completion_announcement`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              response: payload,
-              challenge,
-              challenge_id,
-              challenge_signature,
-            }),
-          });
-    
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        } catch (error) {
-          console.error(`Error sending credit pack storage retry completion announcement: ${utils.safeStringify(error)}`);
-          throw error;
-        }
-      }
-    
-      async retrieveCreditPackTicketFromPurchaseBurnTxid(supernodeURL: string, txid: string): Promise<unknown> {
-        try {
-          const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
-          const payload = {
-            purchase_burn_txid: txid,
-            challenge,
-            challenge_id,
-            challenge_signature,
-          };
-          utils.logActionWithPayload('retrieving', 'credit pack ticket from purchase burn txid', payload);
-    
-          const response = await fetch(`${supernodeURL}/retrieve_credit_pack_ticket_from_purchase_burn_txid`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-    
-          if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-    
-          const ticketInfo = await response.json();
-          console.info(`Received credit pack ticket for purchase burn txid ${txid}: ${JSON.stringify(ticketInfo)}`);
-          return ticketInfo;
-        } catch (error) {
-          console.error(`Error retrieving credit pack ticket for purchase burn txid ${txid}: ${error instanceof Error ? error.message : String(error)}`);
-          throw error;
-        }
-      }
-    
-      async getFinalCreditPackRegistrationTxidFromPurchaseBurnTxid(supernodeURL: string, purchaseBurnTxid: string): Promise<string> {
-        try {
-          const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
-          const payload = {
-            purchase_burn_txid: purchaseBurnTxid,
-            challenge,
-            challenge_id,
-            challenge_signature,
-          };
-          utils.logActionWithPayload('retrieving', 'final credit pack registration txid', payload);
-    
-          const response = await fetch(`${supernodeURL}/get_final_credit_pack_registration_txid_from_credit_purchase_burn_txid`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-    
-          if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-    
-          const responseData = await response.json();
-          const finalTxid = responseData.final_credit_pack_registration_txid;
-          console.info(`Received final credit pack registration txid for purchase burn txid ${purchaseBurnTxid}: ${finalTxid}`);
-          return finalTxid;
-        } catch (error) {
-          console.error(`Error retrieving final credit pack registration txid for purchase burn txid ${purchaseBurnTxid}: ${error instanceof Error ? error.message : String(error)}`);
-          throw error;
-        }
-      }
-    
-      async makeInferenceAPIUsageRequest(supernodeURL: string, requestData: InferenceRequestData): Promise<InferenceAPIUsageResponse> {
-        try {
-          const { error, value: validatedRequest } =
-            await validationSchemas.inferenceAPIUsageRequestSchema.validate(requestData);
-          if (error) {
-            throw new Error(`Invalid inference API usage request: ${error.message}`);
-          }
-          delete (validatedRequest as any).id;
-          await db.addData('InferenceAPIUsageRequest', validatedRequest);
-          const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
-          const payload = await utils.prepareModelForEndpoint(validatedRequest);
-          utils.logActionWithPayload('making', 'inference usage request', validatedRequest);
-          const response = await fetch(`${supernodeURL}/make_inference_api_usage_request`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              inference_api_usage_request: validatedRequest,
-              challenge,
-              challenge_id,
-              challenge_signature,
-            }),
-          });
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const result = await response.json();
-          utils.logActionWithPayload('received', 'response to inference usage request', result);
-          let transformedResult = await utils.prepareModelForValidation(result);
-          delete (transformedResult as any).id;
-          const { error: responseError, value: validatedResponse } =
-            await validationSchemas.inferenceAPIUsageResponseSchema.validate(transformedResult);
-          if (responseError) {
-            throw new Error(`Invalid inference API usage response: ${responseError.message}`);
-          }
-          await db.addData('InferenceAPIUsageResponse', validatedResponse);
-          return validatedResponse;
-        } catch (error) {
-          console.error(`Error making inference API usage request: ${utils.safeStringify(error)}`);
-          throw error;
-        }
-      }
-    
-      async sendInferenceConfirmation(supernodeURL: string, confirmationData: InferenceConfirmationData): Promise<unknown> {
-        try {
-          const confirmationDataJSON = confirmationData;
-          delete (confirmationDataJSON as any).id;
-    
-          const { error, value: validatedConfirmation } =
-            await validationSchemas.inferenceConfirmationSchema.validate(confirmationDataJSON);
-          if (error) {
-            throw new Error(`Invalid inference confirmation data: ${error.message}`);
-          }
-          await db.addData('InferenceConfirmation', validatedConfirmation);
-          const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
-    
-          const payload = await utils.prepareModelForEndpoint(validatedConfirmation);
-          utils.logActionWithPayload('sending', 'inference confirmation', payload);
-          const response = await fetch(`${supernodeURL}/confirm_inference_request`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              inference_confirmation: confirmationDataJSON,
-              challenge,
-              challenge_id,
-              challenge_signature,
-            }),
-          });
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const result = await response.json();
-          utils.logActionWithPayload('receiving', 'response to inference confirmation', result);
-    
-          return result;
-        } catch (error) {
-          console.error(`Error sending inference confirmation: ${utils.safeStringify(error)}`);
-          throw error;
-        }
-      }
-    
-      async checkStatusOfInferenceRequestResults(supernodeURL: string, inferenceResponseID: string): Promise<boolean> {
-        try {
-          console.info(`Checking status of inference request results for ID ${inferenceResponseID}`);
-    
-          const response = await fetch(`${supernodeURL}/check_status_of_inference_request_results/${inferenceResponseID}`);
-    
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const result = await response.json();
-          utils.logActionWithPayload('receiving', `status ofinference request results for ID ${inferenceResponseID}`, result);
-
-      return typeof result === 'boolean' ? result : false;
     } catch (error) {
-      console.error(`Error checking status of inference request results from Supernode URL: ${supernodeURL}: ${utils.safeStringify(error)}`);
+      console.error(
+        `Error initiating credit pack ticket purchase: ${utils.safeStringify(
+          error
+        )}`
+      );
+      throw error;
+    }
+  }
+
+  private async calculatePriceDifferencePercentage(
+    quotedPrice: number,
+    estimatedPrice: number
+  ): Promise<number> {
+    if (estimatedPrice === 0) {
+      throw new Error("Estimated price cannot be zero.");
+    }
+    return Math.abs(quotedPrice - estimatedPrice) / estimatedPrice;
+  }
+
+  private async confirmPreliminaryPriceQuote(
+    preliminaryPriceQuote: PreliminaryPriceQuote,
+    maximumTotalCreditPackPriceInPSL: number,
+    maximumPerCreditPriceInPSL: number
+  ): Promise<boolean> {
+    if (!maximumTotalCreditPackPriceInPSL && !maximumPerCreditPriceInPSL) {
+      maximumPerCreditPriceInPSL = parseFloat(
+        localStorage.getItem("MAXIMUM_PER_CREDIT_PRICE_IN_PSL_FOR_CLIENT") ||
+          "0.1"
+      );
+    }
+    const {
+      preliminary_quoted_price_per_credit_in_psl: quotedPricePerCredit,
+      preliminary_total_cost_of_credit_pack_in_psl: quotedTotalPrice,
+      credit_pack_purchase_request_fields_json_b64: requestFieldsB64,
+    } = preliminaryPriceQuote;
+    const requestFields = JSON.parse(atob(requestFieldsB64));
+    const { requested_initial_credits_in_credit_pack: requestedCredits } =
+      requestFields;
+    if (!maximumTotalCreditPackPriceInPSL) {
+      maximumTotalCreditPackPriceInPSL =
+        maximumPerCreditPriceInPSL * requestedCredits;
+    } else if (!maximumPerCreditPriceInPSL) {
+      maximumPerCreditPriceInPSL =
+        maximumTotalCreditPackPriceInPSL / requestedCredits;
+    }
+    const estimatedPricePerCredit =
+      await utils.estimatedMarketPriceOfInferenceCreditsInPSLTerms();
+    const priceDifferencePercentage =
+      await this.calculatePriceDifferencePercentage(
+        quotedPricePerCredit,
+        estimatedPricePerCredit
+      );
+
+    const MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING =
+      parseFloat(
+        localStorage.getItem(
+          "MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING"
+        ) || "0.001"
+      );
+
+    const numberFormat = new Intl.NumberFormat("en-US");
+    const percentageFormat = (value: number) => value.toFixed(2);
+
+    if (
+      quotedPricePerCredit <= maximumPerCreditPriceInPSL &&
+      quotedTotalPrice <= maximumTotalCreditPackPriceInPSL &&
+      priceDifferencePercentage <=
+        MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING
+    ) {
+      console.info(
+        `Preliminary price quote is within the acceptable range: ${numberFormat.format(
+          quotedPricePerCredit
+        )} PSL per credit, ${numberFormat.format(
+          quotedTotalPrice
+        )} PSL total, which is within the maximum of ${numberFormat.format(
+          maximumPerCreditPriceInPSL
+        )} PSL per credit and ${numberFormat.format(
+          maximumTotalCreditPackPriceInPSL
+        )} PSL total. The price difference from the estimated fair market price is ${percentageFormat(
+          priceDifferencePercentage * 100
+        )}%, which is within the allowed maximum of ${percentageFormat(
+          MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING * 100
+        )}%. Please be patient while the new credit pack request is initialized.`
+      );
+      return true;
+    } else {
+      console.warn(
+        `Preliminary price quote exceeds the maximum acceptable price or the price difference from the estimated fair price is too high! Quoted price: ${numberFormat.format(
+          quotedPricePerCredit
+        )} PSL per credit, ${numberFormat.format(
+          quotedTotalPrice
+        )} PSL total, maximum price: ${numberFormat.format(
+          maximumPerCreditPriceInPSL
+        )} PSL per credit, ${numberFormat.format(
+          maximumTotalCreditPackPriceInPSL
+        )} PSL total. The price difference from the estimated fair market price is ${percentageFormat(
+          priceDifferencePercentage * 100
+        )}%, which exceeds the allowed maximum of ${percentageFormat(
+          MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING * 100
+        )}%.`
+      );
+      return false;
+    }
+  }
+
+  async internalEstimateOfCreditPackTicketCostInPSL(
+    desiredNumberOfCredits: number,
+    priceCushionPercentage: number
+  ): Promise<number> {
+    const estimatedPricePerCredit =
+      await utils.estimatedMarketPriceOfInferenceCreditsInPSLTerms();
+    return (
+      Math.round(
+        desiredNumberOfCredits *
+          estimatedPricePerCredit *
+          (1 + priceCushionPercentage) *
+          100
+      ) / 100
+    );
+  }
+
+  async creditPackTicketPreliminaryPriceQuoteResponse(
+    supernodeURL: string,
+    creditPackRequest: CreditPackPurchaseRequest,
+    preliminaryPriceQuote: PreliminaryPriceQuote,
+    maximumTotalCreditPackPriceInPSL: number,
+    maximumPerCreditPriceInPSL: number
+  ): Promise<
+    | CreditPackPurchaseRequestResponse
+    | CreditPackPurchaseRequestResponseTermination
+  > {
+    try {
+      if ("rejection_reason_string" in preliminaryPriceQuote) {
+        console.error(
+          `Credit pack purchase request rejected: ${preliminaryPriceQuote.rejection_reason_string}`
+        );
+return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTermination;
+      }
+
+      const agreeWithPriceQuote = await this.confirmPreliminaryPriceQuote(
+        preliminaryPriceQuote,
+        maximumTotalCreditPackPriceInPSL,
+        maximumPerCreditPriceInPSL
+      );
+
+      console.info(
+        `Agree with price quote: ${agreeWithPriceQuote}; responding to preliminary price quote to Supernode at ${supernodeURL}...`
+      );
+      const priceQuoteResponse = {
+        sha3_256_hash_of_credit_pack_purchase_request_fields:
+          creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields,
+        sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_fields:
+          preliminaryPriceQuote.sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_fields,
+        credit_pack_purchase_request_fields_json_b64:
+          preliminaryPriceQuote.credit_pack_purchase_request_fields_json_b64,
+        agree_with_preliminary_price_quote: agreeWithPriceQuote,
+        credit_usage_tracking_psl_address:
+          preliminaryPriceQuote.credit_usage_tracking_psl_address,
+        preliminary_quoted_price_per_credit_in_psl: parseFloat(
+          preliminaryPriceQuote.preliminary_quoted_price_per_credit_in_psl.toString()
+        ),
+        preliminary_price_quote_response_timestamp_utc_iso_string:
+          new Date().toISOString(),
+        preliminary_price_quote_response_pastel_block_height:
+          await rpc.getCurrentPastelBlockHeight(),
+        preliminary_price_quote_response_message_version_string: "1.0",
+        requesting_end_user_pastelid:
+          creditPackRequest.requesting_end_user_pastelid,
+        sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_response_fields:
+          "",
+        requesting_end_user_pastelid_signature_on_preliminary_price_quote_response_hash:
+          "",
+      };
+
+      // Compute hashes and signatures
+      priceQuoteResponse.sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_response_fields =
+        await utils.computeSHA3256HashOfSQLModelResponseFields(
+          priceQuoteResponse
+        );
+      priceQuoteResponse.requesting_end_user_pastelid_signature_on_preliminary_price_quote_response_hash =
+        await rpc.signMessageWithPastelID(
+          creditPackRequest.requesting_end_user_pastelid,
+          priceQuoteResponse.sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_response_fields,
+          this.passphrase
+        );
+
+      // Validate the price quote response
+      const validatedPriceQuoteResponse =
+        validationSchemas.creditPackPurchaseRequestPreliminaryPriceQuoteResponseSchema.parse(
+          priceQuoteResponse
+        );
+
+      // Prepare model for endpoint before sending
+      const preparedPriceQuoteResponse = await utils.prepareModelForEndpoint(
+        validatedPriceQuoteResponse
+      );
+
+      delete preparedPriceQuoteResponse.id;
+      preparedPriceQuoteResponse.agree_with_preliminary_price_quote =
+        preparedPriceQuoteResponse.agree_with_preliminary_price_quote ? 1 : 0;
+
+      // Prepare and send the payload to the supernode
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
+      const completePriceQuoteResponse = {
+        challenge,
+        challenge_id,
+        challenge_signature,
+        preliminary_price_quote_response: preparedPriceQuoteResponse,
+      };
+
+      const response = await fetch(
+        `${supernodeURL}/credit_purchase_preliminary_price_quote_response`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(completePriceQuoteResponse),
+        }
+      );
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+
+      if ("termination_reason_string" in result) {
+        console.error(
+          `Credit pack purchase request response terminated: ${result.termination_reason_string}`
+        );
+        const terminationResponse = await utils.prepareModelForValidation(
+          result
+        );
+        const validatedTermination =
+          validationSchemas.creditPackPurchaseRequestResponseTerminationSchema.parse(
+            terminationResponse
+          );
+        await db.addData(
+          "CreditPackPurchaseRequestResponseTermination",
+          validatedTermination
+        );
+        return validatedTermination;
+      } else {
+        const transformedResult =
+          utils.transformCreditPackPurchaseRequestResponse(
+            await utils.prepareModelForValidation(result)
+          );
+        utils.logActionWithPayload(
+          "receiving",
+          "response to credit pack purchase request",
+          transformedResult
+        );
+        const validatedResponse =
+          validationSchemas.creditPackPurchaseRequestResponseSchema.parse(
+            transformedResult
+          );
+        await db.addData(
+          "CreditPackPurchaseRequestResponse",
+          validatedResponse
+        );
+        return validatedResponse;
+      }
+    } catch (error) {
+      console.error(
+        `Error responding to preliminary price quote: ${utils.safeStringify(
+          error
+        )}`
+      );
+      throw error;
+    }
+  }
+
+  async confirmCreditPurchaseRequest(
+    supernodeURL: string,
+    creditPackPurchaseRequestConfirmation: CreditPackPurchaseRequestConfirmation
+  ): Promise<CreditPackPurchaseRequestConfirmationResponse> {
+    try {
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
+      const payload = await utils.prepareModelForEndpoint(
+        creditPackPurchaseRequestConfirmation
+      );
+      utils.logActionWithPayload(
+        "confirming",
+        "credit pack purchase request",
+        payload
+      );
+      const response = await fetch(
+        `${supernodeURL}/confirm_credit_purchase_request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirmation: payload,
+            challenge,
+            challenge_id,
+            challenge_signature,
+          }),
+        }
+      );
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+      utils.logActionWithPayload(
+        "receiving",
+        "response to credit pack purchase confirmation",
+        result
+      );
+      const validatedResult =
+        validationSchemas.creditPackPurchaseRequestConfirmationResponseSchema.parse(
+          result
+        );
+      await db.addData(
+        "CreditPackPurchaseRequestConfirmationResponse",
+        validatedResult
+      );
+      return validatedResult as CreditPackPurchaseRequestConfirmationResponse;
+    } catch (error) {
+      console.error(
+        `Error confirming credit pack purchase request: ${utils.safeStringify(
+          error
+        )}`
+      );
+      throw error;
+    }
+  }
+
+  async checkStatusOfCreditPurchaseRequest(
+    supernodeURL: string,
+    creditPackPurchaseRequestHash: string
+  ): Promise<CreditPackPurchaseRequestStatus> {
+    try {
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
+      const statusCheck = {
+        sha3_256_hash_of_credit_pack_purchase_request_fields:
+          creditPackPurchaseRequestHash,
+        requesting_end_user_pastelid: this.pastelID,
+        requesting_end_user_pastelid_signature_on_sha3_256_hash_of_credit_pack_purchase_request_fields:
+          await rpc.signMessageWithPastelID(
+            this.pastelID,
+            creditPackPurchaseRequestHash,
+            this.passphrase
+          ),
+      };
+      const validatedStatusCheck =
+        validationSchemas.creditPackRequestStatusCheckSchema.parse(statusCheck);
+        delete (validatedStatusCheck as Partial<CreditPackRequestStatusCheck>).id;
+
+      utils.logActionWithPayload(
+        "checking",
+        "status of credit pack purchase request",
+        validatedStatusCheck
+      );
+      const response = await fetch(
+        `${supernodeURL}/check_status_of_credit_purchase_request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            credit_pack_request_status_check: validatedStatusCheck,
+            challenge,
+            challenge_id,
+            challenge_signature,
+          }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error(
+          `HTTP error ${response.status}: ${response.statusText}`
+        );
+      }
+      const responseData = await response.json();
+      utils.logActionWithPayload(
+        "receiving",
+        "credit pack purchase request response from Supernode",
+        responseData
+      );
+      const transformedResult = await utils.prepareModelForValidation(
+        responseData
+      );
+      delete (transformedResult as Partial<InferenceAPIUsageResponse>).id;
+      const validatedResult =
+        validationSchemas.creditPackPurchaseRequestStatusSchema.parse(
+          transformedResult
+        );
+      await db.addData("CreditPackPurchaseRequestStatus", validatedResult);
+      return validatedResult;
+    } catch (error) {
+      console.error(
+        `Error checking status of credit purchase request: ${utils.safeStringify(
+          error
+        )}`
+      );
+      throw error;
+    }
+  }
+
+  async creditPackPurchaseCompletionAnnouncement(
+    supernodeURL: string,
+    creditPackPurchaseRequestConfirmation: CreditPackPurchaseRequestConfirmation
+  ): Promise<void> {
+    try {
+      const validatedConfirmation =
+        validationSchemas.creditPackPurchaseRequestConfirmationSchema.parse(
+          creditPackPurchaseRequestConfirmation
+        );
+
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
+
+      const payload = validatedConfirmation;
+      delete (payload as any).id;
+
+      const response = await fetch(
+        `${supernodeURL}/credit_pack_purchase_completion_announcement`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirmation: payload,
+            challenge,
+            challenge_id,
+            challenge_signature,
+          }),
+        }
+      );
+      if (!response.ok) {
+        console.error(`HTTP error ${response.status}: ${response.statusText}`);
+      } else {
+        console.info(
+          `Credit pack purchase completion announcement sent successfully to ${supernodeURL}`
+        );
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        console.error(
+          `Timeout error sending credit pack purchase completion announcement to ${supernodeURL}: ${error.message}`
+        );
+      } else {
+        console.error(
+          `Error sending credit pack purchase completion announcement to ${supernodeURL}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+  }
+
+  async creditPackStorageRetryRequest(
+    supernodeURL: string,
+    creditPackStorageRetryRequest: CreditPackStorageRetryRequest
+  ): Promise<CreditPackStorageRetryRequestResponse> {
+    try {
+      const validatedRequest =
+        validationSchemas.creditPackStorageRetryRequestSchema.parse(
+          creditPackStorageRetryRequest
+        );
+
+      await db.addData("CreditPackStorageRetryRequest", validatedRequest);
+
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
+
+      const payload = await utils.prepareModelForEndpoint(validatedRequest);
+      utils.logActionWithPayload(
+        "sending",
+        "credit pack storage retry request",
+        payload
+      );
+
+      const response = await fetch(
+        `${supernodeURL}/credit_pack_storage_retry_request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            request: payload,
+            challenge,
+            challenge_id,
+            challenge_signature,
+          }),
+        }
+      );
+
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+      utils.logActionWithPayload(
+        "receiving",
+        "response to credit pack storage retry request",
+        result
+      );
+
+      const transformedResult = await utils.prepareModelForValidation(result);
+      const validatedResponse =
+        validationSchemas.creditPackStorageRetryRequestResponseSchema.parse(
+          transformedResult
+        );
+
+      await db.addData(
+        "CreditPackStorageRetryRequestResponse",
+        validatedResponse
+      );
+      return validatedResponse;
+    } catch (error) {
+      console.error(
+        `Error sending credit pack storage retry request: ${utils.safeStringify(
+          error
+        )}`
+      );
+      throw error;
+    }
+  }
+
+  async creditPackStorageRetryCompletionAnnouncement(
+    supernodeURL: string,
+    creditPackStorageRetryRequestResponse: CreditPackStorageRetryRequestResponse
+  ): Promise<void> {
+    try {
+      const validatedResponse =
+        validationSchemas.creditPackStorageRetryRequestResponseSchema.parse(
+          creditPackStorageRetryRequestResponse
+        );
+
+      await db.addData(
+        "CreditPackStorageRetryRequestResponse",
+        validatedResponse
+      );
+
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
+
+      const payload = await utils.prepareModelForEndpoint(validatedResponse);
+      utils.logActionWithPayload(
+        "sending",
+        "storage retry completion announcement message",
+        payload
+      );
+
+      const response = await fetch(
+        `${supernodeURL}/credit_pack_storage_retry_completion_announcement`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            response: payload,
+            challenge,
+            challenge_id,
+            challenge_signature,
+          }),
+        }
+      );
+
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+    } catch (error) {
+      console.error(
+        `Error sending credit pack storage retry completion announcement: ${utils.safeStringify(
+          error
+        )}`
+      );
+      throw error;
+    }
+  }
+
+  async retrieveCreditPackTicketFromPurchaseBurnTxid(
+    supernodeURL: string,
+    txid: string
+  ): Promise<unknown> {
+    try {
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
+      const payload = {
+        purchase_burn_txid: txid,
+        challenge,
+        challenge_id,
+        challenge_signature,
+      };
+      utils.logActionWithPayload(
+        "retrieving",
+        "credit pack ticket from purchase burn txid",
+        payload
+      );
+
+      const response = await fetch(
+        `${supernodeURL}/retrieve_credit_pack_ticket_from_purchase_burn_txid`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!response.ok)
+        throw new Error(`HTTP error! Status: ${response.status}`);
+
+      const ticketInfo = await response.json();
+      console.info(
+        `Received credit pack ticket for purchase burn txid ${txid}: ${JSON.stringify(
+          ticketInfo
+        )}`
+      );
+      return ticketInfo;
+    } catch (error) {
+      console.error(
+        `Error retrieving credit pack ticket for purchase burn txid ${txid}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
+    }
+  }
+
+  async getFinalCreditPackRegistrationTxidFromPurchaseBurnTxid(
+    supernodeURL: string,
+    purchaseBurnTxid: string
+  ): Promise<string> {
+    try {
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
+      const payload = {
+        purchase_burn_txid: purchaseBurnTxid,
+        challenge,
+        challenge_id,
+        challenge_signature,
+      };
+      utils.logActionWithPayload(
+        "retrieving",
+        "final credit pack registration txid",
+        payload
+      );
+
+      const response = await fetch(
+        `${supernodeURL}/get_final_credit_pack_registration_txid_from_credit_purchase_burn_txid`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!response.ok)
+        throw new Error(`HTTP error! Status: ${response.status}`);
+
+      const responseData = await response.json();
+      const finalTxid = responseData.final_credit_pack_registration_txid;
+      console.info(
+        `Received final credit pack registration txid for purchase burn txid ${purchaseBurnTxid}: ${finalTxid}`
+      );
+      return finalTxid;
+    } catch (error) {
+      console.error(
+        `Error retrieving final credit pack registration txid for purchase burn txid ${purchaseBurnTxid}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
+    }
+  }
+
+  async makeInferenceAPIUsageRequest(
+    supernodeURL: string,
+    requestData: InferenceRequestData
+  ): Promise<InferenceAPIUsageResponse> {
+    try {
+      const validatedRequest =
+        validationSchemas.inferenceAPIUsageRequestSchema.parse(requestData);
+      delete (validatedRequest as any).id;
+      await db.addData("InferenceAPIUsageRequest", validatedRequest);
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
+      utils.logActionWithPayload(
+        "making",
+        "inference usage request",
+        validatedRequest
+      );
+      const response = await fetch(
+        `${supernodeURL}/make_inference_api_usage_request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inference_api_usage_request: validatedRequest,
+            challenge,
+            challenge_id,
+            challenge_signature,
+          }),
+        }
+      );
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+      utils.logActionWithPayload(
+        "received",
+        "response to inference usage request",
+        result
+      );
+      const transformedResult = await utils.prepareModelForValidation(result);
+      delete (transformedResult as any).id;
+      const validatedResponse =
+        validationSchemas.inferenceAPIUsageResponseSchema.parse(
+          transformedResult
+        );
+      await db.addData("InferenceAPIUsageResponse", validatedResponse);
+      return validatedResponse;
+    } catch (error) {
+      console.error(
+        `Error making inference API usage request: ${utils.safeStringify(
+          error
+        )}`
+      );
+      throw error;
+    }
+  }
+
+  async sendInferenceConfirmation(
+    supernodeURL: string,
+    confirmationData: InferenceConfirmationData
+  ): Promise<unknown> {
+    try {
+      const confirmationDataJSON = confirmationData;
+      delete (confirmationDataJSON as any).id;
+
+      const validatedConfirmation =
+        validationSchemas.inferenceConfirmationSchema.parse(
+          confirmationDataJSON
+        );
+      await db.addData("InferenceConfirmation", validatedConfirmation);
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
+
+      const payload = await utils.prepareModelForEndpoint(
+        validatedConfirmation
+      );
+      utils.logActionWithPayload("sending", "inference confirmation", payload);
+      const response = await fetch(
+        `${supernodeURL}/confirm_inference_request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inference_confirmation: confirmationDataJSON,
+            challenge,
+            challenge_id,
+            challenge_signature,
+          }),
+        }
+      );
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+      utils.logActionWithPayload(
+        "receiving",
+        "response to inference confirmation",
+        result
+      );
+
+      return result;
+    } catch (error) {
+      console.error(
+        `Error sending inference confirmation: ${utils.safeStringify(error)}`
+      );
+      throw error;
+    }
+  }
+
+  async checkStatusOfInferenceRequestResults(
+    supernodeURL: string,
+    inferenceResponseID: string
+  ): Promise<boolean> {
+    try {
+      console.info(
+        `Checking status of inference request results for ID ${inferenceResponseID}`
+      );
+
+      const response = await fetch(
+        `${supernodeURL}/check_status_of_inference_request_results/${inferenceResponseID}`
+      );
+
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+      utils.logActionWithPayload(
+        "receiving",
+        `status of inference request results for ID ${inferenceResponseID}`,
+        result
+      );
+
+      return typeof result === "boolean" ? result : false;
+    } catch (error) {
+      console.error(
+        `Error checking status of inference request results from Supernode URL: ${supernodeURL}: ${utils.safeStringify(
+          error
+        )}`
+      );
       return false;
     }
   }
@@ -928,7 +1298,8 @@ class PastelInferenceClient {
     inferenceResponseID: string
   ): Promise<InferenceAPIOutputResult> {
     try {
-      const { challenge, challenge_id, challenge_signature } = await this.requestAndSignChallenge(supernodeURL);
+      const { challenge, challenge_id, challenge_signature } =
+        await this.requestAndSignChallenge(supernodeURL);
       const params = new URLSearchParams({
         inference_response_id: inferenceResponseID,
         pastelid: this.pastelID,
@@ -937,103 +1308,154 @@ class PastelInferenceClient {
         challenge_signature,
       });
       utils.logActionWithPayload(
-        'attempting',
+        "attempting",
         `to retrieve inference output results for response ID ${inferenceResponseID}`,
         params
       );
-      const response = await fetch(`${supernodeURL}/retrieve_inference_output_results?${params}`, {
-        method: 'POST',
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await fetch(
+        `${supernodeURL}/retrieve_inference_output_results?${params}`,
+        {
+          method: "POST",
+        }
+      );
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
-      delete (result as any).id;
-      utils.logActionWithPayload('receiving', 'inference output results', result);
-      let transformedResult = await utils.prepareModelForValidation(result);
-      const { error: validationError, value: validatedResult } =
-        await validationSchemas.inferenceAPIOutputResultSchema.validate(transformedResult);
-      if (validationError) {
-        throw new Error(`Invalid inference API output result: ${validationError.message}`);
-      }
-      await db.addData('InferenceAPIOutputResult', validatedResult);
+      delete (result as Partial<InferenceAPIUsageResponse>).id;
+      utils.logActionWithPayload(
+        "receiving",
+        "inference output results",
+        result
+      );
+      const transformedResult = await utils.prepareModelForValidation(result);
+      const validatedResult =
+        validationSchemas.inferenceAPIOutputResultSchema.parse(
+          transformedResult
+        );
+      await db.addData("InferenceAPIOutputResult", validatedResult);
       return validatedResult;
     } catch (error) {
-      console.error(`Error retrieving inference output results: ${utils.safeStringify(error)}`);
+      console.error(
+        `Error retrieving inference output results: ${utils.safeStringify(
+          error
+        )}`
+      );
       throw error;
     }
   }
 
-  async callAuditInferenceRequestResponse(supernodeURL: string, inferenceResponseID: string): Promise<InferenceAPIUsageResponse> {
+  async callAuditInferenceRequestResponse(
+    supernodeURL: string,
+    inferenceResponseID: string
+  ): Promise<InferenceAPIUsageResponse> {
     try {
-      const signature = await rpc.signMessageWithPastelID(this.pastelID, inferenceResponseID, this.passphrase);
+      const signature = await rpc.signMessageWithPastelID(
+        this.pastelID,
+        inferenceResponseID,
+        this.passphrase
+      );
       const payload = {
         inference_response_id: inferenceResponseID,
         pastel_id: this.pastelID,
         signature,
       };
-      const response = await fetch(`${supernodeURL}/audit_inference_request_response`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await fetch(
+        `${supernodeURL}/audit_inference_request_response`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
-      delete (result as any).id;
-      let transformedResult = await utils.prepareModelForValidation(result);
-      const { error: validationError, value: validatedResult } =
-        await validationSchemas.inferenceAPIUsageResponseSchema.validate(transformedResult);
-      if (validationError) {
-        throw new Error(`Invalid inference API usage response: ${validationError.message}`);
-      }
+      delete (result as Partial<InferenceAPIOutputResult>).id;
+      const transformedResult = await utils.prepareModelForValidation(result);
+      const validatedResult =
+        validationSchemas.inferenceAPIUsageResponseSchema.parse(
+          transformedResult
+        );
       return validatedResult;
     } catch (error) {
-      console.error(`Error calling audit inference request response from Supernode URL: ${supernodeURL}: ${utils.safeStringify(error)}`);
+      console.error(
+        `Error calling audit inference request response from Supernode URL: ${supernodeURL}: ${utils.safeStringify(
+          error
+        )}`
+      );
       throw error;
     }
   }
 
-  async callAuditInferenceRequestResult(supernodeURL: string, inferenceResponseID: string): Promise<InferenceAPIOutputResult> {
+  async callAuditInferenceRequestResult(
+    supernodeURL: string,
+    inferenceResponseID: string
+  ): Promise<InferenceAPIOutputResult> {
     try {
-      const signature = await rpc.signMessageWithPastelID(this.pastelID, inferenceResponseID, this.passphrase);
+      const signature = await rpc.signMessageWithPastelID(
+        this.pastelID,
+        inferenceResponseID,
+        this.passphrase
+      );
       const payload = {
         inference_response_id: inferenceResponseID,
         pastel_id: this.pastelID,
         signature,
       };
-      const response = await fetch(`${supernodeURL}/audit_inference_request_result`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await fetch(
+        `${supernodeURL}/audit_inference_request_result`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
-      delete (result as any).id;
-      let transformedResult = await utils.prepareModelForValidation(result);
-      const { error: validationError, value: validatedResult } =
-        await validationSchemas.inferenceAPIOutputResultSchema.validate(transformedResult);
-      if (validationError) {
-        throw new Error(`Invalid inference API output result: ${validationError.message}`);
-      }
+      delete (result as Partial<InferenceAPIOutputResult>).id;
+      const transformedResult = await utils.prepareModelForValidation(result);
+      const validatedResult =
+        validationSchemas.inferenceAPIOutputResultSchema.parse(
+          transformedResult
+        );
       return validatedResult;
     } catch (error) {
-      console.error(`Error calling audit inference request result from Supernode URL: ${supernodeURL}: ${utils.safeStringify(error)}`);
+      console.error(
+        `Error calling audit inference request result from Supernode URL: ${supernodeURL}: ${utils.safeStringify(
+          error
+        )}`
+      );
       throw error;
     }
   }
 
-  async auditInferenceRequestResponseID(inferenceResponseID: string, pastelIDOfSupernodeToAudit: string): Promise<(InferenceAPIUsageResponse | InferenceAPIOutputResult)[]> {
+  async auditInferenceRequestResponseID(
+    inferenceResponseID: string,
+    pastelIDOfSupernodeToAudit: string
+  ): Promise<(InferenceAPIUsageResponse | InferenceAPIOutputResult)[]> {
     try {
       const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
-      const filteredSupernodes = await utils.filterSupernodes(validMasternodeListFullDF);
+      const filteredSupernodes = await utils.filterSupernodes(
+        validMasternodeListFullDF
+      );
 
       const supernodeURLsAndPastelIDs = filteredSupernodes
-        .filter(({ pastelID }) => pastelID !== pastelIDOfSupernodeToAudit)
+        .filter((supernode) => supernode.extKey !== pastelIDOfSupernodeToAudit)
         .slice(0, 5);
 
-      const listOfSupernodePastelIDs = supernodeURLsAndPastelIDs.map(({ pastelID }) => pastelID);
-      const listOfSupernodeURLs = supernodeURLsAndPastelIDs.map(({ url }) => url);
-      const listOfSupernodeIPs = listOfSupernodeURLs.map((url) => url.split('//')[1].split(':')[0]);
-
-      console.info(`Now attempting to audit inference request response with ID ${inferenceResponseID} with ${listOfSupernodePastelIDs.length} closest supernodes (with Supernode IPs of ${listOfSupernodeIPs})...`);
+      const listOfSupernodePastelIDs = supernodeURLsAndPastelIDs.map(
+        (supernode) => supernode.extKey
+      );
+      const listOfSupernodeURLs = supernodeURLsAndPastelIDs.map(
+        (supernode) => `http://${supernode.ipaddress_port.split(":")[0]}:7123`
+      );
+      const listOfSupernodeIPs = listOfSupernodeURLs.map(
+        (url) => url.split("//")[1].split(":")[0]
+      );
+      console.info(
+        `Now attempting to audit inference request response with ID ${inferenceResponseID} with ${listOfSupernodePastelIDs.length} closest supernodes (with Supernode IPs of ${listOfSupernodeIPs})...`
+      );
 
       const responseAuditTasks = listOfSupernodeURLs.map((url) =>
         this.callAuditInferenceRequestResponse(url, inferenceResponseID)
@@ -1042,7 +1464,9 @@ class PastelInferenceClient {
 
       await new Promise((resolve) => setTimeout(resolve, 20000));
 
-      console.info(`Now attempting to audit inference request result for response ID ${inferenceResponseID} by comparing information from other Supernodes to the information reported by the Responding Supernode...`);
+      console.info(
+        `Now attempting to audit inference request result for response ID ${inferenceResponseID} by comparing information from other Supernodes to the information reported by the Responding Supernode...`
+      );
 
       const resultAuditTasks = listOfSupernodeURLs.map((url) =>
         this.callAuditInferenceRequestResult(url, inferenceResponseID)
@@ -1050,11 +1474,17 @@ class PastelInferenceClient {
       const resultAuditResults = await Promise.all(resultAuditTasks);
 
       const auditResults = [...responseAuditResults, ...resultAuditResults];
-      console.info(`Audit results retrieved for inference response ID ${inferenceResponseID}`);
+      console.info(
+        `Audit results retrieved for inference response ID ${inferenceResponseID}`
+      );
 
       return auditResults;
     } catch (error) {
-      console.error(`Error auditing inference request response ID: ${utils.safeStringify(error)}`);
+      console.error(
+        `Error auditing inference request response ID: ${utils.safeStringify(
+          error
+        )}`
+      );
       throw error;
     }
   }
@@ -1067,34 +1497,54 @@ class PastelInferenceClient {
   ): Promise<boolean> {
     try {
       const response = await fetch(`${supernodeURL}/get_inference_model_menu`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
       const modelMenu: ModelMenu = await response.json();
       const desiredParameters = JSON.parse(modelParametersJSON);
 
       for (const model of modelMenu.models) {
         if (
           model.model_name === modelCanonicalString &&
-          model.supported_inference_type_strings.includes(modelInferenceTypeString)
+          model.supported_inference_type_strings.includes(
+            modelInferenceTypeString
+          )
         ) {
           const unsupportedParameters: string[] = [];
 
-          for (const [desiredParam, desiredValue] of Object.entries(desiredParameters)) {
+          for (const [desiredParam, desiredValue] of Object.entries(
+            desiredParameters
+          )) {
             let paramFound = false;
 
             for (const param of model.model_parameters) {
               if (
                 param.name === desiredParam &&
-                param.inference_types_parameter_applies_to.includes(modelInferenceTypeString)
+                param.inference_types_parameter_applies_to.includes(
+                  modelInferenceTypeString
+                )
               ) {
-                if ('type' in param) {
-                  if (param.type === 'int' && Number.isInteger(Number(desiredValue))) {
+                if ("type" in param) {
+                  if (
+                    param.type === "int" &&
+                    Number.isInteger(Number(desiredValue))
+                  ) {
                     paramFound = true;
-                  } else if (param.type === 'float' && !isNaN(parseFloat(desiredValue as string))) {
+                  } else if (
+                    param.type === "float" &&
+                    !isNaN(parseFloat(desiredValue as string))
+                  ) {
                     paramFound = true;
-                  } else if (param.type === 'string' && typeof desiredValue === 'string') {
-                    if ('options' in param && Array.isArray(param.options) && param.options.includes(desiredValue)) {
+                  } else if (
+                    param.type === "string" &&
+                    typeof desiredValue === "string"
+                  ) {
+                    if (
+                      "options" in param &&
+                      Array.isArray(param.options) &&
+                      param.options.includes(desiredValue)
+                    ) {
                       paramFound = true;
-                    } else if (!('options' in param)) {
+                    } else if (!("options" in param)) {
                       paramFound = true;
                     }
                   }
@@ -1113,14 +1563,16 @@ class PastelInferenceClient {
           if (unsupportedParameters.length === 0) {
             return true;
           } else {
-            const unsupportedParamStr = unsupportedParameters.join(', ');
-            console.error(`Unsupported model parameters for ${modelCanonicalString}: ${unsupportedParamStr}`);
+            const unsupportedParamStr = unsupportedParameters.join(", ");
+            console.error(
+              `Unsupported model parameters for ${modelCanonicalString}: ${unsupportedParamStr}`
+            );
             return false;
           }
         }
       }
       return false;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -1135,41 +1587,58 @@ class PastelInferenceClient {
 
     try {
       const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
-      const filteredSupernodes = await utils.filterSupernodes(validMasternodeListFullDF);
+      const filteredSupernodes = await utils.filterSupernodes(
+        validMasternodeListFullDF
+      );
 
       const checkSupernodePromises = filteredSupernodes.map((supernode) => {
         const startTime = Date.now();
+        const url = `http://${supernode.ipaddress_port.split(":")[0]}:7123`;
 
         return Promise.race([
           this.checkIfSupernodeSupportsDesiredModel(
-            supernode.url,
+            url,
             desiredModelCanonicalString,
             desiredModelInferenceTypeString,
             desiredModelParametersJSON
           ).then((result) => ({
             result,
-            url: supernode.url,
+            url,
             responseTime: Date.now() - startTime,
           })),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeoutPeriod)),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout")), timeoutPeriod)
+          ),
         ]).catch(() => null);
       });
 
       const results = await Promise.allSettled(checkSupernodePromises);
 
       const validResponses = results
-        .filter((res): res is PromiseFulfilledResult<{ result: boolean; url: string; responseTime: number }> => 
-          res.status === 'fulfilled' && res.value !== null
+        .filter(
+          (
+            res
+          ): res is PromiseFulfilledResult<{
+            result: boolean;
+            url: string;
+            responseTime: number;
+          }> => res.status === "fulfilled" && res.value !== null
         )
         .map((res) => res.value);
 
-      const sortedResponses = validResponses.sort((a, b) => a.responseTime - b.responseTime);
+      const sortedResponses = validResponses.sort(
+        (a, b) => a.responseTime - b.responseTime
+      );
 
       return sortedResponses.slice(0, N).map((response) => response.url);
     } catch (error) {
-      throw new Error(`Failed to get closest supernodes: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to get closest supernodes: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 }
 
-export default PastelInferenceClient;                  
+export default PastelInferenceClient;

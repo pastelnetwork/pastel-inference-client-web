@@ -7,7 +7,7 @@ class BrowserLoggerImpl implements BrowserLogger {
   MAX_LOG_ENTRIES: number = 100;
   listeners: Map<string, Set<LoggerListener>> = new Map();
 
-  log(level: string, msg: string, meta?: any): void {
+  log(level: string, msg: string, meta?: unknown): void {
     const logEntry: LogEntry = { level, msg, meta, timestamp: new Date().toISOString() };
     this.logBuffer.push(this.safeStringify(logEntry));
     if (this.logBuffer.length > this.MAX_LOG_ENTRIES) {
@@ -30,19 +30,19 @@ class BrowserLoggerImpl implements BrowserLogger {
     }
   }
 
-  error(msg: string, meta?: any): void {
+  error(msg: string, meta?: unknown): void {
     this.log('error', msg, meta);
   }
 
-  warn(msg: string, meta?: any): void {
+  warn(msg: string, meta?: unknown): void {
     this.log('warn', msg, meta);
   }
 
-  info(msg: string, meta?: any): void {
+  info(msg: string, meta?: unknown): void {
     this.log('info', msg, meta);
   }
 
-  debug(msg: string, meta?: any): void {
+  debug(msg: string, meta?: unknown): void {
     this.log('debug', msg, meta);
   }
 
@@ -61,13 +61,13 @@ class BrowserLoggerImpl implements BrowserLogger {
 
   emit(eventName: string, data: string): void {
     if (this.listeners.has(eventName)) {
-      for (const listener of this.listeners.get(eventName)!) {
+      this.listeners.get(eventName)!.forEach((listener) => {
         listener(data);
-      }
+      });
     }
   }
 
-  safeStringify(obj: any): string {
+  safeStringify(obj: unknown): string {
     return JSON.stringify(obj, (key, value) =>
       typeof value === 'bigint' ? value.toString() : value
     );

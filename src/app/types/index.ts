@@ -173,6 +173,7 @@ export interface PreliminaryPriceQuote {
 }
 
 export interface InferenceRequestData {
+  id?: number | string;
   requesting_pastelid: string;
   credit_pack_ticket_pastel_txid: string;
   requested_model_canonical_string: string;
@@ -188,6 +189,7 @@ export interface InferenceRequestData {
 }
 
 export interface InferenceConfirmationData {
+  id?: number | string;
   inference_request_id: string;
   requesting_pastelid: string;
   confirmation_transaction: {
@@ -214,7 +216,6 @@ export interface PreliminaryPriceQuote {
   preliminary_total_cost_of_credit_pack_in_psl: number;
   credit_pack_purchase_request_fields_json_b64: string;
   credit_usage_tracking_psl_address: string;
-  [key: string]: unknown;
 }
 
 export interface CreditPackCreationResult {
@@ -245,6 +246,7 @@ export interface SupernodeInfo {
   extAddress: string;
   extP2P: string;
   extKey: string;
+  url?: string;
 }
 
 export interface WalletInfo {
@@ -259,13 +261,11 @@ export interface WalletInfo {
   seedfp: string;
 }
 
-export interface CreditPack {
+export interface CreditPack extends ValidCreditPackTicket {
   id: string;
   credits: number;
   balance: number;
   address: string;
-  blockHeight: number;
-  txid: string;
 }
 
 export interface InferenceRequest {
@@ -278,9 +278,14 @@ export interface InferenceRequest {
 }
 
 export interface InferenceResult {
-  inferenceResultDict: unknown;
-  auditResults: unknown;
-  validationResults: unknown;
+  supernode_url: string;
+  request_data: InferenceAPIUsageRequest;
+  usage_request_response: InferenceAPIUsageResponse;
+  model_input_data_json: unknown;
+  output_results: InferenceAPIOutputResult;
+  generated_image_decoded?: string;
+  zip_file_data?: string;
+  inference_result_decoded?: string;
 }
 
 export interface PastelIDTicket {
@@ -362,6 +367,12 @@ export interface ChainTip {
   hash: string;
   branchlen: number;
   status: string;
+}
+
+export interface SendToAddressResult {
+  success: boolean;
+  result?: string;
+  message?: string;
 }
 
 export interface BlockHeader {
@@ -543,7 +554,7 @@ export interface AddressAmount {
 }
 
 export interface SupernodeList {
-  id?: number;
+  id?: number | string;
   txid_vout: string;
   supernode_status: string;
   protocol_version: number;
@@ -562,7 +573,7 @@ export interface SupernodeList {
 }
 
 export interface Message {
-  id?: number;
+  id: string;
   sending_sn_pastelid: string;
   receiving_sn_pastelid: string;
   sending_sn_txid_vout: string;
@@ -574,15 +585,16 @@ export interface Message {
 }
 
 export interface UserMessage {
-  id?: number | string;
+  id: string;
   from_pastelid: string;
   to_pastelid: string;
   message_body: string;
   message_signature: string;
   timestamp: string;
 }
-export interface CreditPackPurchaseRequest {
-  id?: number;
+
+export interface CreditPackPurchaseRequest extends Record<string, unknown> {  
+  id?: number | string;
   requesting_end_user_pastelid: string;
   requested_initial_credits_in_credit_pack: number;
   list_of_authorized_pastelids_allowed_to_use_credit_pack: string;
@@ -594,8 +606,8 @@ export interface CreditPackPurchaseRequest {
   requesting_end_user_pastelid_signature_on_request_hash: string;
 }
 
-export interface CreditPackPurchaseRequestRejection {
-  id?: number;
+export interface CreditPackPurchaseRequestRejection extends Record<string, unknown> {  
+  id?: number | string;
   sha3_256_hash_of_credit_pack_purchase_request_fields: string;
   credit_pack_purchase_request_fields_json_b64: string;
   rejection_reason_string: string;
@@ -607,8 +619,8 @@ export interface CreditPackPurchaseRequestRejection {
   responding_supernode_signature_on_credit_pack_purchase_request_rejection_hash: string;
 }
 
-export interface CreditPackPurchaseRequestPreliminaryPriceQuote {
-  id?: number;
+export interface CreditPackPurchaseRequestPreliminaryPriceQuote extends Record<string, unknown> {  
+  id?: number | string;
   sha3_256_hash_of_credit_pack_purchase_request_fields: string;
   credit_usage_tracking_psl_address: string;
   credit_pack_purchase_request_fields_json_b64: string;
@@ -622,8 +634,8 @@ export interface CreditPackPurchaseRequestPreliminaryPriceQuote {
   responding_supernode_signature_on_credit_pack_purchase_request_preliminary_price_quote_hash: string;
 }
 
-export interface CreditPackPurchaseRequestPreliminaryPriceQuoteResponse {
-  id?: number;
+export interface CreditPackPurchaseRequestPreliminaryPriceQuoteResponse extends Record<string, unknown> {  
+  id?: number | string;
   sha3_256_hash_of_credit_pack_purchase_request_fields: string;
   sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_fields: string;
   credit_pack_purchase_request_fields_json_b64: string;
@@ -638,8 +650,8 @@ export interface CreditPackPurchaseRequestPreliminaryPriceQuoteResponse {
   requesting_end_user_pastelid_signature_on_preliminary_price_quote_response_hash: string;
 }
 
-export interface CreditPackPurchaseRequestResponseTermination {
-  id?: number;
+export interface CreditPackPurchaseRequestResponseTermination extends Record<string, unknown> {  
+  id?: number | string;
   sha3_256_hash_of_credit_pack_purchase_request_fields: string;
   credit_pack_purchase_request_fields_json_b64: string;
   termination_reason_string: string;
@@ -651,7 +663,7 @@ export interface CreditPackPurchaseRequestResponseTermination {
   responding_supernode_signature_on_credit_pack_purchase_request_termination_hash: string;
 }
 
-export interface CreditPackPurchaseRequestResponse {
+export interface CreditPackPurchaseRequestResponse extends Record<string, unknown> {  
   id?: number | string;
   sha3_256_hash_of_credit_pack_purchase_request_fields: string;
   credit_pack_purchase_request_fields_json_b64: string;
@@ -673,8 +685,8 @@ export interface CreditPackPurchaseRequestResponse {
   responding_supernode_signature_on_credit_pack_purchase_request_response_hash: string;
 }
 
-export interface CreditPackPurchaseRequestConfirmation {
-  id?: number;
+export interface CreditPackPurchaseRequestConfirmation extends Record<string, unknown> {  
+  id?: number | string;
   sha3_256_hash_of_credit_pack_purchase_request_fields: string;
   sha3_256_hash_of_credit_pack_purchase_request_response_fields: string;
   credit_pack_purchase_request_fields_json_b64: string;
@@ -687,8 +699,8 @@ export interface CreditPackPurchaseRequestConfirmation {
   requesting_end_user_pastelid_signature_on_sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields: string;
 }
 
-export interface CreditPackPurchaseRequestConfirmationResponse {
-  id?: number;
+export interface CreditPackPurchaseRequestConfirmationResponse extends Record<string, unknown> {  
+  id?: number | string;
   sha3_256_hash_of_credit_pack_purchase_request_fields: string;
   sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields: string;
   credit_pack_confirmation_outcome_string: string;
@@ -702,14 +714,14 @@ export interface CreditPackPurchaseRequestConfirmationResponse {
   responding_supernode_signature_on_credit_pack_purchase_request_confirmation_response_hash: string;
 }
 
-export interface CreditPackRequestStatusCheck {
+export interface CreditPackRequestStatusCheck extends Record<string, unknown> {  
     sha3_256_hash_of_credit_pack_purchase_request_fields: string;
     requesting_end_user_pastelid: string;
     requesting_end_user_pastelid_signature_on_sha3_256_hash_of_credit_pack_purchase_request_fields: string;
   }
 
-export interface CreditPackPurchaseRequestStatus {
-  id?: number;
+export interface CreditPackPurchaseRequestStatus extends Record<string, unknown> {  
+  id?: number | string;
   sha3_256_hash_of_credit_pack_purchase_request_fields: string;
   sha3_256_hash_of_credit_pack_purchase_request_response_fields: string;
   status: string;
@@ -722,8 +734,8 @@ export interface CreditPackPurchaseRequestStatus {
   responding_supernode_signature_on_credit_pack_purchase_request_status_hash: string;
 }
 
-export interface CreditPackStorageRetryRequest {
-  id?: number;
+export interface CreditPackStorageRetryRequest extends Record<string, unknown> {  
+  id?: number | string;
   sha3_256_hash_of_credit_pack_purchase_request_response_fields: string;
   credit_pack_purchase_request_fields_json_b64: string;
   requesting_end_user_pastelid: string;
@@ -735,8 +747,8 @@ export interface CreditPackStorageRetryRequest {
   requesting_end_user_pastelid_signature_on_credit_pack_storage_retry_request_hash: string;
 }
 
-export interface CreditPackStorageRetryRequestResponse {
-  id?: number;
+export interface CreditPackStorageRetryRequestResponse extends Record<string, unknown> {  
+  id?: number | string;
   sha3_256_hash_of_credit_pack_purchase_request_fields: string;
   sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields: string;
   credit_pack_storage_retry_confirmation_outcome_string: string;
@@ -750,8 +762,8 @@ export interface CreditPackStorageRetryRequestResponse {
   closest_agreeing_supernode_to_retry_storage_pastelid_signature_on_credit_pack_storage_retry_confirmation_response_hash: string;
 }
 
-export interface InferenceAPIUsageRequest {
-  id?: number;
+export interface InferenceAPIUsageRequest extends Record<string, unknown> {  
+  id?: number | string;
   inference_request_id: string;
   requesting_pastelid: string;
   credit_pack_ticket_pastel_txid: string;
@@ -767,8 +779,8 @@ export interface InferenceAPIUsageRequest {
   requesting_pastelid_signature_on_request_hash: string;
 }
 
-export interface InferenceAPIUsageResponse {
-  id?: number;
+export interface InferenceAPIUsageResponse extends Record<string, unknown> {  
+  id?: number | string;
   inference_response_id: string;
   inference_request_id: string;
   proposed_cost_of_request_in_inference_credits: number;
@@ -783,8 +795,8 @@ export interface InferenceAPIUsageResponse {
   supernode_pastelid_and_signature_on_inference_request_response_hash: string;
 }
 
-export interface InferenceAPIOutputResult {
-  id?: number;
+export interface InferenceAPIOutputResult extends Record<string, unknown> {  
+  id?: number | string;
   inference_result_id: string;
   inference_request_id: string;
   inference_response_id: string;
@@ -798,8 +810,8 @@ export interface InferenceAPIOutputResult {
   responding_supernode_signature_on_inference_result_id: string;
 }
 
-export interface InferenceConfirmation {
-  id?: number;
+export interface InferenceConfirmation extends Record<string, unknown> {  
+  id?: number | string;
   inference_request_id: string;
   requesting_pastelid: string;
   confirmation_transaction: {
@@ -807,18 +819,18 @@ export interface InferenceConfirmation {
   };
 }
 
-export interface ValidationResult {
+export interface ValidationResult extends Record<string, unknown> {  
   inference_result_id: string;
   inference_response_id: string;
   inference_request_id: string;
-  proposed_cost_in_credits: boolean;
-  remaining_credits_after_request: boolean;
-  credit_usage_tracking_psl_address: boolean;
-  request_confirmation_message_amount_in_patoshis: boolean;
-  max_block_height_to_include_confirmation_transaction: boolean;
-  supernode_pastelid_and_signature_on_inference_response_id: boolean;
-  responding_supernode_pastelid: boolean;
-  inference_result_json_base64: boolean;
-  inference_result_file_type_strings: boolean;
-  responding_supernode_signature_on_inference_result_id: boolean;
+  proposed_cost_in_credits: number;
+  remaining_credits_after_request: number;
+  credit_usage_tracking_psl_address: string;
+  request_confirmation_message_amount_in_patoshis: number;
+  max_block_height_to_include_confirmation_transaction: number;
+  supernode_pastelid_and_signature_on_inference_response_id: unknown;
+  responding_supernode_pastelid: string;
+  inference_result_json_base64: string;
+  inference_result_file_type_strings: unknown;
+  responding_supernode_signature_on_inference_result_id: string;
 }

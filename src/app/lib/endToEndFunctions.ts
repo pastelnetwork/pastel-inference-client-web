@@ -1,9 +1,10 @@
 // src/app/lib/endToEndFunctions.ts
 
+'use client'
+
 import BrowserRPCReplacement from "@/app/lib/BrowserRPCReplacement";
 import { BrowserDatabase } from "@/app/lib/BrowserDatabase";
 import PastelInferenceClient from "@/app/lib/PastelInferenceClient";
-import * as storage from "./storage";
 import * as utils from "./utils";
 import * as schemas from "./validationSchemas";
 import browserLogger from "@/app/lib/logger";
@@ -11,27 +12,18 @@ import pastelGlobals from "@/app/lib/globals";
 
 import {
   CreditPack,
-  Message,
   CreditPackTicketInfo,
-  CreditPackEstimation,
   InferenceRequestParams,
   InferenceResult,
-  PreliminaryPriceQuote,
   CreditPackCreationResult,
   SupernodeURL,
   CreditPackPurchaseRequest,
   CreditPackPurchaseRequestConfirmation,
-  CreditPackPurchaseRequestConfirmationResponse,
   CreditPackPurchaseRequestResponse,
   SupernodeInfo,
-  AuditResult,
-  ValidationResult,
   InferenceAPIUsageRequest,
-  InferenceAPIUsageResponse,
   InferenceConfirmation,
-  InferenceAPIOutputResult,
   UserMessage,
-  CreditPackPurchaseRequestRejection,
   CreditPackStorageRetryRequest,
   CreditPackStorageRetryRequestResponse,
 } from "@/app/types";
@@ -44,7 +36,7 @@ function getIsoStringWithMicroseconds(): string {
   return now.toISOString().replace("Z", "+00:00").replace(/\s/g, "");
 }
 
-export async function checkForNewIncomingMessages(): Promise<Message[]> {
+export async function checkForNewIncomingMessages(): Promise<UserMessage[]> {
   try {
     const pastelID = pastelGlobals.getPastelId();
     const passphrase = pastelGlobals.getPassphrase();
@@ -81,11 +73,11 @@ export async function checkForNewIncomingMessages(): Promise<Message[]> {
     );
     const messageLists = await Promise.all(messageRetrievalTasks);
 
-    const uniqueMessages: Message[] = [];
+    const uniqueMessages: UserMessage[] = [];
     const messageIDs = new Set<string>();
     for (const messageList of messageLists) {
       for (const message of messageList) {
-        if (!messageIDs.has(message.id)) {
+        if (message.id && !messageIDs.has(message.id)) {
           uniqueMessages.push(message);
           messageIDs.add(message.id);
         }
@@ -104,7 +96,7 @@ export async function checkForNewIncomingMessages(): Promise<Message[]> {
 export async function sendMessageAndCheckForNewIncomingMessages(
   toPastelID: string,
   messageBody: string
-): Promise<{ sent_messages: Message[]; received_messages: Message[] }> {
+): Promise<{ sent_messages: UserMessage[]; received_messages: UserMessage[] }> {
   try {
     const pastelID = pastelGlobals.getPastelId();
     const passphrase = pastelGlobals.getPassphrase();
@@ -141,6 +133,7 @@ export async function sendMessageAndCheckForNewIncomingMessages(
         passphrase
       ),
       timestamp: new Date().toISOString(),
+      id: ""
     };
 
     const { error } = schemas.userMessageSchema.safeParse(userMessage);
@@ -152,13 +145,14 @@ export async function sendMessageAndCheckForNewIncomingMessages(
       inferenceClient.sendUserMessage(url, userMessage)
     );
 
-    const sendResults = await Promise.all(sendTasks) as Message[];
+    const sendResults = await Promise.all(sendTasks);
 
     browserLogger.info(
       `Sent user messages: ${utils.safeStringify(sendResults)}`
     );
 
     const receivedMessages = await checkForNewIncomingMessages();
+
 
     return {
       sent_messages: sendResults,
@@ -279,7 +273,6 @@ export async function handleCreditPackTicketEndToEnd(
             signedCreditPackTicket.proposed_total_cost_of_credit_pack_in_psl *
               100000
           ) / 100000,
-          "Burn transaction for credit pack ticket"
         );
 
         if (!burnTransactionResponse) {
@@ -474,6 +467,10 @@ async function initiateStorageRetry(
       )
     );
 
+  if (closestAgreeingSupernodePastelID === null) {
+    throw new Error("No agreeing Supernode found for credit pack storage retry");
+  }
+
   const creditPackStorageRetryRequest =
     await buildCreditPackStorageRetryRequest(
       creditPackRequest,
@@ -520,10 +517,10 @@ async function initiateStorageRetry(
           supernodePastelID,
           validMasternodeListFullDF
         );
-        await inferenceClient.creditPackPurchaseCompletionAnnouncement(
-          supernodeURL,
-          creditPackStorageRetryRequestResponse
-        );
+await inferenceClient.creditPackPurchaseCompletionAnnouncement(
+  supernodeURL,
+  creditPackStorageRetryRequestResponse as unknown as CreditPackPurchaseRequestConfirmation
+);
       } catch {
         // Silently ignore errors in completion announcements
       }
@@ -633,9 +630,8 @@ export async function getCreditPackTicketInfoEndToEnd(
       requestResponse,
       requestConfirmation,
       balanceInfo: {
-        credit_pack_current_credit_balance:
-          balanceInfo.credit_pack_current_credit_balance,
-        balance_as_of_datetime: balanceInfo.balance_as_of_datetime,
+        credit_pack_current_credit_balance: Number(balanceInfo.credit_pack_current_credit_balance),
+        balance_as_of_datetime: String(balanceInfo.balance_as_of_datetime),
       },
     };
   } catch (error) {
@@ -669,11 +665,11 @@ export async function getMyValidCreditPackTicketsEndToEnd(): Promise<
       validMasternodeListFullDF
     );
 
-    let allResponses: { response: CreditPack[]; url: string }[] = [];
-    let nonEmptyResponses: { response: CreditPack[]; url: string }[] = [];
+    const allResponses: { response: CreditPack[]; url: string }[] = [];
+    const nonEmptyResponses: { response: CreditPack[]; url: string }[] = [];
     let isResolved = false;
 
-    await new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve) => {
       let completedRequests = 0;
 
       const handleResponse = () => {
@@ -714,9 +710,9 @@ export async function getMyValidCreditPackTicketsEndToEnd(): Promise<
             browserLogger.info(
               `Response received from supernode at ${url}; response length: ${response.length}`
             );
-            allResponses.push({ response, url });
+            allResponses.push({ response: response as unknown as CreditPack[], url });
             if (response.length > 0) {
-              nonEmptyResponses.push({ response, url });
+              nonEmptyResponses.push({ response: response as unknown as CreditPack[], url });
             }
             completedRequests++;
             handleResponse();
@@ -793,13 +789,12 @@ export async function handleInferenceRequestEndToEnd(
     const inferenceClient = new PastelInferenceClient({ pastelID, passphrase });
     const modelParametersJSON = utils.safeStringify(params.modelParameters);
 
-    // Get the closest N supernode URLs that support the desired model, ordered by response time
     const supernodeURLs =
       await inferenceClient.getClosestSupernodeURLsThatSupportsDesiredModel(
         params.requestedModelCanonicalString,
         params.modelInferenceTypeString,
         modelParametersJSON,
-        12 // Limit to the closest 12 supernodes
+        12
       );
 
     if (!supernodeURLs || supernodeURLs.length === 0) {
@@ -809,12 +804,6 @@ export async function handleInferenceRequestEndToEnd(
       return null;
     }
 
-    let inferenceResultDict: InferenceResultDict | null = null;
-    let auditResults: AuditResult[] | null = null;
-    let validationResults: ValidationResult | null = null;
-    let error: Error | null = null;
-
-    // Limit to trying the 5 fastest supernodes (based on response times)
     const maxTries = Math.min(5, supernodeURLs.length);
 
     for (let i = 0; i < maxTries; i++) {
@@ -827,17 +816,14 @@ export async function handleInferenceRequestEndToEnd(
         const modelInputDataJSONBase64Encoded = btoa(
           JSON.stringify(params.modelInputData)
         );
-
         const modelParametersJSONBase64Encoded = btoa(modelParametersJSON);
-
         const currentBlockHeight = await rpc.getCurrentPastelBlockHeight();
 
         const inferenceRequestData: InferenceAPIUsageRequest = {
           inference_request_id: utils.generateUUID(),
           requesting_pastelid: pastelID,
           credit_pack_ticket_pastel_txid: params.creditPackTicketPastelTxid,
-          requested_model_canonical_string:
-            params.requestedModelCanonicalString,
+          requested_model_canonical_string: params.requestedModelCanonicalString,
           model_inference_type_string: params.modelInferenceTypeString,
           model_parameters_json_b64: modelParametersJSONBase64Encoded,
           model_input_data_json_b64: modelInputDataJSONBase64Encoded,
@@ -849,20 +835,16 @@ export async function handleInferenceRequestEndToEnd(
           requesting_pastelid_signature_on_request_hash: "",
         };
 
-        const sha3256HashOfInferenceRequestFields =
+        inferenceRequestData.sha3_256_hash_of_inference_request_fields =
           await utils.computeSHA3256HashOfSQLModelResponseFields(
             inferenceRequestData
           );
-        inferenceRequestData.sha3_256_hash_of_inference_request_fields =
-          sha3256HashOfInferenceRequestFields;
-        const requestingPastelIDSignatureOnRequestHash =
+        inferenceRequestData.requesting_pastelid_signature_on_request_hash =
           await rpc.signMessageWithPastelID(
             pastelID,
-            sha3256HashOfInferenceRequestFields,
+            inferenceRequestData.sha3_256_hash_of_inference_request_fields,
             passphrase
           );
-        inferenceRequestData.requesting_pastelid_signature_on_request_hash =
-          requestingPastelIDSignatureOnRequestHash;
 
         const usageRequestResponse =
           await inferenceClient.makeInferenceAPIUsageRequest(
@@ -880,20 +862,18 @@ export async function handleInferenceRequestEndToEnd(
           );
         }
 
-        const usageRequestResponseDict = usageRequestResponse;
-        const inferenceRequestID =
-          usageRequestResponseDict.inference_request_id;
-        const inferenceResponseID =
-          usageRequestResponseDict.inference_response_id;
+        const inferenceRequestID = usageRequestResponse.inference_request_id;
+        const inferenceResponseID = usageRequestResponse.inference_response_id;
         const proposedCostInCredits = parseFloat(
-          usageRequestResponseDict.proposed_cost_of_request_in_inference_credits.toString()
+          usageRequestResponse.proposed_cost_of_request_in_inference_credits.toString()
         );
         const creditUsageTrackingPSLAddress =
-          usageRequestResponseDict.credit_usage_tracking_psl_address;
+          usageRequestResponse.credit_usage_tracking_psl_address;
         const creditUsageTrackingAmountInPSL =
           parseFloat(
-            usageRequestResponseDict.request_confirmation_message_amount_in_patoshis.toString()
+            usageRequestResponse.request_confirmation_message_amount_in_patoshis.toString()
           ) / 100000;
+        
         const trackingAddressBalance = await rpc.checkPSLAddressBalance(
           creditUsageTrackingPSLAddress
         );
@@ -908,12 +888,13 @@ export async function handleInferenceRequestEndToEnd(
         }
 
         if (proposedCostInCredits <= params.maximumInferenceCostInCredits) {
+          const burnAddress = await rpc.getBurnAddress();
           const trackingTransactionTxid =
             await rpc.sendTrackingAmountFromControlAddressToBurnAddressToConfirmInferenceRequest(
               inferenceRequestID,
               creditUsageTrackingPSLAddress,
               creditUsageTrackingAmountInPSL,
-              pastelGlobals.getBurnAddress()
+              burnAddress
             );
 
           const txidLooksValid = /^[0-9a-fA-F]{64}$/.test(
@@ -940,7 +921,7 @@ export async function handleInferenceRequestEndToEnd(
             );
 
             const maxTriesToGetConfirmation = 60;
-            let initialWaitTimeInSeconds = 3;
+            const initialWaitTimeInSeconds = 3;
             let waitTimeInSeconds = initialWaitTimeInSeconds;
 
             for (let cnt = 0; cnt < maxTriesToGetConfirmation; cnt++) {
@@ -978,16 +959,12 @@ export async function handleInferenceRequestEndToEnd(
                     inferenceResponseID
                   );
 
-                const outputResultsDict = outputResults;
-                  outputResults.inference_result_json_base64.length;
-                const maxResponseSizeToLog = 20000;
-
-                inferenceResultDict = {
+                const inferenceResult: InferenceResult = {
                   supernode_url: supernodeURL,
                   request_data: inferenceRequestData,
-                  usage_request_response: usageRequestResponseDict,
+                  usage_request_response: usageRequestResponse,
                   model_input_data_json: params.modelInputData,
-                  output_results: outputResultsDict,
+                  output_results: outputResults,
                 };
 
                 if (params.modelInferenceTypeString === "text_to_image") {
@@ -996,8 +973,7 @@ export async function handleInferenceRequestEndToEnd(
                   );
                   const jsonObject = JSON.parse(jsonString);
                   const imageBase64 = jsonObject.image;
-                  inferenceResultDict.generated_image_decoded =
-                    atob(imageBase64);
+                  inferenceResult.generated_image_decoded = atob(imageBase64);
                 } else if (
                   params.modelInferenceTypeString === "embedding_document"
                 ) {
@@ -1005,14 +981,13 @@ export async function handleInferenceRequestEndToEnd(
                     outputResults.inference_result_json_base64
                   );
                   const zipBinary = atob(inferenceResultDecoded);
-                  inferenceResultDict.zip_file_data = zipBinary;
+                  inferenceResult.zip_file_data = zipBinary;
                 } else {
                   const inferenceResultDecoded = atob(
                     outputResults.inference_result_json_base64
                   );
                   console.log(`Decoded response:\n${inferenceResultDecoded}`);
-                  inferenceResultDict.inference_result_decoded =
-                    inferenceResultDecoded;
+                  inferenceResult.inference_result_decoded = inferenceResultDecoded;
                 }
 
                 const useAuditFeature = false;
@@ -1023,13 +998,12 @@ export async function handleInferenceRequestEndToEnd(
                   );
                   await new Promise((resolve) => setTimeout(resolve, 3000));
 
-                  auditResults =
+                  const auditResults =
                     await inferenceClient.auditInferenceRequestResponseID(
-                      inferenceResponseID,
-                      supernodeURL
+                      inferenceResponseID
                     );
-                  validationResults = utils.validateInferenceData(
-                    inferenceResultDict,
+                  const validationResults = utils.validateInferenceData(
+                    inferenceResult,
                     auditResults
                   );
                   console.log(
@@ -1041,20 +1015,9 @@ export async function handleInferenceRequestEndToEnd(
                   if (!validationResults) {
                     console.warn("Validation results are null");
                   }
-                } else {
-                  auditResults = null;
-                  validationResults = null;
                 }
 
-                if (!inferenceResultDict) {
-                  console.error("Inference result is null");
-                  return {
-                    inferenceResultDict: null,
-                    auditResults: null,
-                    validationResults: null,
-                  };
-                }
-                return { inferenceResultDict, auditResults, validationResults };
+                return inferenceResult;
               } else {
                 console.log("Inference results not available yet; retrying...");
               }
@@ -1064,34 +1027,22 @@ export async function handleInferenceRequestEndToEnd(
           console.log(
             `Quoted price of ${proposedCostInCredits} credits exceeds the maximum allowed cost of ${params.maximumInferenceCostInCredits} credits. Inference request not confirmed.`
           );
-          return {
-            inferenceResultDict: null,
-            auditResults: null,
-            validationResults: null,
-          };
         }
       } catch (err) {
-        error = err as Error;
         console.warn(
-          `Failed inference request to Supernode URL ${supernodeURL}. Moving on to the next one.`
+          `Failed inference request to Supernode URL ${supernodeURL}. Moving on to the next one. Error: ${(err as Error).message}`
         );
       }
     }
 
-    // If no inference request succeeded after all retries
-    if (!inferenceResultDict) {
-      throw new Error(
-        `Failed to make inference request after ${maxTries} tries. Last error: ${
-          error ? error.message : "Unknown error"
-        }`
-      );
-    }
+    console.error(
+      `Failed to make inference request after ${maxTries} tries.`
+    );
+    return null;
   } catch (error) {
     console.error(
       `Error in handleInferenceRequestEndToEnd: ${(error as Error).message}`
     );
     throw error;
   }
-
-  return null;
 }

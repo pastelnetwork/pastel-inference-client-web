@@ -1,10 +1,12 @@
 // src/app/lib/logger.ts
 
+'use client'
+
 import { BrowserLogger, LogEntry, LoggerListener } from '@/app/types';
 
 class BrowserLoggerImpl implements BrowserLogger {
   logBuffer: string[] = [];
-  MAX_LOG_ENTRIES: number = 100;
+  MAX_LOG_ENTRIES: number = 1000;
   listeners: Map<string, Set<LoggerListener>> = new Map();
 
   log(level: string, msg: string, meta?: unknown): void {

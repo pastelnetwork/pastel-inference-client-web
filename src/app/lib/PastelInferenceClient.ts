@@ -1,5 +1,7 @@
 // src/app/lib/PastelInferenceClient.ts
 
+'use client'
+
 import BrowserRPCReplacement from "./BrowserRPCReplacement";
 import { BrowserDatabase } from "./BrowserDatabase";
 import * as utils from "./utils";
@@ -29,6 +31,7 @@ import {
   CreditPackPurchaseRequestRejection,
   CreditPackPurchaseRequestResponseTermination,
   CreditPackPurchaseRequestStatus,
+  AuditResult 
 } from "@/app/types";
 
 const rpc = new BrowserRPCReplacement();
@@ -46,7 +49,7 @@ class PastelInferenceClient {
   public getPastelID(): string {
     return this.pastelID;
   }
-  
+
   private async requestAndSignChallenge(
     supernodeURL: string
   ): Promise<ChallengeResponse> {
@@ -402,20 +405,21 @@ class PastelInferenceClient {
         validationSchemas.creditPackPurchaseRequestResponseSchema.parse(
           credit_pack_purchase_request_response
         );
-        const validatedRequestConfirmation = validationSchemas.creditPackPurchaseRequestConfirmationSchema.parse(
-            credit_pack_purchase_request_confirmation
-          ) as CreditPackPurchaseRequestConfirmation;
+      const validatedRequestConfirmation = validationSchemas.creditPackPurchaseRequestConfirmationSchema.parse(
+        credit_pack_purchase_request_confirmation
+  );
 
-      return {
-        requestResponse:
-          validatedRequestResponse as CreditPackPurchaseRequestResponse,
-        requestConfirmation:
-          validatedRequestConfirmation as CreditPackPurchaseRequestConfirmation,
-        balanceInfo: {
-          credit_pack_current_credit_balance: 0,
-          balance_as_of_datetime: new Date().toISOString(),
-        },
-      };
+  return {
+    requestResponse: validatedRequestResponse,
+    requestConfirmation: {
+      ...validatedRequestConfirmation,
+      id: parseInt(validatedRequestConfirmation.id, 10)
+    },
+    balanceInfo: {
+      credit_pack_current_credit_balance: 0,
+      balance_as_of_datetime: new Date().toISOString(),
+    },
+  };
     } catch (error) {
       console.error(
         `Error retrieving credit pack ticket from txid: ${
@@ -443,9 +447,9 @@ class PastelInferenceClient {
       );
       const { challenge, challenge_id, challenge_signature } =
         await this.requestAndSignChallenge(supernodeURL);
-      const preparedCreditPackRequest = await utils.prepareModelForEndpoint(
-        creditPackRequest
-      );
+        const preparedCreditPackRequest = await utils.prepareModelForEndpoint(
+          validatedCreditPackRequest
+        );
       const response = await fetch(
         `${supernodeURL}/credit_purchase_initial_request`,
         {
@@ -744,10 +748,9 @@ return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTerm
           "response to credit pack purchase request",
           transformedResult
         );
-        const validatedResponse =
-          validationSchemas.creditPackPurchaseRequestResponseSchema.parse(
-            transformedResult
-          );
+        const validatedResponse = validationSchemas.creditPackPurchaseRequestResponseSchema.parse(
+          transformedResult as CreditPackPurchaseRequestResponse
+        );
         await db.addData(
           "CreditPackPurchaseRequestResponse",
           validatedResponse
@@ -800,10 +803,7 @@ return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTerm
         "response to credit pack purchase confirmation",
         result
       );
-      const validatedResult =
-        validationSchemas.creditPackPurchaseRequestConfirmationResponseSchema.parse(
-          result
-        );
+      const validatedResult = validationSchemas.creditPackPurchaseRequestConfirmationResponseSchema.parse(result);
       await db.addData(
         "CreditPackPurchaseRequestConfirmationResponse",
         validatedResult
@@ -903,8 +903,8 @@ return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTerm
       const { challenge, challenge_id, challenge_signature } =
         await this.requestAndSignChallenge(supernodeURL);
 
-      const payload = validatedConfirmation;
-      delete (payload as any).id;
+      const payload = { ...validatedConfirmation };
+      delete (payload as Partial<typeof validatedConfirmation>).id;
 
       const response = await fetch(
         `${supernodeURL}/credit_pack_purchase_completion_announcement`,
@@ -1160,7 +1160,7 @@ return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTerm
     try {
       const validatedRequest =
         validationSchemas.inferenceAPIUsageRequestSchema.parse(requestData);
-      delete (validatedRequest as any).id;
+      delete (validatedRequest as Partial<InferenceRequestData>).id;
       await db.addData("InferenceAPIUsageRequest", validatedRequest);
       const { challenge, challenge_id, challenge_signature } =
         await this.requestAndSignChallenge(supernodeURL);
@@ -1191,7 +1191,7 @@ return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTerm
         result
       );
       const transformedResult = await utils.prepareModelForValidation(result);
-      delete (transformedResult as any).id;
+      delete (transformedResult as Partial<InferenceAPIUsageResponse>).id;
       const validatedResponse =
         validationSchemas.inferenceAPIUsageResponseSchema.parse(
           transformedResult
@@ -1213,8 +1213,8 @@ return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTerm
     confirmationData: InferenceConfirmationData
   ): Promise<unknown> {
     try {
-      const confirmationDataJSON = confirmationData;
-      delete (confirmationDataJSON as any).id;
+      const confirmationDataJSON = { ...confirmationData };
+      delete (confirmationDataJSON as Partial<InferenceConfirmationData>).id;
 
       const validatedConfirmation =
         validationSchemas.inferenceConfirmationSchema.parse(
@@ -1431,53 +1431,37 @@ return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTerm
   }
 
   async auditInferenceRequestResponseID(
-    inferenceResponseID: string,
-    pastelIDOfSupernodeToAudit: string
-  ): Promise<(InferenceAPIUsageResponse | InferenceAPIOutputResult)[]> {
+    inferenceResponseID: string
+  ): Promise<AuditResult[]> {
     try {
       const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
       const filteredSupernodes = await utils.filterSupernodes(
         validMasternodeListFullDF
       );
-
-      const supernodeURLsAndPastelIDs = filteredSupernodes
-        .filter((supernode) => supernode.extKey !== pastelIDOfSupernodeToAudit)
-        .slice(0, 5);
-
-      const listOfSupernodePastelIDs = supernodeURLsAndPastelIDs.map(
-        (supernode) => supernode.extKey
-      );
+  
+      const supernodeURLsAndPastelIDs = filteredSupernodes.slice(0, 5);
+  
       const listOfSupernodeURLs = supernodeURLsAndPastelIDs.map(
         (supernode) => `http://${supernode.ipaddress_port.split(":")[0]}:7123`
       );
-      const listOfSupernodeIPs = listOfSupernodeURLs.map(
-        (url) => url.split("//")[1].split(":")[0]
-      );
-      console.info(
-        `Now attempting to audit inference request response with ID ${inferenceResponseID} with ${listOfSupernodePastelIDs.length} closest supernodes (with Supernode IPs of ${listOfSupernodeIPs})...`
-      );
-
+  
       const responseAuditTasks = listOfSupernodeURLs.map((url) =>
         this.callAuditInferenceRequestResponse(url, inferenceResponseID)
       );
       const responseAuditResults = await Promise.all(responseAuditTasks);
-
+  
       await new Promise((resolve) => setTimeout(resolve, 20000));
-
-      console.info(
-        `Now attempting to audit inference request result for response ID ${inferenceResponseID} by comparing information from other Supernodes to the information reported by the Responding Supernode...`
-      );
-
+  
       const resultAuditTasks = listOfSupernodeURLs.map((url) =>
         this.callAuditInferenceRequestResult(url, inferenceResponseID)
       );
       const resultAuditResults = await Promise.all(resultAuditTasks);
-
-      const auditResults = [...responseAuditResults, ...resultAuditResults];
-      console.info(
-        `Audit results retrieved for inference response ID ${inferenceResponseID}`
-      );
-
+  
+      const auditResults: AuditResult[] = responseAuditResults.map((response, index) => ({
+        ...response,
+        ...resultAuditResults[index],
+      }));
+  
       return auditResults;
     } catch (error) {
       console.error(

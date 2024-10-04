@@ -1,5 +1,7 @@
 // src/app/lib/BrowserDatabase.ts
 
+'use client'
+
 import {
   SupernodeList,
   Message,

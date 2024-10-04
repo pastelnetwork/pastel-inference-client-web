@@ -1,6 +1,9 @@
 // src/app/lib/cache.ts
+
+'use client'
+
 export class Cache<T> {
-    private static instance: Cache<any>;
+    private static instance: Cache<unknown>;
     private cache: Map<string, { data: T; timestamp: number }> = new Map();
   
     private constructor() {}
@@ -46,4 +49,4 @@ export class Cache<T> {
     }
 }
   
-export const cacheInstance = Cache.getInstance<any>();
+export const cacheInstance = Cache.getInstance<unknown>();

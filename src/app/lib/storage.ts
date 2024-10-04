@@ -1,10 +1,12 @@
 // src/app/lib/storage.ts
 
-import { BrowserRPCReplacement } from './BrowserRPCReplacement';
+'use client'
+
+import BrowserRPCReplacement from "./BrowserRPCReplacement";
 import { BrowserDatabase } from './BrowserDatabase';
-import { PastelID, NetworkInfo } from '@/app/types';
+import { PastelID } from '@/app/types';
 import browserLogger from '@/app/lib/logger';
-import pastelGlobals from '@/app/lib/globals';
+
 
 class BrowserStorage {
   private browserDB: BrowserDatabase;
@@ -92,8 +94,8 @@ class BrowserStorage {
     return this.browserDB.deleteData(storeName, id);
   }
 
-  async performRPCOperation<T>(method: keyof BrowserRPCReplacement, ...args: any[]): Promise<T> {
-    return (this.rpcReplacement[method] as (...args: any[]) => Promise<T>)(...args);
+  async performRPCOperation<T>(method: keyof BrowserRPCReplacement, ...args: unknown[]): Promise<T> {
+    return (this.rpcReplacement[method] as (...args: unknown[]) => Promise<T>)(...args);
   }
 
   async getNetworkFromLocalStorage(): Promise<string> {

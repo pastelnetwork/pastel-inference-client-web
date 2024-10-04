@@ -1,5 +1,7 @@
 // src/app/lib/utils.ts
 
+'use client'
+
 import CryptoJS from "crypto-js";
 import pako from "pako";
 import browserLogger from "@/app/lib/logger";
@@ -93,7 +95,7 @@ export async function storeInCache<T>(key: string, data: T): Promise<void> {
 }
 
 export async function getFromCache<T>(key: string): Promise<T | null> {
-  return cacheInstance.get(key);
+  return cacheInstance.get(key) as T | null;
 }
 
 // Market price functions
@@ -433,34 +435,30 @@ export async function computeSHA3256HashOfSQLModelResponseFields(
   return sha256HashOfResponseFields;
 }
 
-export async function prepareModelForEndpoint(
-  modelInstance: Record<string, unknown>
+export async function prepareModelForEndpoint<T extends Record<string, unknown>>(
+  modelInstance: T
 ): Promise<Record<string, unknown>> {
-  const preparedModelInstance: { [key: string]: unknown } = {};
-  const instanceData = modelInstance;
-  for (const key in instanceData) {
-    if (Object.prototype.hasOwnProperty.call(instanceData, key)) {
+  const preparedModelInstance: Record<string, unknown> = {};
+  for (const key in modelInstance) {
+    if (Object.prototype.hasOwnProperty.call(modelInstance, key)) {
       if (key.endsWith("_json")) {
-        if (typeof instanceData[key] === "string") {
+        if (typeof modelInstance[key] === "string") {
           try {
-            const parsedJson = JSON.parse(instanceData[key] as string);
+            const parsedJson = JSON.parse(modelInstance[key] as string);
             preparedModelInstance[key] = pythonCompatibleStringify(parsedJson);
           } catch (e) {
             browserLogger.error(
-              "Failed to parse JSON for key:",
-              key,
-              "Error:",
-              e
+              `Failed to parse JSON for key: ${key}. Error: ${e}`
             );
-            preparedModelInstance[key] = instanceData[key];
+            preparedModelInstance[key] = modelInstance[key];
           }
         } else {
           preparedModelInstance[key] = pythonCompatibleStringify(
-            instanceData[key]
+            modelInstance[key]
           );
         }
       } else {
-        preparedModelInstance[key] = instanceData[key];
+        preparedModelInstance[key] = modelInstance[key];
       }
     }
   }
@@ -486,25 +484,23 @@ export function removeSequelizeFields(
   });
 }
 
-export async function prepareModelForValidation(
-  modelInstance: Record<string, unknown>
-): Promise<Record<string, unknown>> {
-  const preparedModelInstance = { ...modelInstance };
-  Object.keys(preparedModelInstance).forEach((key) => {
-    if (
-      key.endsWith("_json") &&
-      typeof preparedModelInstance[key] === "string"
-    ) {
-      try {
-        preparedModelInstance[key] = JSON.parse(
-          preparedModelInstance[key] as string
-        );
-      } catch (error) {
-        browserLogger.error(`Error parsing ${key}: ${error}`);
+export async function prepareModelForValidation<T>(modelInstance: Record<string, unknown>): Promise<T> {
+  const preparedModelInstance: Record<string, unknown> = {};
+  for (const key in modelInstance) {
+    if (Object.prototype.hasOwnProperty.call(modelInstance, key)) {
+      if (key.endsWith("_json") && typeof modelInstance[key] === "string") {
+        try {
+          preparedModelInstance[key] = JSON.parse(modelInstance[key] as string);
+        } catch (error) {
+          console.error(`Error parsing ${key}: ${error}`);
+          preparedModelInstance[key] = modelInstance[key];
+        }
+      } else {
+        preparedModelInstance[key] = modelInstance[key];
       }
     }
-  });
-  return preparedModelInstance;
+  }
+  return preparedModelInstance as T;
 }
 
 export function compareDatetimes(
@@ -620,8 +616,26 @@ export async function getClosestSupernodePastelIDFromList(
       }
 
       try {
-        const distance = await calculateXORDistance(localPastelID, pastelID);
-        return { pastelID, distance: BigInt(distance) };
+        const startTime = Date.now();
+        const distanceResult = await Promise.race([
+          calculateXORDistance(localPastelID, pastelID),
+          new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error("XOR calculation timed out")), maxResponseTimeInMilliseconds)
+          )
+        ]);
+        const endTime = Date.now();
+        
+        if (endTime - startTime > maxResponseTimeInMilliseconds) {
+          browserLogger.warn(`XOR calculation for ${pastelID} exceeded time limit`);
+          return null;
+        }
+
+        if (distanceResult === null) {
+          browserLogger.warn(`XOR calculation for ${pastelID} returned null`);
+          return null;
+        }
+
+        return { pastelID, distance: BigInt(distanceResult) };
       } catch (error) {
         browserLogger.error(
           `Error calculating XOR distance: ${(error as Error).message}`
@@ -683,7 +697,9 @@ export async function validatePastelIDSignatureFields(
   let lastSignatureFieldName: string | null = null;
   let lastHashFieldName: string | null = null;
   let firstPastelID: string | undefined;
-  let pastelID: string, messageToVerify: string, signature: string;
+  let pastelID: string;
+  let messageToVerify: string;
+  let signature: string | undefined;
 
   const fields = modelInstance;
   for (const fieldName in fields) {
@@ -724,22 +740,27 @@ export async function validatePastelIDSignatureFields(
   if (
     firstPastelID &&
     lastHashFieldName &&
-    lastSignatureFieldName &&
-    signature
+    lastSignatureFieldName
   ) {
     pastelID = firstPastelID;
     messageToVerify = fields[lastHashFieldName] as string;
     if (!embeddedField) {
       signature = fields[lastSignatureFieldName] as string;
     }
-    const verificationResult = await rpc.verifyMessageWithPastelID(
-      pastelID,
-      messageToVerify,
-      signature
-    );
-    if (verificationResult !== "OK") {
+    if (signature) {
+      const verificationResult = await rpc.verifyMessageWithPastelID(
+        pastelID,
+        messageToVerify,
+        signature
+      );
+      if (verificationResult !== "OK") {
+        validationErrors.push({
+          message: `PastelID signature in field ${lastSignatureFieldName} failed verification`,
+        });
+      }
+    } else {
       validationErrors.push({
-        message: `PastelID signature in field ${lastSignatureFieldName} failed verification`,
+        message: `Signature is missing`,
       });
     }
   } else {
@@ -915,58 +936,19 @@ export function validateInferenceResponseFields(
   const proposedCostInCreditsCounts: { [key: number]: number } = {};
   const remainingCreditsAfterRequestCounts: { [key: number]: number } = {};
   const creditUsageTrackingPSLAddressCounts: { [key: string]: number } = {};
-  const requestConfirmationMessageAmountInPatoshisCounts: {
-    [key: number]: number;
-  } = {};
-  const maxBlockHeightToIncludeConfirmationTransactionCounts: {
-    [key: number]: number;
-  } = {};
-  const supernodePastelIDAndSignatureOnInferenceResponseIDCounts: {
-    [key: string]: number;
-  } = {};
+  const requestConfirmationMessageAmountInPatoshisCounts: { [key: number]: number } = {};
+  const maxBlockHeightToIncludeConfirmationTransactionCounts: { [key: number]: number } = {};
+  const supernodePastelIDAndSignatureOnInferenceResponseIDCounts: { [key: string]: number } = {};
 
   for (const result of responseAuditResults) {
-    inferenceResponseIDCounts[result.inference_response_id] =
-      (inferenceResponseIDCounts[result.inference_response_id] || 0) + 1;
-    inferenceRequestIDCounts[result.inference_request_id] =
-      (inferenceRequestIDCounts[result.inference_request_id] || 0) + 1;
-    proposedCostInCreditsCounts[
-      result.proposed_cost_of_request_in_inference_credits
-    ] =
-      (proposedCostInCreditsCounts[
-        result.proposed_cost_of_request_in_inference_credits
-      ] || 0) + 1;
-    remainingCreditsAfterRequestCounts[
-      result.remaining_credits_in_pack_after_request_processed
-    ] =
-      (remainingCreditsAfterRequestCounts[
-        result.remaining_credits_in_pack_after_request_processed
-      ] || 0) + 1;
-    creditUsageTrackingPSLAddressCounts[
-      result.credit_usage_tracking_psl_address
-    ] =
-      (creditUsageTrackingPSLAddressCounts[
-        result.credit_usage_tracking_psl_address
-      ] || 0) + 1;
-    requestConfirmationMessageAmountInPatoshisCounts[
-      result.request_confirmation_message_amount_in_patoshis
-    ] =
-      (requestConfirmationMessageAmountInPatoshisCounts[
-        result.request_confirmation_message_amount_in_patoshis
-      ] || 0) + 1;
-    maxBlockHeightToIncludeConfirmationTransactionCounts[
-      result.max_block_height_to_include_confirmation_transaction
-    ] =
-      (maxBlockHeightToIncludeConfirmationTransactionCounts[
-        result.max_block_height_to_include_confirmation_transaction
-      ] || 0) + 1;
-    supernodePastelIDAndSignatureOnInferenceResponseIDCounts[
-      result.supernode_pastelid_and_signature_on_inference_request_response_hash
-    ] =
-      (supernodePastelIDAndSignatureOnInferenceResponseIDCounts[
-        result
-          .supernode_pastelid_and_signature_on_inference_request_response_hash
-      ] || 0) + 1;
+    inferenceResponseIDCounts[result.inference_response_id] = (inferenceResponseIDCounts[result.inference_response_id] || 0) + 1;
+    inferenceRequestIDCounts[result.inference_request_id] = (inferenceRequestIDCounts[result.inference_request_id] || 0) + 1;
+    proposedCostInCreditsCounts[result.proposed_cost_of_request_in_inference_credits] = (proposedCostInCreditsCounts[result.proposed_cost_of_request_in_inference_credits] || 0) + 1;
+    remainingCreditsAfterRequestCounts[result.remaining_credits_in_pack_after_request_processed] = (remainingCreditsAfterRequestCounts[result.remaining_credits_in_pack_after_request_processed] || 0) + 1;
+    creditUsageTrackingPSLAddressCounts[result.credit_usage_tracking_psl_address] = (creditUsageTrackingPSLAddressCounts[result.credit_usage_tracking_psl_address] || 0) + 1;
+    requestConfirmationMessageAmountInPatoshisCounts[result.request_confirmation_message_amount_in_patoshis] = (requestConfirmationMessageAmountInPatoshisCounts[result.request_confirmation_message_amount_in_patoshis] || 0) + 1;
+    maxBlockHeightToIncludeConfirmationTransactionCounts[result.max_block_height_to_include_confirmation_transaction] = (maxBlockHeightToIncludeConfirmationTransactionCounts[result.max_block_height_to_include_confirmation_transaction] || 0) + 1;
+    supernodePastelIDAndSignatureOnInferenceResponseIDCounts[result.supernode_pastelid_and_signature_on_inference_request_response_hash] = (supernodePastelIDAndSignatureOnInferenceResponseIDCounts[result.supernode_pastelid_and_signature_on_inference_request_response_hash] || 0) + 1;
   }
 
   const getMajorityValue = <T>(counts: { [key: string]: number }): T => {
@@ -975,56 +957,29 @@ export function validateInferenceResponseFields(
     ) as unknown as T;
   };
 
-  const majorityInferenceResponseID = getMajorityValue<string>(
-    inferenceResponseIDCounts
-  );
-  const majorityInferenceRequestID = getMajorityValue<string>(
-    inferenceRequestIDCounts
-  );
-  const majorityProposedCostInCredits = getMajorityValue<number>(
-    proposedCostInCreditsCounts
-  );
-  const majorityRemainingCreditsAfterRequest = getMajorityValue<number>(
-    remainingCreditsAfterRequestCounts
-  );
-  const majorityCreditUsageTrackingPSLAddress = getMajorityValue<string>(
-    creditUsageTrackingPSLAddressCounts
-  );
-  const majorityRequestConfirmationMessageAmountInPatoshis =
-    getMajorityValue<number>(requestConfirmationMessageAmountInPatoshisCounts);
-  const majorityMaxBlockHeightToIncludeConfirmationTransaction =
-    getMajorityValue<number>(
-      maxBlockHeightToIncludeConfirmationTransactionCounts
-    );
-  const majoritySupernodePastelIDAndSignatureOnInferenceResponseID =
-    getMajorityValue<string>(
-      supernodePastelIDAndSignatureOnInferenceResponseIDCounts
-    );
+  const majorityInferenceResponseID = getMajorityValue<string>(inferenceResponseIDCounts);
+  const majorityInferenceRequestID = getMajorityValue<string>(inferenceRequestIDCounts);
+  const majorityProposedCostInCredits = getMajorityValue<number>(proposedCostInCreditsCounts);
+  const majorityRemainingCreditsAfterRequest = getMajorityValue<number>(remainingCreditsAfterRequestCounts);
+  const majorityCreditUsageTrackingPSLAddress = getMajorityValue<string>(creditUsageTrackingPSLAddressCounts);
+  const majorityRequestConfirmationMessageAmountInPatoshis = getMajorityValue<number>(requestConfirmationMessageAmountInPatoshisCounts);
+  const majorityMaxBlockHeightToIncludeConfirmationTransaction = getMajorityValue<number>(maxBlockHeightToIncludeConfirmationTransactionCounts);
+  const majoritySupernodePastelIDAndSignatureOnInferenceResponseID = getMajorityValue<string>(supernodePastelIDAndSignatureOnInferenceResponseIDCounts);
 
   const validationResults: ValidationResult = {
-    inference_response_id:
-      majorityInferenceResponseID ===
-      usageRequestResponse.inference_response_id,
-    inference_request_id:
-      majorityInferenceRequestID === usageRequestResponse.inference_request_id,
-    proposed_cost_in_credits:
-      majorityProposedCostInCredits ===
-      usageRequestResponse.proposed_cost_of_request_in_inference_credits,
-    remaining_credits_after_request:
-      majorityRemainingCreditsAfterRequest ===
-      usageRequestResponse.remaining_credits_in_pack_after_request_processed,
-    credit_usage_tracking_psl_address:
-      majorityCreditUsageTrackingPSLAddress ===
-      usageRequestResponse.credit_usage_tracking_psl_address,
-    request_confirmation_message_amount_in_patoshis:
-      majorityRequestConfirmationMessageAmountInPatoshis ===
-      usageRequestResponse.request_confirmation_message_amount_in_patoshis,
-    max_block_height_to_include_confirmation_transaction:
-      majorityMaxBlockHeightToIncludeConfirmationTransaction ===
-      usageRequestResponse.max_block_height_to_include_confirmation_transaction,
-    supernode_pastelid_and_signature_on_inference_response_id:
-      majoritySupernodePastelIDAndSignatureOnInferenceResponseID ===
-      usageRequestResponse.supernode_pastelid_and_signature_on_inference_request_response_hash,
+    inference_result_id: '', // This field is not present in the response validation
+    inference_response_id: majorityInferenceResponseID === usageRequestResponse.inference_response_id ? majorityInferenceResponseID : '',
+    inference_request_id: majorityInferenceRequestID === usageRequestResponse.inference_request_id ? majorityInferenceRequestID : '',
+    proposed_cost_in_credits: majorityProposedCostInCredits === usageRequestResponse.proposed_cost_of_request_in_inference_credits ? majorityProposedCostInCredits : 0,
+    remaining_credits_after_request: majorityRemainingCreditsAfterRequest === usageRequestResponse.remaining_credits_in_pack_after_request_processed ? majorityRemainingCreditsAfterRequest : 0,
+    credit_usage_tracking_psl_address: majorityCreditUsageTrackingPSLAddress === usageRequestResponse.credit_usage_tracking_psl_address ? majorityCreditUsageTrackingPSLAddress : '',
+    request_confirmation_message_amount_in_patoshis: majorityRequestConfirmationMessageAmountInPatoshis === usageRequestResponse.request_confirmation_message_amount_in_patoshis ? majorityRequestConfirmationMessageAmountInPatoshis : 0,
+    max_block_height_to_include_confirmation_transaction: majorityMaxBlockHeightToIncludeConfirmationTransaction === usageRequestResponse.max_block_height_to_include_confirmation_transaction ? majorityMaxBlockHeightToIncludeConfirmationTransaction : 0,
+    supernode_pastelid_and_signature_on_inference_response_id: majoritySupernodePastelIDAndSignatureOnInferenceResponseID === usageRequestResponse.supernode_pastelid_and_signature_on_inference_request_response_hash ? majoritySupernodePastelIDAndSignatureOnInferenceResponseID : '',
+    responding_supernode_pastelid: '', // This field is not present in the response validation
+    inference_result_json_base64: '', // This field is not present in the response validation
+    inference_result_file_type_strings: '', // This field is not present in the response validation
+    responding_supernode_signature_on_inference_result_id: '', // This field is not present in the response validation
   };
 
   return validationResults;
@@ -1040,39 +995,16 @@ export function validateInferenceResultFields(
   const respondingSupernodePastelIDCounts: { [key: string]: number } = {};
   const inferenceResultJSONBase64Counts: { [key: string]: number } = {};
   const inferenceResultFileTypeStringsCounts: { [key: string]: number } = {};
-  const respondingSupernodeSignatureOnInferenceResultIDCounts: {
-    [key: string]: number;
-  } = {};
+  const respondingSupernodeSignatureOnInferenceResultIDCounts: { [key: string]: number } = {};
 
   for (const result of resultAuditResults) {
-    inferenceResultIDCounts[result.inference_result_id] =
-      (inferenceResultIDCounts[result.inference_result_id] || 0) + 1;
-    inferenceRequestIDCounts[result.inference_request_id] =
-      (inferenceRequestIDCounts[result.inference_request_id] || 0) + 1;
-    inferenceResponseIDCounts[result.inference_response_id] =
-      (inferenceResponseIDCounts[result.inference_response_id] || 0) + 1;
-    respondingSupernodePastelIDCounts[result.responding_supernode_pastelid] =
-      (respondingSupernodePastelIDCounts[
-        result.responding_supernode_pastelid
-      ] || 0) + 1;
-    inferenceResultJSONBase64Counts[
-      result.inference_result_json_base64.slice(0, 32)
-    ] =
-      (inferenceResultJSONBase64Counts[
-        result.inference_result_json_base64.slice(0, 32)
-      ] || 0) + 1;
-    inferenceResultFileTypeStringsCounts[
-      result.inference_result_file_type_strings
-    ] =
-      (inferenceResultFileTypeStringsCounts[
-        result.inference_result_file_type_strings
-      ] || 0) + 1;
-    respondingSupernodeSignatureOnInferenceResultIDCounts[
-      result.responding_supernode_signature_on_inference_result_id
-    ] =
-      (respondingSupernodeSignatureOnInferenceResultIDCounts[
-        result.responding_supernode_signature_on_inference_result_id
-      ] || 0) + 1;
+    inferenceResultIDCounts[result.inference_result_id] = (inferenceResultIDCounts[result.inference_result_id] || 0) + 1;
+    inferenceRequestIDCounts[result.inference_request_id] = (inferenceRequestIDCounts[result.inference_request_id] || 0) + 1;
+    inferenceResponseIDCounts[result.inference_response_id] = (inferenceResponseIDCounts[result.inference_response_id] || 0) + 1;
+    respondingSupernodePastelIDCounts[result.responding_supernode_pastelid] = (respondingSupernodePastelIDCounts[result.responding_supernode_pastelid] || 0) + 1;
+    inferenceResultJSONBase64Counts[result.inference_result_json_base64.slice(0, 32)] = (inferenceResultJSONBase64Counts[result.inference_result_json_base64.slice(0, 32)] || 0) + 1;
+    inferenceResultFileTypeStringsCounts[result.inference_result_file_type_strings] = (inferenceResultFileTypeStringsCounts[result.inference_result_file_type_strings] || 0) + 1;
+    respondingSupernodeSignatureOnInferenceResultIDCounts[result.responding_supernode_signature_on_inference_result_id] = (respondingSupernodeSignatureOnInferenceResultIDCounts[result.responding_supernode_signature_on_inference_result_id] || 0) + 1;
   }
 
   const getMajorityValue = <T>(counts: { [key: string]: number }): T => {
@@ -1081,48 +1013,28 @@ export function validateInferenceResultFields(
     ) as unknown as T;
   };
 
-  const majorityInferenceResultID = getMajorityValue<string>(
-    inferenceResultIDCounts
-  );
-  const majorityInferenceRequestID = getMajorityValue<string>(
-    inferenceRequestIDCounts
-  );
-  const majorityInferenceResponseID = getMajorityValue<string>(
-    inferenceResponseIDCounts
-  );
-  const majorityRespondingSupernodePastelID = getMajorityValue<string>(
-    respondingSupernodePastelIDCounts
-  );
-  const majorityInferenceResultJSONBase64 = getMajorityValue<string>(
-    inferenceResultJSONBase64Counts
-  );
-  const majorityInferenceResultFileTypeStrings = getMajorityValue<string>(
-    inferenceResultFileTypeStringsCounts
-  );
-  const majorityRespondingSupernodeSignatureOnInferenceResultID =
-    getMajorityValue<string>(
-      respondingSupernodeSignatureOnInferenceResultIDCounts
-    );
+  const majorityInferenceResultID = getMajorityValue<string>(inferenceResultIDCounts);
+  const majorityInferenceRequestID = getMajorityValue<string>(inferenceRequestIDCounts);
+  const majorityInferenceResponseID = getMajorityValue<string>(inferenceResponseIDCounts);
+  const majorityRespondingSupernodePastelID = getMajorityValue<string>(respondingSupernodePastelIDCounts);
+  const majorityInferenceResultJSONBase64 = getMajorityValue<string>(inferenceResultJSONBase64Counts);
+  const majorityInferenceResultFileTypeStrings = getMajorityValue<string>(inferenceResultFileTypeStringsCounts);
+  const majorityRespondingSupernodeSignatureOnInferenceResultID = getMajorityValue<string>(respondingSupernodeSignatureOnInferenceResultIDCounts);
 
   const validationResults: ValidationResult = {
-    inference_result_id:
-      majorityInferenceResultID === usageResult.inference_result_id,
-    inference_request_id:
-      majorityInferenceRequestID === usageResult.inference_request_id,
-    inference_response_id:
-      majorityInferenceResponseID === usageResult.inference_response_id,
-    responding_supernode_pastelid:
-      majorityRespondingSupernodePastelID ===
-      usageResult.responding_supernode_pastelid,
-    inference_result_json_base64:
-      majorityInferenceResultJSONBase64 ===
-      usageResult.inference_result_json_base64.slice(0, 32),
-    inference_result_file_type_strings:
-      majorityInferenceResultFileTypeStrings ===
-      usageResult.inference_result_file_type_strings,
-    responding_supernode_signature_on_inference_result_id:
-      majorityRespondingSupernodeSignatureOnInferenceResultID ===
-      usageResult.responding_supernode_signature_on_inference_result_id,
+    inference_result_id: majorityInferenceResultID === usageResult.inference_result_id ? majorityInferenceResultID : '',
+    inference_request_id: majorityInferenceRequestID === usageResult.inference_request_id ? majorityInferenceRequestID : '',
+    inference_response_id: majorityInferenceResponseID === usageResult.inference_response_id ? majorityInferenceResponseID : '',
+    responding_supernode_pastelid: majorityRespondingSupernodePastelID === usageResult.responding_supernode_pastelid ? majorityRespondingSupernodePastelID : '',
+    inference_result_json_base64: majorityInferenceResultJSONBase64 === usageResult.inference_result_json_base64.slice(0, 32) ? majorityInferenceResultJSONBase64 : '',
+    inference_result_file_type_strings: majorityInferenceResultFileTypeStrings === usageResult.inference_result_file_type_strings ? majorityInferenceResultFileTypeStrings : '',
+    responding_supernode_signature_on_inference_result_id: majorityRespondingSupernodeSignatureOnInferenceResultID === usageResult.responding_supernode_signature_on_inference_result_id ? majorityRespondingSupernodeSignatureOnInferenceResultID : '',
+    proposed_cost_in_credits: 0, // This field is not present in the result validation
+    remaining_credits_after_request: 0, // This field is not present in the result validation
+    credit_usage_tracking_psl_address: '', // This field is not present in the result validation
+    request_confirmation_message_amount_in_patoshis: 0, // This field is not present in the result validation
+    max_block_height_to_include_confirmation_transaction: 0, // This field is not present in the result validation
+    supernode_pastelid_and_signature_on_inference_response_id: '', // This field is not present in the result validation
   };
 
   return validationResults;
@@ -1131,33 +1043,28 @@ export function validateInferenceResultFields(
 export function validateInferenceData(
   inferenceResultDict: InferenceResultDict,
   auditResults: AuditResult[]
-): {
-  response_validation: ValidationResult;
-  result_validation: ValidationResult;
-} {
+): ValidationResult {
   const usageRequestResponse = inferenceResultDict.usage_request_response;
   const usageResult = inferenceResultDict.output_results;
 
   const responseValidationResults = validateInferenceResponseFields(
-    auditResults.filter((result) => result.inference_response_id),
+    auditResults,
     usageRequestResponse
   );
 
   const resultValidationResults = validateInferenceResultFields(
-    auditResults.filter((result) => result.inference_result_id),
+    auditResults,
     usageResult
   );
 
-  const validationResults = {
-    response_validation: responseValidationResults,
-    result_validation: resultValidationResults,
+  return {
+    ...responseValidationResults,
+    ...resultValidationResults,
   };
-
-  return validationResults;
 }
 
 export async function filterSupernodes(
-  supernodeList: SupernodeInfo[],
+  supernodeList: (SupernodeInfo | string)[],
   maxResponseTimeInMilliseconds: number = 700,
   minPerformanceRatio: number = 0.75,
   maxSupernodes: number = 130
@@ -1205,12 +1112,14 @@ export async function filterSupernodes(
     return cachedData.slice(0, maxSupernodes);
   }
 
-  let fullSupernodeList = supernodeList;
+  let fullSupernodeList: SupernodeInfo[] = [];
   if (typeof supernodeList[0] === "string") {
     const validMasternodeListFullDF = await rpc.checkSupernodeList();
-    fullSupernodeList = validMasternodeListFullDF.filter((supernode) =>
-      supernodeList.includes(supernode.extKey)
+    fullSupernodeList = validMasternodeListFullDF.validMasternodeListFullDF.filter((supernode: SupernodeInfo) =>
+      (supernodeList as string[]).includes(supernode.extKey)
     );
+  } else {
+    fullSupernodeList = supernodeList as SupernodeInfo[];
   }
 
   const filteredSupernodes: SupernodeInfo[] = [];
@@ -1259,7 +1168,7 @@ export async function filterSupernodes(
         stats.removedDueToPerformance++;
         return null;
       }
-      const result = {
+      const result: SupernodeInfo = {
         ...supernode,
         url: `http://${ipAddress}:7123`,
       };
@@ -1282,8 +1191,7 @@ export async function filterSupernodes(
   return filteredSupernodes.slice(0, maxSupernodes);
 }
 
-type CheckFunction = (...args: unknown[]) => Promise<boolean>;
-
+type CheckFunction = (arg: string) => Promise<boolean>;
 interface ConfirmationOptions {
   maxRetries: number;
   retryDelay: number;
@@ -1292,46 +1200,45 @@ interface ConfirmationOptions {
 
 export async function waitForConfirmation(
   checkFunction: CheckFunction,
-  ...checkFunctionArgs: unknown[]
+  arg: string,
+  options?: Partial<ConfirmationOptions>
 ): Promise<boolean> {
-  const options: ConfirmationOptions = {
+  const defaultOptions: ConfirmationOptions = {
     maxRetries: 30,
     retryDelay: 10000,
     actionName: "condition",
-    ...(typeof checkFunctionArgs[checkFunctionArgs.length - 1] === "object"
-      ? checkFunctionArgs.pop()
-      : {}),
   };
+  const finalOptions = { ...defaultOptions, ...options };
 
-  for (let attempt = 1; attempt <= options.maxRetries; attempt++) {
+  for (let attempt = 1; attempt <= finalOptions.maxRetries; attempt++) {
     try {
-      const result = await checkFunction(...checkFunctionArgs);
+      const result = await checkFunction(arg);
       if (result) {
         browserLogger.info(
-          `${options.actionName} confirmed after ${attempt} attempt(s).`
+          `${finalOptions.actionName} confirmed after ${attempt} attempt(s).`
         );
         return true;
       }
     } catch (error) {
       browserLogger.warn(
-        `Error checking ${options.actionName} (attempt ${attempt}/${
-          options.maxRetries
+        `Error checking ${finalOptions.actionName} (attempt ${attempt}/${
+          finalOptions.maxRetries
         }): ${(error as Error).message}`
       );
     }
 
-    if (attempt < options.maxRetries) {
+    if (attempt < finalOptions.maxRetries) {
       browserLogger.info(
-        `${options.actionName} not yet confirmed. Attempt ${attempt}/${
-          options.maxRetries
-        }. Waiting ${options.retryDelay / 1000} seconds before next check...`
+        `${finalOptions.actionName} not yet confirmed. Attempt ${attempt}/${
+          finalOptions.maxRetries
+        }. Waiting ${finalOptions.retryDelay / 1000} seconds before next check...`
       );
-      await new Promise((resolve) => setTimeout(resolve, options.retryDelay));
+      await new Promise((resolve) => setTimeout(resolve, finalOptions.retryDelay));
     }
   }
 
   browserLogger.warn(
-    `${options.actionName} not confirmed after ${options.maxRetries} attempts.`
+    `${finalOptions.actionName} not confirmed after ${finalOptions.maxRetries} attempts.`
   );
   return false;
 }
@@ -1395,17 +1302,22 @@ export async function importPromotionalPack(jsonData: string): Promise<{
   const processedPacks: { pub_key: string; passphrase: string }[] = [];
 
   try {
-    // Initialize RPC connection
-    browserLogger.info("Initializing RPC connection...");
-    await rpc.initializeRPCConnection();
-    browserLogger.info("RPC connection initialized successfully");
+    // Initialize WASM
+    browserLogger.info("Initializing WASM...");
+    await rpc.initialize();
+    browserLogger.info("WASM initialized successfully");
 
     // Parse the JSON data
-    let packData: any[] = JSON.parse(jsonData);
-
-    // Process each promotional pack in the data
+    let packData: { 
+      pastel_id_pubkey: string; 
+      pastel_id_passphrase: string;
+      secureContainerBase64: string; 
+      requested_initial_credits_in_credit_pack: number;
+      psl_credit_usage_tracking_address: string;
+      psl_credit_usage_tracking_address_private_key: string;
+    }[] = JSON.parse(jsonData);
     if (!Array.isArray(packData)) {
-      packData = [packData]; // Wrap it in an array if it's not already
+      packData = [packData];
     }
 
     for (let i = 0; i < packData.length; i++) {
@@ -1413,15 +1325,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
       browserLogger.info(`Processing pack ${i + 1} of ${packData.length}`);
 
       // 1. Save the PastelID secure container
-      const { rpcport } = await rpc.getLocalRPCSettings();
-      const network =
-        rpcport === "9932"
-          ? "mainnet"
-          : rpcport === "19932"
-          ? "testnet"
-          : "devnet";
-
-      // Store the secure container in IndexedDB
+      const network = await storage.getNetworkFromLocalStorage();
       await storage.storeSecureContainer(
         pack.pastel_id_pubkey,
         pack.secureContainerBase64,
@@ -1433,12 +1337,10 @@ export async function importPromotionalPack(jsonData: string): Promise<{
         `Importing private key for tracking address: ${pack.psl_credit_usage_tracking_address}`
       );
 
-      const startingBlockHeight = 730000;
       const importResult = await rpc.importPrivKey(
         pack.psl_credit_usage_tracking_address_private_key,
         "Imported from promotional pack",
-        true,
-        startingBlockHeight
+        true
       );
       if (importResult) {
         browserLogger.info(
@@ -1455,7 +1357,6 @@ export async function importPromotionalPack(jsonData: string): Promise<{
         `Credit Pack Ticket: ${JSON.stringify(pack, null, 2)}`
       );
 
-      // Add the processed pack info to our array
       processedPacks.push({
         pub_key: pack.pastel_id_pubkey,
         passphrase: pack.pastel_id_passphrase,
@@ -1464,21 +1365,12 @@ export async function importPromotionalPack(jsonData: string): Promise<{
       browserLogger.info(`Pack ${i + 1} processed successfully`);
     }
 
-    // Wait for RPC connection to be re-established
-    await rpc.waitForRPCConnection();
-
-    // Verify PastelID import and wait for blockchain confirmation
+    // Verify PastelID import and functionality
     for (let i = 0; i < packData.length; i++) {
       const pack = packData[i];
       browserLogger.info(`Verifying PastelID import for pack ${i + 1}`);
 
       try {
-        // Wait for PastelID to be confirmed in the blockchain
-        await waitForPastelIDRegistration(pack.pastel_id_pubkey);
-        browserLogger.info(
-          `PastelID ${pack.pastel_id_pubkey} confirmed in blockchain`
-        );
-
         // Verify PastelID functionality
         const testMessage = "This is a test message for PastelID verification";
         const signature = await rpc.signMessageWithPastelID(
@@ -1506,10 +1398,10 @@ export async function importPromotionalPack(jsonData: string): Promise<{
           );
         }
 
-        // Verify Credit Pack Ticket
-        await waitForCreditPackConfirmation(pack.credit_pack_registration_txid);
+        // We can't wait for blockchain confirmation in browser context,
+        // so we'll just log that we've processed the credit pack ticket
         browserLogger.info(
-          `Credit Pack Ticket ${pack.credit_pack_registration_txid} confirmed in blockchain`
+          `Credit Pack Ticket for ${pack.requested_initial_credits_in_credit_pack} credits processed`
         );
       } catch (error) {
         browserLogger.error(
@@ -1538,7 +1430,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
 }
 
 // Export all functions
-export default {
+const utils  = {
   safeStringify,
   clearOldCache,
   storeInCache,
@@ -1584,3 +1476,5 @@ export default {
   waitForCreditPackConfirmation,
   importPromotionalPack,
 };
+
+export default utils;

@@ -1,5 +1,7 @@
 // src/app/lib/BrowserRPCReplacement.ts
 
+'use client'
+
 import {
   SupernodeInfo,
   WalletInfo,
@@ -130,12 +132,15 @@ class BrowserRPCReplacement {
     return modeMap[mode] || NetworkMode.Mainnet;
   }
 
-  private executeWasmMethod<T>(method: () => string): T {
+  private executeWasmMethod<T>(method: () => string | number): T {
     if (!this.pastelInstance) {
       throw new Error("Pastel instance not initialized");
     }
     try {
       const result = method();
+      if (typeof result === 'number') {
+        return result as T;
+      }
       return this.parseWasmResponse<T>(result);
     } catch (error) {
       console.error("WASM method execution failed:", error);
@@ -1059,6 +1064,20 @@ async signMessageWithPastelID(
   private async getLocalRPCSettings(): Promise<{ rpcport: string }> {
     const rpcport = localStorage.getItem("rpcport") || "9932"; // Default to mainnet
     return { rpcport };
+  }
+
+  async getBurnAddress(): Promise<string> {
+    const { network } = await this.getNetworkInfo();
+    switch (network) {
+      case "Mainnet":
+        return "PtpasteLBurnAddressXXXXXXXXXXbJ5ndd";
+      case "Testnet":
+        return "tPpasteLBurnAddressXXXXXXXXXXX3wy7u";
+      case "Devnet":
+        return "44oUgmZSL997veFEQDq569wv5tsT6KXf9QY7";
+      default:
+        throw new Error(`Unsupported network: ${network}`);
+    }
   }
 
   async changeNetwork(

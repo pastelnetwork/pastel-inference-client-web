@@ -1,5 +1,7 @@
 // src/app/lib/globals.ts
 
+'use client'
+
 import { PastelGlobals } from '@/app/types';
 
 const pastelGlobals: PastelGlobals = {
@@ -23,6 +25,7 @@ const pastelGlobals: PastelGlobals = {
   getPassphrase(): string | null {
     return this.MY_PASTELID_PASSPHRASE;
   },
-};
+
+}
 
 export default pastelGlobals;

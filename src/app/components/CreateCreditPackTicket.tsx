@@ -1,0 +1,300 @@
+"use client";
+
+import React, { useState, useEffect, useCallback } from "react";
+
+interface CreditPackTicketDetails {
+  pastel_api_credit_pack_ticket_registration_txid: string;
+  sha3_256_hash_of_credit_pack_purchase_request_fields: string;
+  responding_supernode_pastelid: string;
+  credit_pack_confirmation_outcome_string: string;
+}
+
+export default function CreateCreditPackTicket() {
+  const [numCredits, setNumCredits] = useState<string>("1500");
+  const [maxTotalPrice, setMaxTotalPrice] = useState<string>("150000");
+  const [maxPerCreditPrice, setMaxPerCreditPrice] = useState<string>("100.0");
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [status, setStatus] = useState<string>("");
+  const [newTicketDetails, setNewTicketDetails] =
+    useState<CreditPackTicketDetails | null>(null);
+
+  const updateMaxTotalPrice = useCallback(() => {
+    const credits = parseFloat(numCredits.replace(/,/g, ""));
+    const perCreditPrice = parseFloat(maxPerCreditPrice.replace(/,/g, ""));
+    if (!isNaN(credits) && !isNaN(perCreditPrice)) {
+      const total = credits * perCreditPrice;
+      setMaxTotalPrice(
+        total.toLocaleString(undefined, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        })
+      );
+    }
+  }, [numCredits, maxPerCreditPrice]);
+
+  useEffect(() => {
+    updateMaxTotalPrice();
+  }, [numCredits, maxPerCreditPrice, updateMaxTotalPrice]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target;
+    const numericValue = value.replace(/,/g, "");
+    switch (id) {
+      case "numCredits":
+        setNumCredits(numericValue);
+        break;
+      case "maxPerCreditPrice":
+        setMaxPerCreditPrice(numericValue);
+        break;
+      case "maxTotalPrice":
+        setMaxTotalPrice(numericValue);
+        break;
+    }
+  };
+
+  const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { id, value } = e.target;
+    const numericValue = parseFloat(value.replace(/,/g, ""));
+    if (!isNaN(numericValue)) {
+      const formattedValue = numericValue.toLocaleString(undefined, {
+        minimumFractionDigits: id === "maxPerCreditPrice" ? 1 : 0,
+        maximumFractionDigits: id === "maxPerCreditPrice" ? 1 : 0,
+      });
+      switch (id) {
+        case "numCredits":
+          setNumCredits(formattedValue);
+          break;
+        case "maxPerCreditPrice":
+          setMaxPerCreditPrice(formattedValue);
+          break;
+        case "maxTotalPrice":
+          setMaxTotalPrice(formattedValue);
+          break;
+      }
+    }
+  };
+
+  const createNewCreditPackTicket = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setStatus("Initializing ticket creation...");
+    setNewTicketDetails(null);
+
+    try {
+      const response = await fetch("/create-credit-pack-ticket", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          numCredits: parseInt(numCredits.replace(/,/g, "")),
+          maxTotalPrice: parseFloat(maxTotalPrice.replace(/,/g, "")),
+          maxPerCreditPrice: parseFloat(maxPerCreditPrice.replace(/,/g, "")),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setStatus("Credit pack ticket created successfully.");
+        setNewTicketDetails(result.ticketDetails);
+        pollCreditPackStatus(
+          result.ticketDetails.pastel_api_credit_pack_ticket_registration_txid
+        );
+      } else {
+        throw new Error(
+          result.message || "Failed to create new credit pack ticket"
+        );
+      }
+    } catch (error) {
+      console.error("Error creating credit pack ticket:", error);
+      setStatus(
+        `Failed to create credit pack ticket: ${(error as Error).message}`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const pollCreditPackStatus = async (txid: string) => {
+    const pollInterval = 30000; // 30 seconds
+    const maxAttempts = 20; // 10 minutes total
+    let attempts = 0;
+
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(`/credit-pack-status/${txid}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json();
+
+        if (result.confirmed) {
+          setStatus(
+            "Credit pack ticket has been confirmed. Refreshing the table..."
+          );
+          // Trigger a refresh of the credit pack tickets table
+          window.dispatchEvent(new CustomEvent("refreshCreditPackTickets"));
+          setStatus("Credit pack ticket is now available for use.");
+        } else {
+          attempts++;
+          if (attempts < maxAttempts) {
+            setStatus(
+              `Waiting for credit pack ticket confirmation... (Attempt ${attempts}/${maxAttempts})`
+            );
+            setTimeout(checkStatus, pollInterval);
+          } else {
+            setStatus(
+              "Credit pack ticket confirmation is taking longer than expected. It should appear soon. You can manually refresh the table to check."
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error checking credit pack status:", error);
+        setStatus(
+          "An error occurred while checking the credit pack status. Please try refreshing the table manually."
+        );
+      }
+    };
+
+    checkStatus();
+  };
+
+  return (
+    <div className="grid grid-cols-1 gap-4 p-4 has-border rounded-xl bg-white shadow-md">
+      <h2 className="text-2xl text-bw-800">Create New Credit Pack Ticket</h2>
+      <form
+        id="createTicketForm"
+        className="grid grid-cols-2 gap-4"
+        onSubmit={createNewCreditPackTicket}
+      >
+        <div>
+          <label
+            className="block text-bw-700 font-bold mb-2"
+            htmlFor="numCredits"
+          >
+            Number of Credits
+          </label>
+          <input
+            className="input w-full"
+            id="numCredits"
+            type="text"
+            placeholder="Enter number of credits"
+            value={numCredits}
+            onChange={handleInputChange}
+            onBlur={handleInputBlur}
+            required
+          />
+        </div>
+        <div>
+          <label
+            className="block text-bw-700 font-bold mb-2"
+            htmlFor="maxTotalPrice"
+          >
+            Maximum Total Price (PSL)
+          </label>
+          <input
+            className="input w-full"
+            id="maxTotalPrice"
+            type="text"
+            placeholder="Enter maximum total price"
+            value={maxTotalPrice}
+            onChange={handleInputChange}
+            onBlur={handleInputBlur}
+            required
+          />
+        </div>
+        <div>
+          <label
+            className="block text-bw-700 font-bold mb-2"
+            htmlFor="maxPerCreditPrice"
+          >
+            Maximum Per Credit Price (PSL)
+          </label>
+          <input
+            className="input w-full"
+            id="maxPerCreditPrice"
+            type="text"
+            placeholder="Enter maximum per credit price"
+            value={maxPerCreditPrice}
+            onChange={handleInputChange}
+            onBlur={handleInputBlur}
+            required
+          />
+        </div>
+
+        <div className="col-span-full flex justify-between">
+          <div className="flex gap-4 items-center" style={{ width: "100%" }}>
+            <button
+              className="btn success outline"
+              type="submit"
+              id="createCreditPackButton"
+              disabled={isLoading}
+            >
+              Create Credit Pack
+            </button>
+            {isLoading && <div className="btn is-loading">Loading...</div>}
+            <div className="prompt success xs" id="createTicketStatusContainer">
+              <label
+                className="text-bw-800 font-bold mb-4"
+                htmlFor="createTicketStatus"
+              >
+                Current Status:
+              </label>
+              <div className="content p-2" id="createTicketStatus">
+                {status}
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {newTicketDetails && (
+        <div
+          className="credit-pack-details-container"
+          id="newCreditPackTicketDetailsContainer"
+        >
+          <h3 className="text-xl text-bw-800">
+            New Credit Pack Ticket Details
+          </h3>
+          <div className="table-responsive">
+            <table className="table bordered bw new-ticket-table">
+              <thead>
+                <tr>
+                  <th>Registration TXID</th>
+                  <th>SHA3-256 Hash of Credit Pack Purchase Request Fields</th>
+                  <th>Responding Supernode PastelID</th>
+                  <th>Outcome</th>
+                </tr>
+              </thead>
+              <tbody id="newCreditPackTicketDetails">
+                <tr>
+                  <td>
+                    {
+                      newTicketDetails.pastel_api_credit_pack_ticket_registration_txid
+                    }
+                  </td>
+                  <td>
+                    {
+                      newTicketDetails.sha3_256_hash_of_credit_pack_purchase_request_fields
+                    }
+                  </td>
+                  <td>{newTicketDetails.responding_supernode_pastelid}</td>
+                  <td>
+                    {newTicketDetails.credit_pack_confirmation_outcome_string}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

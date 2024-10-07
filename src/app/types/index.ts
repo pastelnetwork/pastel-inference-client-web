@@ -373,6 +373,8 @@ export interface SendToAddressResult {
   success: boolean;
   result?: string;
   message?: string;
+  newCreditTrackingAddress?: string;
+  txid?: string;
 }
 
 export interface BlockHeader {

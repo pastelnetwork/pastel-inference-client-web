@@ -1,6 +1,6 @@
 // src/app/lib/PastelInferenceClient.ts
 
-'use client'
+"use client";
 
 import BrowserRPCReplacement from "./BrowserRPCReplacement";
 import { BrowserDatabase } from "./BrowserDatabase";
@@ -31,7 +31,7 @@ import {
   CreditPackPurchaseRequestRejection,
   CreditPackPurchaseRequestResponseTermination,
   CreditPackPurchaseRequestStatus,
-  AuditResult 
+  AuditResult,
 } from "@/app/types";
 
 const rpc = new BrowserRPCReplacement();
@@ -405,21 +405,22 @@ class PastelInferenceClient {
         validationSchemas.creditPackPurchaseRequestResponseSchema.parse(
           credit_pack_purchase_request_response
         );
-      const validatedRequestConfirmation = validationSchemas.creditPackPurchaseRequestConfirmationSchema.parse(
-        credit_pack_purchase_request_confirmation
-  );
+      const validatedRequestConfirmation =
+        validationSchemas.creditPackPurchaseRequestConfirmationSchema.parse(
+          credit_pack_purchase_request_confirmation
+        );
 
-  return {
-    requestResponse: validatedRequestResponse,
-    requestConfirmation: {
-      ...validatedRequestConfirmation,
-      id: parseInt(validatedRequestConfirmation.id, 10)
-    },
-    balanceInfo: {
-      credit_pack_current_credit_balance: 0,
-      balance_as_of_datetime: new Date().toISOString(),
-    },
-  };
+      return {
+        requestResponse: validatedRequestResponse,
+        requestConfirmation: {
+          ...validatedRequestConfirmation,
+          id: parseInt(validatedRequestConfirmation.id, 10),
+        },
+        balanceInfo: {
+          credit_pack_current_credit_balance: 0,
+          balance_as_of_datetime: new Date().toISOString(),
+        },
+      };
     } catch (error) {
       console.error(
         `Error retrieving credit pack ticket from txid: ${
@@ -447,9 +448,9 @@ class PastelInferenceClient {
       );
       const { challenge, challenge_id, challenge_signature } =
         await this.requestAndSignChallenge(supernodeURL);
-        const preparedCreditPackRequest = await utils.prepareModelForEndpoint(
-          validatedCreditPackRequest
-        );
+      const preparedCreditPackRequest = await utils.prepareModelForEndpoint(
+        validatedCreditPackRequest
+      );
       const response = await fetch(
         `${supernodeURL}/credit_purchase_initial_request`,
         {
@@ -635,7 +636,7 @@ class PastelInferenceClient {
         console.error(
           `Credit pack purchase request rejected: ${preliminaryPriceQuote.rejection_reason_string}`
         );
-return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTermination;
+        return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTermination;
       }
 
       const agreeWithPriceQuote = await this.confirmPreliminaryPriceQuote(
@@ -748,9 +749,10 @@ return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTerm
           "response to credit pack purchase request",
           transformedResult
         );
-        const validatedResponse = validationSchemas.creditPackPurchaseRequestResponseSchema.parse(
-          transformedResult as CreditPackPurchaseRequestResponse
-        );
+        const validatedResponse =
+          validationSchemas.creditPackPurchaseRequestResponseSchema.parse(
+            transformedResult as CreditPackPurchaseRequestResponse
+          );
         await db.addData(
           "CreditPackPurchaseRequestResponse",
           validatedResponse
@@ -803,7 +805,10 @@ return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTerm
         "response to credit pack purchase confirmation",
         result
       );
-      const validatedResult = validationSchemas.creditPackPurchaseRequestConfirmationResponseSchema.parse(result);
+      const validatedResult =
+        validationSchemas.creditPackPurchaseRequestConfirmationResponseSchema.parse(
+          result
+        );
       await db.addData(
         "CreditPackPurchaseRequestConfirmationResponse",
         validatedResult
@@ -839,7 +844,7 @@ return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTerm
       };
       const validatedStatusCheck =
         validationSchemas.creditPackRequestStatusCheckSchema.parse(statusCheck);
-        delete (validatedStatusCheck as Partial<CreditPackRequestStatusCheck>).id;
+      delete (validatedStatusCheck as Partial<CreditPackRequestStatusCheck>).id;
 
       utils.logActionWithPayload(
         "checking",
@@ -1438,30 +1443,32 @@ return preliminaryPriceQuote as unknown as CreditPackPurchaseRequestResponseTerm
       const filteredSupernodes = await utils.filterSupernodes(
         validMasternodeListFullDF
       );
-  
+
       const supernodeURLsAndPastelIDs = filteredSupernodes.slice(0, 5);
-  
+
       const listOfSupernodeURLs = supernodeURLsAndPastelIDs.map(
         (supernode) => `http://${supernode.ipaddress_port.split(":")[0]}:7123`
       );
-  
+
       const responseAuditTasks = listOfSupernodeURLs.map((url) =>
         this.callAuditInferenceRequestResponse(url, inferenceResponseID)
       );
       const responseAuditResults = await Promise.all(responseAuditTasks);
-  
+
       await new Promise((resolve) => setTimeout(resolve, 20000));
-  
+
       const resultAuditTasks = listOfSupernodeURLs.map((url) =>
         this.callAuditInferenceRequestResult(url, inferenceResponseID)
       );
       const resultAuditResults = await Promise.all(resultAuditTasks);
-  
-      const auditResults: AuditResult[] = responseAuditResults.map((response, index) => ({
-        ...response,
-        ...resultAuditResults[index],
-      }));
-  
+
+      const auditResults: AuditResult[] = responseAuditResults.map(
+        (response, index) => ({
+          ...response,
+          ...resultAuditResults[index],
+        })
+      );
+
       return auditResults;
     } catch (error) {
       console.error(

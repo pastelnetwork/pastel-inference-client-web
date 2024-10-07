@@ -1,6 +1,9 @@
+// src/app/components/UserInfo.tsx
+
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import browserLogger from "@/app/lib/logger";
 
 interface UserInfoProps {
   pastelId: string | null;
@@ -24,7 +27,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
     null
   );
 
-  const fetchWalletInfo = async () => {
+  const fetchWalletInfo = useCallback(async () => {
     try {
       const response = await fetch("/get-wallet-info");
       const data = await response.json();
@@ -39,17 +42,19 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         setWalletBalance("Failed to load balance");
       }
     } catch (error) {
-      console.error("Error retrieving wallet info:", error);
+      browserLogger.error("Error retrieving wallet info:", error);
       setWalletBalance("Failed to load balance");
     }
-  };
+  }, []);
 
-  const fetchPastelIDs = async () => {
+  const fetchPastelIDs = useCallback(async () => {
     try {
       const response = await fetch("/list-pastel-id-tickets?filter=mine");
       const data = await response.json();
       if (data.success) {
-        const ids = data.result.map((ticket: any) => ticket.ticket.pastelID);
+        const ids = data.result.map(
+          (ticket: { ticket: { pastelID: string } }) => ticket.ticket.pastelID
+        );
         setPastelIDs(ids);
         if (ids.length > 0) {
           setSelectedPastelID(ids[0]);
@@ -57,11 +62,11 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         }
       }
     } catch (error) {
-      console.error("Error fetching PastelIDs:", error);
+      browserLogger.error("Error fetching PastelIDs:", error);
     }
-  };
+  }, [setPastelId]);
 
-  const fetchMyPslAddress = async () => {
+  const fetchMyPslAddress = useCallback(async () => {
     try {
       const response = await fetch("/get-my-psl-address-with-largest-balance");
       const data = await response.json();
@@ -69,15 +74,15 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         setMyPslAddress(data.result);
       }
     } catch (error) {
-      console.error("Error fetching PSL address:", error);
+      browserLogger.error("Error fetching PSL address:", error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchWalletInfo();
     fetchPastelIDs();
     fetchMyPslAddress();
-  }, [fetchPastelIDs]);
+  }, [fetchWalletInfo, fetchPastelIDs, fetchMyPslAddress]);
 
   const handlePastelIDChange = (
     event: React.ChangeEvent<HTMLSelectElement>
@@ -109,7 +114,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         setMessage("Failed to set PastelID and passphrase.");
       }
     } catch (error) {
-      console.error("Error setting PastelID and passphrase:", error);
+      browserLogger.error("Error setting PastelID and passphrase:", error);
       setMessage("Failed to set PastelID and passphrase.");
     }
   };
@@ -141,7 +146,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         setMessage(data.message);
       }
     } catch (error) {
-      console.error("Error creating PastelID:", error);
+      browserLogger.error("Error creating PastelID:", error);
       setMessage("Failed to create PastelID. Please try again.");
     } finally {
       setIsCreatingPastelID(false);
@@ -187,7 +192,10 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
           }
         }
       } catch (error) {
-        console.error("Error checking PastelID and wallet status:", error);
+        browserLogger.error(
+          "Error checking PastelID and wallet status:",
+          error
+        );
         setMessage(
           "An error occurred while checking your PastelID and wallet status. Please refresh the page in a few minutes."
         );
@@ -225,7 +233,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         setMessage(data.message);
       }
     } catch (error) {
-      console.error("Error importing PastelID:", error);
+      browserLogger.error("Error importing PastelID:", error);
       setMessage("Failed to import PastelID. Please try again.");
     }
   };
@@ -255,7 +263,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
       const result = await response.json();
       if (result.success) {
         setMessage(result.message);
-        console.log("Import details:", result.details);
+        browserLogger.info("Import details:", result.details);
 
         if (result.details && result.details.processedPacks.length > 0) {
           result.details.processedPacks.forEach(
@@ -278,7 +286,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         );
       }
     } catch (error) {
-      console.error("Error importing promotional pack:", error);
+      browserLogger.error("Error importing promotional pack:", error);
       setMessage(
         `An error occurred while importing the promotional pack: ${
           (error as Error).message
@@ -289,10 +297,10 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
 
   const setSelectedPastelIDAndPassphrase = async (
     selectedPastelID: string,
-    extraMessage: string = "",
+    _extraMessage: string = "",
     isNewlyImportedPromoPack: boolean = false
   ) => {
-    let storedPassphrase = localStorage.getItem(selectedPastelID);
+    const storedPassphrase = localStorage.getItem(selectedPastelID);
 
     try {
       const response = await fetch("/check-pastel-id-validity", {
@@ -306,7 +314,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
       const isValid = data.isValid;
 
       if (!isValid) {
-        console.log(
+        browserLogger.info(
           `PastelID ${selectedPastelID} is not valid. Removing from localStorage.`
         );
         localStorage.removeItem(selectedPastelID);
@@ -322,9 +330,11 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         );
       } else {
         if (isNewlyImportedPromoPack) {
-          console.log("Using stored passphrase for newly imported promo pack.");
+          browserLogger.info(
+            "Using stored passphrase for newly imported promo pack."
+          );
           if (!storedPassphrase) {
-            console.error(
+            browserLogger.error(
               "Expected passphrase not found for newly imported promo pack."
             );
             return;
@@ -342,8 +352,10 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
       // Fetch received messages after setting the PastelID and passphrase
       await fetchReceivedMessages();
     } catch (error) {
-      console.error("Error in setSelectedPastelIDAndPassphrase:", error);
-      if ((error as any).response && (error as any).response.status === 401) {
+      browserLogger.error("Error in setSelectedPastelIDAndPassphrase:", error);
+      if (
+        (error as { response?: { status: number } }).response?.status === 401
+      ) {
         // Handle unauthorized error (e.g., invalid passphrase)
         await setSelectedPastelIDAndPassphrase(
           selectedPastelID,
@@ -386,7 +398,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
     } catch (error) {
       localStorage.setItem(pastelID, "");
       await setSelectedPastelIDAndPassphrase(pastelID, "Invalid Passphrase");
-      console.error("Error setting PastelID and passphrase:", error);
+      browserLogger.error("Error setting PastelID and passphrase:", error);
     }
   };
 
@@ -395,9 +407,9 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
       const response = await fetch("/get-inference-model-menu");
       const data = await response.json();
       // Handle the model menu data as needed
-      console.log("Model menu fetched:", data);
+      browserLogger.info("Model menu fetched:", data);
     } catch (error) {
-      console.error("Error fetching model menu:", error);
+      browserLogger.error("Error fetching model menu:", error);
     }
   };
 
@@ -406,9 +418,9 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
       const response = await fetch("/get-received-messages");
       const data = await response.json();
       // Handle the received messages as needed
-      console.log("Received messages:", data);
+      browserLogger.info("Received messages:", data);
     } catch (error) {
-      console.error("Error fetching received messages:", error);
+      browserLogger.error("Error fetching received messages:", error);
     }
   };
 
@@ -419,7 +431,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         setTimeout(() => setMessage(""), 3000);
       },
       (err) => {
-        console.error("Could not copy text: ", err);
+        browserLogger.error("Could not copy text: ", err);
       }
     );
   };

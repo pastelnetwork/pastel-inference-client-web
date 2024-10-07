@@ -1,36 +1,39 @@
+// src/app/components/SelectCreditPackTicket.tsx
+
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { CreditPackTicketInfo, CreditPackPurchaseRequestResponse } from "@/app/types";
 
-interface CreditPackTicket {
+// 1. Define an extended interface to include augmented fields
+interface ExtendedCreditPackPurchaseRequestResponse extends CreditPackPurchaseRequestResponse {
   credit_pack_registration_txid: string;
   requested_initial_credits_in_credit_pack: number;
   credit_pack_current_credit_balance: number;
-  credit_usage_tracking_psl_address: string;
   credit_purchase_request_confirmation_pastel_block_height: number;
-  [key: string]: any;
+}
+
+// 2. Define an extended ticket interface
+interface ExtendedCreditPackTicketInfo extends CreditPackTicketInfo {
+  requestResponse: ExtendedCreditPackPurchaseRequestResponse;
+}
+
+// 3. Define the response structure
+interface GetValidCreditPacksResponse {
+  success: boolean;
+  result: ExtendedCreditPackTicketInfo[];
+  message?: string;
 }
 
 export default function SelectCreditPackTicket() {
-  const [creditPackTickets, setCreditPackTickets] = useState<
-    CreditPackTicket[]
-  >([]);
+  // 4. Update the state to use the extended ticket info
+  const [creditPackTickets, setCreditPackTickets] = useState<ExtendedCreditPackTicketInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    getMyValidCreditPacks();
-    window.addEventListener("refreshCreditPackTickets", getMyValidCreditPacks);
-    return () => {
-      window.removeEventListener(
-        "refreshCreditPackTickets",
-        getMyValidCreditPacks
-      );
-    };
-  }, [getMyValidCreditPacks]);
-
-  const getMyValidCreditPacks = async (forceRefresh = false) => {
+  // 5. Update the fetch function to use the extended response type
+  const getMyValidCreditPacks = useCallback(async (forceRefresh = false) => {
     setIsLoading(true);
     try {
       const response = await fetch(
@@ -39,16 +42,18 @@ export default function SelectCreditPackTicket() {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const data = await response.json();
+
+      // Explicitly type the response data
+      const data: GetValidCreditPacksResponse = await response.json();
+
       if (data.success) {
         const validTickets = data.result.filter(
-          (ticket: CreditPackTicket) =>
-            typeof ticket.credit_pack_current_credit_balance === "number" &&
-            ticket.credit_pack_current_credit_balance > 0
+          (ticket: ExtendedCreditPackTicketInfo) =>
+            ticket.requestResponse.credit_pack_current_credit_balance > 0
         );
         setCreditPackTickets(validTickets);
         if (validTickets.length > 0 && !selectedTicket) {
-          setSelectedTicket(validTickets[0].credit_pack_registration_txid);
+          setSelectedTicket(validTickets[0].requestResponse.credit_pack_registration_txid);
         }
       } else {
         throw new Error(data.message || "Failed to fetch credit pack tickets");
@@ -58,7 +63,16 @@ export default function SelectCreditPackTicket() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedTicket]);
+
+  useEffect(() => {
+    getMyValidCreditPacks();
+    const handleRefresh = () => getMyValidCreditPacks(true);
+    window.addEventListener("refreshCreditPackTickets", handleRefresh as EventListener);
+    return () => {
+      window.removeEventListener("refreshCreditPackTickets", handleRefresh as EventListener);
+    };
+  }, [getMyValidCreditPacks]);
 
   const handleTicketSelection = (txid: string) => {
     setSelectedTicket(txid);
@@ -66,32 +80,33 @@ export default function SelectCreditPackTicket() {
 
   const showTooltip = (
     event: React.MouseEvent<HTMLTableRowElement>,
-    ticket: CreditPackTicket
+    ticket: ExtendedCreditPackTicketInfo
   ) => {
     if (tooltipRef.current) {
       const tooltip = tooltipRef.current;
+      const tooltipContent = Object.entries(ticket.requestResponse)
+        .filter(
+          ([key]) =>
+            ![
+              "credit_pack_registration_txid",
+              "requested_initial_credits_in_credit_pack",
+              "credit_pack_current_credit_balance",
+              "credit_usage_tracking_psl_address",
+              "credit_purchase_request_confirmation_pastel_block_height",
+            ].includes(key)
+        )
+        .map(
+          ([key, value]) => `
+            <div class="tooltip-row">
+              <span class="tooltip-label">${key.replace(/_/g, " ")}:</span>
+              <span class="tooltip-value">${value}</span>
+            </div>
+          `
+        )
+        .join("");
       tooltip.innerHTML = `
         <div class="tooltip-content">
-          ${Object.entries(ticket)
-            .filter(
-              ([key]) =>
-                ![
-                  "credit_pack_registration_txid",
-                  "requested_initial_credits_in_credit_pack",
-                  "credit_pack_current_credit_balance",
-                  "credit_usage_tracking_psl_address",
-                  "credit_purchase_request_confirmation_pastel_block_height",
-                ].includes(key)
-            )
-            .map(
-              ([key, value]) => `
-              <div class="tooltip-row">
-                <span class="tooltip-label">${key.replace(/_/g, " ")}:</span>
-                <span class="tooltip-value">${value}</span>
-              </div>
-            `
-            )
-            .join("")}
+          ${tooltipContent}
         </div>
       `;
       tooltip.style.display = "block";
@@ -106,7 +121,7 @@ export default function SelectCreditPackTicket() {
     }
   };
 
-  const getAddressURL = (address: string) => {
+  const getAddressURL = (address: string): string => {
     let baseURL = "https://explorer.pastel.network/address/";
     if (address.startsWith("44")) {
       baseURL = "https://explorer-devnet.pastel.network/address/";
@@ -116,7 +131,7 @@ export default function SelectCreditPackTicket() {
     return `${baseURL}${address}`;
   };
 
-  const getTxidURL = (txid: string, address: string) => {
+  const getTxidURL = (txid: string, address: string): string => {
     let baseURL = "https://explorer.pastel.network/tx/";
     if (address.startsWith("44")) {
       baseURL = "https://explorer-devnet.pastel.network/tx/";
@@ -159,81 +174,89 @@ export default function SelectCreditPackTicket() {
             </tr>
           </thead>
           <tbody id="creditPackTicketTableBody">
-            {creditPackTickets.map((ticket) => (
-              <tr
-                key={ticket.credit_pack_registration_txid}
-                className={`transition-colors duration-200 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-800 dark:text-gray-200 ${
-                  selectedTicket === ticket.credit_pack_registration_txid
-                    ? "bg-gray-200 dark:bg-gray-700 selected-row"
-                    : ""
-                }`}
-                onClick={() =>
-                  handleTicketSelection(ticket.credit_pack_registration_txid)
-                }
-                onMouseEnter={(e) => showTooltip(e, ticket)}
-                onMouseLeave={hideTooltip}
-              >
-                <td className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="creditPackTicket"
-                    value={ticket.credit_pack_registration_txid}
-                    checked={
-                      selectedTicket === ticket.credit_pack_registration_txid
-                    }
-                    onChange={() =>
-                      handleTicketSelection(
-                        ticket.credit_pack_registration_txid
-                      )
-                    }
-                  />
-                  <button
-                    className="text-gray-500 hover:text-gray-700 focus:outline-none ml-2"
-                    title="Copy Credit Pack Info to Clipboard"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      copyToClipboard(JSON.stringify(ticket, null, 2));
-                    }}
-                  >
-                    📋
-                  </button>
-                </td>
-                <td className="truncate">
-                  {ticket.requested_initial_credits_in_credit_pack.toLocaleString()}
-                </td>
-                <td className="truncate">
-                  {ticket.credit_pack_current_credit_balance.toLocaleString()}
-                </td>
-                <td className="truncate tracking-address">
-                  <a
-                    href={getAddressURL(
-                      ticket.credit_usage_tracking_psl_address
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {ticket.credit_usage_tracking_psl_address}
-                  </a>
-                </td>
-                <td className="truncate">
-                  {ticket.credit_purchase_request_confirmation_pastel_block_height.toLocaleString()}
-                </td>
-                <td className="truncate">
-                  <a
-                    href={getTxidURL(
-                      ticket.credit_pack_registration_txid,
-                      ticket.credit_usage_tracking_psl_address
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {ticket.credit_pack_registration_txid}
-                  </a>
-                </td>
-              </tr>
-            ))}
+            {creditPackTickets.map((ticket) => {
+              const {
+                credit_pack_registration_txid,
+                requested_initial_credits_in_credit_pack,
+                credit_pack_current_credit_balance,
+                credit_usage_tracking_psl_address,
+                credit_purchase_request_confirmation_pastel_block_height,
+              } = ticket.requestResponse;
+
+              return (
+                <tr
+                  key={credit_pack_registration_txid}
+                  className={`transition-colors duration-200 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-800 dark:text-gray-200 ${
+                    selectedTicket === credit_pack_registration_txid
+                      ? "bg-gray-200 dark:bg-gray-700 selected-row"
+                      : ""
+                  }`}
+                  onClick={() =>
+                    handleTicketSelection(credit_pack_registration_txid)
+                  }
+                  onMouseEnter={(e) => showTooltip(e, ticket)}
+                  onMouseLeave={hideTooltip}
+                >
+                  <td className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="creditPackTicket"
+                      value={credit_pack_registration_txid}
+                      checked={
+                        selectedTicket === credit_pack_registration_txid
+                      }
+                      onChange={() =>
+                        handleTicketSelection(credit_pack_registration_txid)
+                      }
+                    />
+                    <button
+                      className="text-gray-500 hover:text-gray-700 focus:outline-none ml-2"
+                      title="Copy Credit Pack Info to Clipboard"
+                      onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                        e.stopPropagation();
+                        copyToClipboard(JSON.stringify(ticket, null, 2));
+                      }}
+                    >
+                      📋
+                    </button>
+                  </td>
+                  <td className="truncate">
+                    {requested_initial_credits_in_credit_pack.toLocaleString()}
+                  </td>
+                  <td className="truncate">
+                    {credit_pack_current_credit_balance.toLocaleString()}
+                  </td>
+                  <td className="truncate tracking-address">
+                    <a
+                      href={getAddressURL(
+                        credit_usage_tracking_psl_address
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {credit_usage_tracking_psl_address}
+                    </a>
+                  </td>
+                  <td className="truncate">
+                    {credit_purchase_request_confirmation_pastel_block_height.toLocaleString()}
+                  </td>
+                  <td className="truncate">
+                    <a
+                      href={getTxidURL(
+                        credit_pack_registration_txid,
+                        credit_usage_tracking_psl_address
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {credit_pack_registration_txid}
+                    </a>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         <div

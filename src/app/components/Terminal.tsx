@@ -1,3 +1,5 @@
+// src/app/components/Terminal.tsx
+
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react';

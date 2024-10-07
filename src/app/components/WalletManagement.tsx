@@ -1,14 +1,9 @@
+// src/app/components/WalletManagement.tsx
+
 "use client";
 
 import React, { useState } from "react";
-
-interface AddressAmount {
-  [address: string]: number;
-}
-
-interface WalletInfo {
-  [key: string]: any;
-}
+import { AddressAmount, WalletInfo } from "@/app/types";
 
 export default function WalletManagement() {
   const [privKey, setPrivKey] = useState<string>("");

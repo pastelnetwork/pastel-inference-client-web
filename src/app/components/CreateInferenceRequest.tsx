@@ -1,8 +1,10 @@
+// src/app/components/CreateInferenceRequest.tsx
+
 /* eslint-disable @next/next/no-img-element */
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { compress } from 'browser-image-compression';
+import compress from 'browser-image-compression';
 import { sha3_256 } from 'js-sha3';
 
 interface ModelMenu {

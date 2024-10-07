@@ -5,26 +5,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import compress from 'browser-image-compression';
-import { sha3_256 } from 'js-sha3';
-
-interface ModelMenu {
-  models: Model[];
-}
-
-interface Model {
-  model_name: string;
-  supported_inference_type_strings: string[];
-  model_parameters: ModelParameter[];
-}
-
-interface ModelParameter {
-  name: string;
-  description: string;
-  type: string;
-  default: string | number;
-  inference_types_parameter_applies_to: string[];
-  options?: string[];
-}
+import { ModelMenu, ModelInfo, ModelParameter, InferenceResultDict, InferenceRequestParams } from '@/app/types';
 
 interface CreateInferenceRequestProps {
   modelMenu: ModelMenu | null;
@@ -41,14 +22,13 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
   const [modelParameters, setModelParameters] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<string>('');
-  const [inferenceResult, setInferenceResult] = useState<any>(null);
+  const [inferenceResult, setInferenceResult] = useState<InferenceResultDict | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   
-  const generateModelParameterFields = useCallback((model: Model) => {
+  const generateModelParameterFields = useCallback((model: ModelInfo) => {
     const params: Record<string, string> = {};
-    model.model_parameters.forEach(param => {
+    model.model_parameters.forEach((param: ModelParameter) => {
       if (param.inference_types_parameter_applies_to.includes(inferenceType)) {
         params[param.name] = param.default.toString();
       }
@@ -87,7 +67,6 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
     }
   };
 
-
   const handleParameterChange = (name: string, value: string) => {
     setModelParameters(prev => ({ ...prev, [name]: value }));
   };
@@ -99,7 +78,7 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
     setInferenceResult(null);
 
     try {
-      let modelInputData: any = {};
+      let modelInputData: Record<string, any> = {};
       let fileData: string | null = null;
 
       if (inferenceType === 'text_completion') {
@@ -115,10 +94,12 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
         if (fileInputRef.current && fileInputRef.current.files && fileInputRef.current.files[0]) {
           fileData = await encodeFile(fileInputRef.current.files[0]);
         }
-        const semanticQueryString = document.getElementById(inferenceType === 'embedding_document' ? 'document_semantic_query_string' : 'audio_semantic_query_string') as HTMLInputElement;
+        const semanticQueryString = document.querySelector<HTMLInputElement>(
+          inferenceType === 'embedding_document' ? '#document_semantic_query_string' : '#audio_semantic_query_string'
+        )?.value || '';
         modelInputData = { 
           [inferenceType === 'embedding_document' ? 'document' : 'audio']: fileData,
-          question: semanticQueryString.value
+          question: semanticQueryString
         };
       }
 
@@ -128,7 +109,7 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          selectedCreditPackTicketId: document.querySelector('input[name="creditPackTicket"]:checked')?.value,
+          selectedCreditPackTicketId: (document.querySelector('input[name="creditPackTicket"]:checked') as HTMLInputElement)?.value,
           selectedInferenceType: inferenceType,
           selectedModelCanonicalName: selectedModel,
           maxCost: parseFloat(maxCost),
@@ -182,20 +163,24 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
     });
   };
 
-  const saveInferenceRequestToLocalStorage = (inferenceResultDict: any) => {
+  const saveInferenceRequestToLocalStorage = (inferenceResultDict: InferenceResultDict) => {
     const requests = JSON.parse(localStorage.getItem('inferenceRequests') || '[]');
+    const elapsedTimeInSeconds = Math.floor(
+      (new Date().getTime() - new Date(inferenceResultDict.request_data.inference_request_utc_iso_string).getTime()) / 1000
+    );
+
     const newRequest = {
       selectedInferenceType: inferenceType,
       selectedModelCanonicalName: selectedModel,
       inputFields: inferenceResultDict.model_input_data_json,
       parameterFields: modelParameters,
       maxCost: parseFloat(maxCost),
-      inferenceResultsDecoded: inferenceResultDict.inference_result_decoded,
+      inferenceResultsDecoded: inferenceResultDict.inference_result_decoded || '',
       prompt: prompt,
-      elapsedTimeInSeconds: Math.floor((new Date().getTime() - new Date(inferenceResultDict.request_data.inference_request_utc_iso_string).getTime()) / 1000),
+      elapsedTimeInSeconds: elapsedTimeInSeconds,
       actualCreditsUsed: inferenceResultDict.usage_request_response.proposed_cost_of_request_in_inference_credits,
       remainingCredits: inferenceResultDict.usage_request_response.remaining_credits_in_pack_after_request_processed,
-      respondingSupernode: inferenceResultDict.responding_supernode_pastelid,
+      respondingSupernode: inferenceResultDict.output_results.responding_supernode_pastelid,
       requestTimestamp: inferenceResultDict.request_data.inference_request_utc_iso_string,
     };
     requests.push(newRequest);
@@ -210,13 +195,13 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
       content = (
         <div className="m-8">
           <img 
-            src={`data:image/png;base64,${inferenceResult.generated_image_decoded}`} 
+            src={`data:image/png;base64,${inferenceResult.generated_image_decoded || ''}`} 
             alt="Generated Image" 
             className="max-w-full max-h-96 mx-auto mb-4"
           />
           <p className="text-center">
             <a 
-              href={`data:image/png;base64,${inferenceResult.generated_image_decoded}`} 
+              href={`data:image/png;base64,${inferenceResult.generated_image_decoded || ''}`} 
               download="generated_image.png" 
               className="btn success outline m-4"
             >
@@ -226,32 +211,45 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
         </div>
       );
     } else if (inferenceType === 'embedding_audio') {
-      const formattedResult = JSON.stringify(JSON.parse(inferenceResult.inference_result_decoded), null, 2);
+      let formattedResult = '';
+      try {
+        formattedResult = JSON.stringify(JSON.parse(inferenceResult.inference_result_decoded || '{}'), null, 2);
+      } catch {
+        formattedResult = inferenceResult.inference_result_decoded || '';
+      }
+      const inputData = inferenceResult.model_input_data_json as { audio_file_name?: string; question?: string };
       content = (
         <div>
-          <p>Original File Name: {inferenceResult.model_input_data_json.audio_file_name}</p>
-          <p>Semantic Query String: {inferenceResult.model_input_data_json.question}</p>
+          <p>Original File Name: {inputData.audio_file_name || 'N/A'}</p>
+          <p>Semantic Query String: {inputData.question || 'N/A'}</p>
           <div style={{ maxHeight: '1000px', overflowY: 'auto' }}>
             <pre>{formattedResult}</pre>
           </div>
         </div>
       );
     } else if (inferenceType === 'ask_question_about_an_image') {
+      const inputData = inferenceResult.model_input_data_json as { image?: string; question?: string };
       content = (
         <div>
           <img 
-            src={inferenceResult.model_input_data_json.image} 
+            src={inputData.image || ''} 
             alt="Input Image" 
             style={{ maxWidth: '100%', maxHeight: '400px' }}
           />
-          <p>Question: {inferenceResult.model_input_data_json.question}</p>
+          <p>Question: {inputData.question || 'N/A'}</p>
           <p>Answer:</p>
-          <div dangerouslySetInnerHTML={{ __html: inferenceResult.inference_result_decoded }} />
+          <div dangerouslySetInnerHTML={{ __html: inferenceResult.inference_result_decoded || '' }} />
         </div>
       );
     } else {
-      content = <div dangerouslySetInnerHTML={{ __html: inferenceResult.inference_result_decoded }} />;
+      content = <div dangerouslySetInnerHTML={{ __html: inferenceResult.inference_result_decoded || '' }} />;
     }
+
+    const inputData = inferenceResult.model_input_data_json as { 
+      prompt?: string; 
+      imagePrompt?: string; 
+      question?: string; 
+    };
 
     return (
       <div className="inference-result">
@@ -262,7 +260,7 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
           <tbody>
             <tr>
               <th>Input Prompt to LLM</th>
-              <td>{inferenceResult.model_input_data_json.prompt || inferenceResult.model_input_data_json.imagePrompt || inferenceResult.model_input_data_json.question}</td>
+              <td>{inputData.prompt || inputData.imagePrompt || inputData.question || 'N/A'}</td>
             </tr>
             <tr>
               <th>Actual Cost (Credits)</th>
@@ -344,7 +342,7 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
           </div>
         )}
 
-{inferenceType === 'text_to_image' && (
+        {inferenceType === 'text_to_image' && (
           <div id="imageGenerationSettings" className="col-span-full">
             <div className="mb-4">
               <label className="block text-bw-700 font-bold mb-2" htmlFor="imagePrompt">Image Prompt</label>

@@ -2,7 +2,7 @@
 
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 
@@ -18,8 +18,12 @@ export default function Terminal() {
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
 
-  
-  const initWebSocket = async () => {
+  const formatLogMessage = (logMessage: LogMessage): string => {
+    const timestamp = new Date(logMessage.timestamp).toISOString();
+    return `[${timestamp}] [${logMessage.level.toUpperCase()}] ${logMessage.message}`;
+  };
+
+  const initWebSocket = useCallback(async () => {
     try {
       const response = await fetch('/ws-url');
       const data = await response.json();
@@ -47,9 +51,8 @@ export default function Terminal() {
     } catch (error) {
       console.error('Error fetching WebSocket URL:', error);
     }
-  };
+  }, []);
 
-  
   useEffect(() => {
     if (isVisible && !xtermRef.current && terminalRef.current) {
       xtermRef.current = new XTerm({
@@ -76,17 +79,12 @@ export default function Terminal() {
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [initWebSocket, isVisible]);
+  }, [isVisible, initWebSocket]);
 
   const handleResize = () => {
     if (fitAddonRef.current) {
       fitAddonRef.current.fit();
     }
-  };
-
-  const formatLogMessage = (logMessage: LogMessage): string => {
-    const timestamp = new Date(logMessage.timestamp).toISOString();
-    return `[${timestamp}] [${logMessage.level.toUpperCase()}] ${logMessage.message}`;
   };
 
   const toggleTerminal = () => {

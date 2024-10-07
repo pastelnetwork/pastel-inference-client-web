@@ -163,9 +163,10 @@ export interface PreliminaryPriceQuote {
   preliminary_price_quote_timestamp_utc_iso_string: string;
   preliminary_price_quote_pastel_block_height: number;
   preliminary_price_quote_message_version_string: string;
-  // Additional properties if needed
+  sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_fields: string;
+  responding_supernode_pastelid: string;
+  responding_supernode_signature_on_credit_pack_purchase_request_preliminary_price_quote_hash: string;
 }
-
 
 export interface InferenceRequestData {
   id?: number | string;
@@ -195,15 +196,6 @@ export interface InferenceConfirmationData {
 export interface CreditPackEstimation {
   desiredNumberOfCredits: number;
   creditPriceCushionPercentage: number;
-}
-
-export interface InferenceRequestParams {
-  creditPackTicketPastelTxid: string;
-  modelInputData: unknown;
-  requestedModelCanonicalString: string;
-  modelInferenceTypeString: string;
-  modelParameters: unknown;
-  maximumInferenceCostInCredits: number;
 }
 
 export interface PreliminaryPriceQuote {
@@ -263,14 +255,47 @@ export interface CreditPack extends ValidCreditPackTicket {
   address: string;
 }
 
-export interface InferenceRequest {
-  creditPackTicketPastelTxid: string;
-  modelInputData: unknown;
-  requestedModelCanonicalString: string;
-  modelInferenceTypeString: string;
-  modelParameters: unknown;
-  maximumInferenceCostInCredits: number;
+// Define specific interfaces for each inference type
+interface ModelInputDataTextCompletion {
+  prompt: string;
 }
+
+interface ModelInputDataImageGeneration {
+  imagePrompt: string;
+}
+
+interface ModelInputDataAskQuestionAboutImage {
+  image: string;
+  question: string;
+}
+
+interface ModelInputDataEmbeddingDocument {
+  document?: string;
+  question: string;
+}
+
+interface ModelInputDataEmbeddingAudio {
+  audio?: string;
+  question: string;
+}
+
+// Union type for all possible model input data
+type ModelInputData = 
+  | ModelInputDataTextCompletion
+  | ModelInputDataImageGeneration
+  | ModelInputDataAskQuestionAboutImage
+  | ModelInputDataEmbeddingDocument
+  | ModelInputDataEmbeddingAudio;
+
+
+  export interface InferenceRequestParams {
+    creditPackTicketPastelTxid: string;
+    modelInputData: ModelInputData;
+    requestedModelCanonicalString: string;
+    modelInferenceTypeString: string;
+    modelParameters: unknown;
+    maximumInferenceCostInCredits: number;
+  }
 
 export interface InferenceResult {
   supernode_url: string;

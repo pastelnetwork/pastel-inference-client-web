@@ -1,9 +1,10 @@
 // src/app/components/WalletManagement.tsx
 
-"use client";
+'use client';
 
 import React, { useState } from "react";
 import { AddressAmount, WalletInfo } from "@/app/types";
+import * as api from '@/app/lib/api';
 
 export default function WalletManagement() {
   const [privKey, setPrivKey] = useState<string>("");
@@ -21,16 +22,7 @@ export default function WalletManagement() {
     }
     setIsLoading(true);
     try {
-      const response = await fetch("/import-priv-key", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ zcashPrivKey: privKey }),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      await api.importPrivKey(privKey);
       alert("Private key imported successfully!");
       setPrivKey("");
     } catch (error) {
@@ -47,16 +39,9 @@ export default function WalletManagement() {
       return;
     }
     setIsLoading(true);
-    const formData = new FormData();
-    formData.append("walletFile", walletFile);
     try {
-      const response = await fetch("/import-wallet", {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      const fileContent = await walletFile.text();
+      await api.importWallet(fileContent);
       alert("Wallet imported successfully!");
       setWalletFile(null);
     } catch (error) {
@@ -70,12 +55,8 @@ export default function WalletManagement() {
   const listAddressAmounts = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/list-address-amounts");
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      setAddressAmounts(data.result);
+      const data = await api.listAddressAmounts();
+      setAddressAmounts(data);
     } catch (error) {
       console.error("Error retrieving address amounts:", error);
       alert("Failed to retrieve address amounts. Please try again.");
@@ -87,12 +68,8 @@ export default function WalletManagement() {
   const getWalletInfo = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/get-wallet-info");
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      setWalletInfo(data.result);
+      const data = await api.getWalletInfo();
+      setWalletInfo(data);
     } catch (error) {
       console.error("Error retrieving wallet info:", error);
       alert("Failed to retrieve wallet info. Please try again.");

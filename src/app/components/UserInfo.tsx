@@ -1,9 +1,11 @@
 // src/app/components/UserInfo.tsx
 
-"use client";
+'use client';
 
 import React, { useState, useEffect, useCallback } from "react";
 import browserLogger from "@/app/lib/logger";
+import * as api from '@/app/lib/api';
+import * as utils from '@/app/lib/utils';
 
 interface UserInfoProps {
   pastelId: string | null;
@@ -16,31 +18,22 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
   const [selectedPastelID, setSelectedPastelID] = useState<string>("");
   const [passphrase, setPassphrase] = useState<string>("");
   const [rememberPassphrase, setRememberPassphrase] = useState<boolean>(false);
-  const [showPassphraseInput, setShowPassphraseInput] =
-    useState<boolean>(false);
+  const [showPassphraseInput, setShowPassphraseInput] = useState<boolean>(false);
   const [message, setMessage] = useState<string>("");
   const [isCreatingPastelID, setIsCreatingPastelID] = useState<boolean>(false);
-  const [newPastelIDPassphrase, setNewPastelIDPassphrase] =
-    useState<string>("");
+  const [newPastelIDPassphrase, setNewPastelIDPassphrase] = useState<string>("");
   const [myPslAddress, setMyPslAddress] = useState<string>("");
-  const [promotionalPackFile, setPromotionalPackFile] = useState<File | null>(
-    null
-  );
+  const [promotionalPackFile, setPromotionalPackFile] = useState<File | null>(null);
 
   const fetchWalletInfo = useCallback(async () => {
     try {
-      const response = await fetch("/get-wallet-info");
-      const data = await response.json();
-      if (data.success) {
-        setWalletBalance(
-          data.result.balance.toLocaleString(undefined, {
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-          })
-        );
-      } else {
-        setWalletBalance("Failed to load balance");
-      }
+      const walletInfo = await api.getWalletInfo();
+      setWalletBalance(
+        walletInfo.balance.toLocaleString(undefined, {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })
+      );
     } catch (error) {
       browserLogger.error("Error retrieving wallet info:", error);
       setWalletBalance("Failed to load balance");
@@ -49,17 +42,12 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
 
   const fetchPastelIDs = useCallback(async () => {
     try {
-      const response = await fetch("/list-pastel-id-tickets?filter=mine");
-      const data = await response.json();
-      if (data.success) {
-        const ids = data.result.map(
-          (ticket: { ticket: { pastelID: string } }) => ticket.ticket.pastelID
-        );
-        setPastelIDs(ids);
-        if (ids.length > 0) {
-          setSelectedPastelID(ids[0]);
-          setPastelId(ids[0]);
-        }
+      const tickets = await api.listPastelIDTickets('mine');
+      const ids = tickets.map(ticket => ticket.ticket.pastelID);
+      setPastelIDs(ids);
+      if (ids.length > 0) {
+        setSelectedPastelID(ids[0]);
+        setPastelId(ids[0]);
       }
     } catch (error) {
       browserLogger.error("Error fetching PastelIDs:", error);
@@ -68,11 +56,8 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
 
   const fetchMyPslAddress = useCallback(async () => {
     try {
-      const response = await fetch("/get-my-psl-address-with-largest-balance");
-      const data = await response.json();
-      if (data.success) {
-        setMyPslAddress(data.result);
-      }
+      const address = await api.getMyPslAddressWithLargestBalance();
+      setMyPslAddress(address);
     } catch (error) {
       browserLogger.error("Error fetching PSL address:", error);
     }
@@ -84,9 +69,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
     fetchMyPslAddress();
   }, [fetchWalletInfo, fetchPastelIDs, fetchMyPslAddress]);
 
-  const handlePastelIDChange = (
-    event: React.ChangeEvent<HTMLSelectElement>
-  ) => {
+  const handlePastelIDChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newPastelID = event.target.value;
     setSelectedPastelID(newPastelID);
     setPastelId(newPastelID);
@@ -96,23 +79,12 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
 
   const handlePassphraseSubmit = async () => {
     try {
-      const response = await fetch("/set-pastel-id-passphrase", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ pastelID: selectedPastelID, passphrase }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        setMessage("Successfully set PastelID and passphrase!");
-        if (rememberPassphrase) {
-          localStorage.setItem(selectedPastelID, btoa(passphrase));
-        }
-        setShowPassphraseInput(false);
-      } else {
-        setMessage("Failed to set PastelID and passphrase.");
+      await api.setPastelIdAndPassphrase(selectedPastelID, passphrase);
+      setMessage("Successfully set PastelID and passphrase!");
+      if (rememberPassphrase) {
+        localStorage.setItem(selectedPastelID, btoa(passphrase));
       }
+      setShowPassphraseInput(false);
     } catch (error) {
       browserLogger.error("Error setting PastelID and passphrase:", error);
       setMessage("Failed to set PastelID and passphrase.");
@@ -126,25 +98,12 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
     }
     setIsCreatingPastelID(true);
     try {
-      const response = await fetch("/create-and-register-pastel-id", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          passphraseForNewPastelID: newPastelIDPassphrase,
-        }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        setMessage(
-          `PastelID creation initiated. Your new PastelID is ${data.PastelID}. Please wait while it's being registered on the blockchain...`
-        );
-        localStorage.setItem(data.PastelID, btoa(newPastelIDPassphrase));
-        pollPastelIDStatus(data.PastelID);
-      } else {
-        setMessage(data.message);
-      }
+      const result = await api.createAndRegisterPastelID();
+      setMessage(
+        `PastelID creation initiated. Your new PastelID is ${result.pastelID}. Please wait while it's being registered on the blockchain...`
+      );
+      localStorage.setItem(result.pastelID, btoa(newPastelIDPassphrase));
+      pollPastelIDStatus(result.pastelID);
     } catch (error) {
       browserLogger.error("Error creating PastelID:", error);
       setMessage("Failed to create PastelID. Please try again.");
@@ -160,13 +119,11 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
 
     const checkStatus = async () => {
       try {
-        const response = await fetch(`/check-pastel-id-status/${pastelID}`);
-        const data = await response.json();
-        const walletResponse = await fetch("/get-wallet-info");
-        const walletData = await walletResponse.json();
-        const walletBalance = walletData.result.balance;
+        const isRegistered = await api.isPastelIDRegistered(pastelID);
+        const walletInfo = await api.getWalletInfo();
+        const walletBalance = walletInfo.balance;
 
-        if (data.registered && walletBalance > 0) {
+        if (isRegistered && walletBalance > 0) {
           setMessage(
             "Your PastelID has been registered and your wallet has been funded. The page will refresh shortly."
           );
@@ -174,14 +131,11 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         } else {
           attempts++;
           if (attempts < maxAttempts) {
-            let statusMessage =
-              "PastelID registration and wallet funding in progress...";
-            if (data.registered) {
-              statusMessage =
-                "PastelID registered. Waiting for wallet to be funded...";
+            let statusMessage = "PastelID registration and wallet funding in progress...";
+            if (isRegistered) {
+              statusMessage = "PastelID registered. Waiting for wallet to be funded...";
             } else if (walletBalance > 0) {
-              statusMessage =
-                "Wallet funded. Waiting for PastelID registration...";
+              statusMessage = "Wallet funded. Waiting for PastelID registration...";
             }
             setMessage(`${statusMessage} (Attempt ${attempts}/${maxAttempts})`);
             setTimeout(checkStatus, pollInterval);
@@ -192,10 +146,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
           }
         }
       } catch (error) {
-        browserLogger.error(
-          "Error checking PastelID and wallet status:",
-          error
-        );
+        browserLogger.error("Error checking PastelID and wallet status:", error);
         setMessage(
           "An error occurred while checking your PastelID and wallet status. Please refresh the page in a few minutes."
         );
@@ -205,32 +156,21 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
     checkStatus();
   };
 
-  const handleImportPastelID = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleImportPastelID = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
       setMessage("Please select a PastelID file to import.");
       return;
     }
-    const formData = new FormData();
-    formData.append("pastelIDFile", file);
     try {
-      const networkResponse = await fetch("/get-network-info");
-      const networkData = await networkResponse.json();
-      const response = await fetch(
-        `/import-pastel-id?network=${networkData.network}`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-      const data = await response.json();
-      if (data.success) {
+      const networkInfo = await api.getNetworkInfo();
+      const fileContent = await file.text();
+      const result = await api.importPastelID(fileContent, networkInfo.network);
+      if (result.success) {
         setMessage("PastelID imported successfully!");
         window.location.reload();
       } else {
-        setMessage(data.message);
+        setMessage(result.message || "Failed to import PastelID.");
       }
     } catch (error) {
       browserLogger.error("Error importing PastelID:", error);
@@ -238,9 +178,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
     }
   };
 
-  const handlePromotionalPackFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handlePromotionalPackFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     setPromotionalPackFile(file || null);
   };
@@ -251,28 +189,19 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
       return;
     }
 
-    const formData = new FormData();
-    formData.append("packFile", promotionalPackFile);
-
     try {
-      const response = await fetch("/import-promotional-pack", {
-        method: "POST",
-        body: formData,
-      });
-
-      const result = await response.json();
+      const fileContent = await promotionalPackFile.text();
+      const result = await utils.importPromotionalPack(fileContent);
       if (result.success) {
         setMessage(result.message);
-        browserLogger.info("Import details:", result.details);
+        browserLogger.info("Import details:", result.processedPacks);
 
-        if (result.details && result.details.processedPacks.length > 0) {
-          result.details.processedPacks.forEach(
-            (pack: { pub_key: string; passphrase: string }) => {
-              localStorage.setItem(pack.pub_key, btoa(pack.passphrase));
-            }
-          );
+        if (result.processedPacks && result.processedPacks.length > 0) {
+          result.processedPacks.forEach((pack: { pub_key: string; passphrase: string }) => {
+            localStorage.setItem(pack.pub_key, btoa(pack.passphrase));
+          });
 
-          const newPastelID = result.details.processedPacks[0].pub_key;
+          const newPastelID = result.processedPacks[0].pub_key;
           await setSelectedPastelIDAndPassphrase(newPastelID, "", true);
         }
 
@@ -281,17 +210,11 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         // Refresh the page to update all components
         window.location.reload();
       } else {
-        throw new Error(
-          result.message || "Unknown error occurred during import"
-        );
+        throw new Error(result.message || "Unknown error occurred during import");
       }
     } catch (error) {
       browserLogger.error("Error importing promotional pack:", error);
-      setMessage(
-        `An error occurred while importing the promotional pack: ${
-          (error as Error).message
-        }`
-      );
+      setMessage(`An error occurred while importing the promotional pack: ${(error as Error).message}`);
     }
   };
 
@@ -303,40 +226,22 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
     const storedPassphrase = localStorage.getItem(selectedPastelID);
 
     try {
-      const response = await fetch("/check-pastel-id-validity", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ pastelID: selectedPastelID }),
-      });
-      const data = await response.json();
-      const isValid = data.isValid;
+      const isValid = await api.checkPastelIDValidity(selectedPastelID);
 
       if (!isValid) {
-        browserLogger.info(
-          `PastelID ${selectedPastelID} is not valid. Removing from localStorage.`
-        );
+        browserLogger.info(`PastelID ${selectedPastelID} is not valid. Removing from localStorage.`);
         localStorage.removeItem(selectedPastelID);
         fetchPastelIDs();
         return;
       }
 
       if (!storedPassphrase && !isNewlyImportedPromoPack) {
-        // Implement a modal or input field to get the passphrase from the user
-        // For now, we'll just set a placeholder message
-        setMessage(
-          "Passphrase required. Please implement a user input for the passphrase."
-        );
+        setMessage("Passphrase required. Please implement a user input for the passphrase.");
       } else {
         if (isNewlyImportedPromoPack) {
-          browserLogger.info(
-            "Using stored passphrase for newly imported promo pack."
-          );
+          browserLogger.info("Using stored passphrase for newly imported promo pack.");
           if (!storedPassphrase) {
-            browserLogger.error(
-              "Expected passphrase not found for newly imported promo pack."
-            );
+            browserLogger.error("Expected passphrase not found for newly imported promo pack.");
             return;
           }
         }
@@ -346,54 +251,22 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
       setSelectedPastelID(selectedPastelID);
       setPastelId(selectedPastelID);
 
-      // Fetch the model menu after setting the PastelID and passphrase
       await fetchModelMenu();
-
-      // Fetch received messages after setting the PastelID and passphrase
       await fetchReceivedMessages();
     } catch (error) {
       browserLogger.error("Error in setSelectedPastelIDAndPassphrase:", error);
-      if (
-        (error as { response?: { status: number } }).response?.status === 401
-      ) {
-        // Handle unauthorized error (e.g., invalid passphrase)
-        await setSelectedPastelIDAndPassphrase(
-          selectedPastelID,
-          "Invalid Passphrase. Please try again."
-        );
+      if ((error as { response?: { status: number } }).response?.status === 401) {
+        await setSelectedPastelIDAndPassphrase(selectedPastelID, "Invalid Passphrase. Please try again.");
       } else {
-        // Handle other errors
-        setMessage(
-          "An error occurred while setting PastelID and passphrase. Please try again."
-        );
+        setMessage("An error occurred while setting PastelID and passphrase. Please try again.");
       }
     }
   };
 
-  const postPassphrase = async (
-    pastelID: string,
-    encodedPassphrase: string
-  ) => {
+  const postPassphrase = async (pastelID: string, encodedPassphrase: string) => {
     try {
-      const response = await fetch("/set-pastel-id-passphrase", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          pastelID: pastelID,
-          passphrase: atob(encodedPassphrase),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to set PastelID and passphrase");
-      }
-
-      // Fetch the model menu after setting the PastelID and passphrase
+      await api.setPastelIdAndPassphrase(pastelID, atob(encodedPassphrase));
       await fetchModelMenu();
-
-      // Fetch received messages after setting the PastelID and passphrase
       await fetchReceivedMessages();
     } catch (error) {
       localStorage.setItem(pastelID, "");
@@ -404,10 +277,8 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
 
   const fetchModelMenu = async () => {
     try {
-      const response = await fetch("/get-inference-model-menu");
-      const data = await response.json();
-      // Handle the model menu data as needed
-      browserLogger.info("Model menu fetched:", data);
+      const modelMenu = await api.getInferenceModelMenu();
+      browserLogger.info("Model menu fetched:", modelMenu);
     } catch (error) {
       browserLogger.error("Error fetching model menu:", error);
     }
@@ -415,10 +286,8 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
 
   const fetchReceivedMessages = async () => {
     try {
-      const response = await fetch("/get-received-messages");
-      const data = await response.json();
-      // Handle the received messages as needed
-      browserLogger.info("Received messages:", data);
+      const messages = await api.getReceivedMessages();
+      browserLogger.info("Received messages:", messages);
     } catch (error) {
       browserLogger.error("Error fetching received messages:", error);
     }

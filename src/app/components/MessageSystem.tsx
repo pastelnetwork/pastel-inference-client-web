@@ -3,12 +3,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-
-interface Message {
-  from_pastelid: string;
-  message_body: string;
-  timestamp: string;
-}
+import * as api from '@/app/lib/api';
+import { UserMessage } from "@/app/types";
 
 interface MessageSystemProps {
   pastelId: string | null;
@@ -17,7 +13,7 @@ interface MessageSystemProps {
 export default function MessageSystem({ pastelId }: MessageSystemProps) {
   const [toPastelID, setToPastelID] = useState<string>('jXXiVgtFzLto4eYziePHjjb1hj3c6eXdABej5ndnQ62B8ouv1GYveJaD5QUMfainQM3b4MTieQuzFEmJexw8Cr');
   const [messageBody, setMessageBody] = useState<string>('Hello, this is a brand 🍉 NEW test message from a regular user!');
-  const [receivedMessages, setReceivedMessages] = useState<Record<string, Message[]>>({});
+  const [receivedMessages, setReceivedMessages] = useState<Record<string, UserMessage[]>>({});
   const [isSending, setIsSending] = useState<boolean>(false);
 
   useEffect(() => {
@@ -28,12 +24,15 @@ export default function MessageSystem({ pastelId }: MessageSystemProps) {
 
   const fetchReceivedMessages = async () => {
     try {
-      const response = await fetch('/get-received-messages');
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      setReceivedMessages(data.messageDict);
+      const messages = await api.getReceivedMessages();
+      const messageDict: Record<string, UserMessage[]> = {};
+      messages.forEach(message => {
+        if (!messageDict[message.from_pastelid]) {
+          messageDict[message.from_pastelid] = [];
+        }
+        messageDict[message.from_pastelid].push(message);
+      });
+      setReceivedMessages(messageDict);
     } catch (error) {
       console.error('Error fetching received messages:', error);
     }
@@ -47,20 +46,7 @@ export default function MessageSystem({ pastelId }: MessageSystemProps) {
     }
     setIsSending(true);
     try {
-      const response = await fetch('/send-message', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          toPastelID,
-          messageBody,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const result = await response.json();
+      const result = await api.sendMessage(toPastelID, messageBody);
       console.log('Message sent:', result);
       setMessageBody('');
       fetchReceivedMessages();

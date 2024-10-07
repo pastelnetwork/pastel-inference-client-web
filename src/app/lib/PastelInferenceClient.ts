@@ -1,6 +1,6 @@
 // src/app/lib/PastelInferenceClient.ts
 
-"use client";
+'use client';
 
 import BrowserRPCReplacement from "./BrowserRPCReplacement";
 import { BrowserDatabase } from "./BrowserDatabase";

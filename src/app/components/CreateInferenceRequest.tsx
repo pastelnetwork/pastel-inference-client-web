@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import compress from 'browser-image-compression';
 import { ModelMenu, ModelInfo, ModelParameter, InferenceResultDict, InferenceRequestParams } from '@/app/types';
+import * as api from '@/app/lib/api';
 
 interface CreateInferenceRequestProps {
   modelMenu: ModelMenu | null;
@@ -103,33 +104,23 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
         };
       }
 
-      const response = await fetch('/create-inference-request', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          selectedCreditPackTicketId: (document.querySelector('input[name="creditPackTicket"]:checked') as HTMLInputElement)?.value,
-          selectedInferenceType: inferenceType,
-          selectedModelCanonicalName: selectedModel,
-          maxCost: parseFloat(maxCost),
-          modelParametersJSONBase64Encoded: btoa(JSON.stringify(modelParameters)),
-          modelInputDataJSONBase64Encoded: btoa(JSON.stringify(modelInputData)),
-        }),
-      });
+      const params: InferenceRequestParams = {
+        selectedCreditPackTicketId: (document.querySelector('input[name="creditPackTicket"]:checked') as HTMLInputElement)?.value,
+        modelInputData,
+        requestedModelCanonicalString: selectedModel,
+        modelInferenceTypeString: inferenceType,
+        modelParameters,
+        maximumInferenceCostInCredits: parseFloat(maxCost),
+      };
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      const result = await api.createInferenceRequest(params);
 
-      const result = await response.json();
-
-      if (result.success) {
+      if (result) {
         setStatus('Inference request created successfully.');
-        setInferenceResult(result.result.inferenceResultDict);
-        saveInferenceRequestToLocalStorage(result.result.inferenceResultDict);
+        setInferenceResult(result);
+        saveInferenceRequestToLocalStorage(result);
       } else {
-        throw new Error(result.message || 'Failed to create inference request');
+        throw new Error('Failed to create inference request');
       }
     } catch (error) {
       console.error('Error creating inference request:', error);

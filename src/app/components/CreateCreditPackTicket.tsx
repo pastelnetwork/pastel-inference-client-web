@@ -1,6 +1,9 @@
 // src/app/components/CreateCreditPackTicket.tsx
 
-"use client";
+'use client';
+
+import * as api from '@/app/lib/api';
+import { CreditPackCreationResult, CreditPackTicketInfo } from "@/app/types";
 
 import React, { useState, useEffect, useCallback } from "react";
 
@@ -76,43 +79,28 @@ export default function CreateCreditPackTicket() {
     }
   };
 
-  const createNewCreditPackTicket = async (
-    e: React.FormEvent<HTMLFormElement>
-  ) => {
+  const createNewCreditPackTicket = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     setStatus("Initializing ticket creation...");
     setNewTicketDetails(null);
 
     try {
-      const response = await fetch("/create-credit-pack-ticket", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          numCredits: parseInt(numCredits.replace(/,/g, "")),
-          maxTotalPrice: parseFloat(maxTotalPrice.replace(/,/g, "")),
-          maxPerCreditPrice: parseFloat(maxPerCreditPrice.replace(/,/g, "")),
-        }),
-      });
+      const result = await api.createCreditPackTicket(
+        parseInt(numCredits.replace(/,/g, "")),
+        maxPerCreditPrice,
+        parseFloat(maxTotalPrice.replace(/,/g, "")),
+        parseFloat(maxPerCreditPrice.replace(/,/g, ""))
+      );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
+      if (result) {
         setStatus("Credit pack ticket created successfully.");
-        setNewTicketDetails(result.ticketDetails);
+        setNewTicketDetails(result.creditPackPurchaseRequestConfirmation);
         pollCreditPackStatus(
-          result.ticketDetails.pastel_api_credit_pack_ticket_registration_txid
+          result.creditPackPurchaseRequestConfirmation.pastel_api_credit_pack_ticket_registration_txid
         );
       } else {
-        throw new Error(
-          result.message || "Failed to create new credit pack ticket"
-        );
+        throw new Error("Failed to create new credit pack ticket");
       }
     } catch (error) {
       console.error("Error creating credit pack ticket:", error);
@@ -131,17 +119,12 @@ export default function CreateCreditPackTicket() {
 
     const checkStatus = async () => {
       try {
-        const response = await fetch(`/credit-pack-status/${txid}`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const result = await response.json();
+        const isConfirmed = await api.isCreditPackConfirmed(txid);
 
-        if (result.confirmed) {
+        if (isConfirmed) {
           setStatus(
             "Credit pack ticket has been confirmed. Refreshing the table..."
           );
-          // Trigger a refresh of the credit pack tickets table
           window.dispatchEvent(new CustomEvent("refreshCreditPackTickets"));
           setStatus("Credit pack ticket is now available for use.");
         } else {

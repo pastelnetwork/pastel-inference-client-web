@@ -1,9 +1,10 @@
 // src/app/components/SelectCreditPackTicket.tsx
 
-"use client";
+'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { CreditPackTicketInfo, CreditPackPurchaseRequestResponse } from "@/app/types";
+import * as api from '@/app/lib/api';
 
 // 1. Define an extended interface to include augmented fields
 interface ExtendedCreditPackPurchaseRequestResponse extends CreditPackPurchaseRequestResponse {
@@ -32,31 +33,16 @@ export default function SelectCreditPackTicket() {
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
-  // 5. Update the fetch function to use the extended response type
   const getMyValidCreditPacks = useCallback(async (forceRefresh = false) => {
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `/get-my-valid-credit-packs${forceRefresh ? "?force=true" : ""}`
+      const data = await api.getMyValidCreditPacks();
+      const validTickets = data.filter(
+        (ticket) => ticket.credit_pack_current_credit_balance > 0
       );
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      // Explicitly type the response data
-      const data: GetValidCreditPacksResponse = await response.json();
-
-      if (data.success) {
-        const validTickets = data.result.filter(
-          (ticket: ExtendedCreditPackTicketInfo) =>
-            ticket.requestResponse.credit_pack_current_credit_balance > 0
-        );
-        setCreditPackTickets(validTickets);
-        if (validTickets.length > 0 && !selectedTicket) {
-          setSelectedTicket(validTickets[0].requestResponse.credit_pack_registration_txid);
-        }
-      } else {
-        throw new Error(data.message || "Failed to fetch credit pack tickets");
+      setCreditPackTickets(validTickets);
+      if (validTickets.length > 0 && !selectedTicket) {
+        setSelectedTicket(validTickets[0].credit_pack_registration_txid);
       }
     } catch (error) {
       console.error("Error retrieving valid credit pack tickets:", error);
@@ -64,19 +50,6 @@ export default function SelectCreditPackTicket() {
       setIsLoading(false);
     }
   }, [selectedTicket]);
-
-  useEffect(() => {
-    getMyValidCreditPacks();
-    const handleRefresh = () => getMyValidCreditPacks(true);
-    window.addEventListener("refreshCreditPackTickets", handleRefresh as EventListener);
-    return () => {
-      window.removeEventListener("refreshCreditPackTickets", handleRefresh as EventListener);
-    };
-  }, [getMyValidCreditPacks]);
-
-  const handleTicketSelection = (txid: string) => {
-    setSelectedTicket(txid);
-  };
 
   const showTooltip = (
     event: React.MouseEvent<HTMLTableRowElement>,

@@ -1,4 +1,6 @@
-"use client";
+// src/app/page.tsx
+
+'use client';
 
 import { useState, useEffect } from "react";
 import Header from "./components/Header";
@@ -11,14 +13,7 @@ import MessageSystem from "./components/MessageSystem";
 import WalletManagement from "./components/WalletManagement";
 import Terminal from "./components/Terminal";
 import { ModelMenu, NetworkInfo } from "./types";
-
-declare global {
-  interface Window {
-    axios: {
-      get: (url: string, config?: Record<string, unknown>) => Promise<{ data: unknown }>;
-    };
-  }
-}
+import * as api from './lib/api';
 
 export default function Home() {
   const [pastelId, setPastelId] = useState<string | null>(null);
@@ -29,17 +24,15 @@ export default function Home() {
   useEffect(() => {
     const initialize = async () => {
       try {
-        const { data: networkInfo } = await window.axios.get("/get-network-info");
-        setNetworkName((networkInfo as NetworkInfo).network);
+        const networkInfo = await api.getNetworkInfo();
+        setNetworkName(networkInfo.network);
 
         if (pastelId) {
-          const { data: url } = await window.axios.get("/get-best-supernode-url", {
-            params: { userPastelID: pastelId },
-          });
-          setSupernodeUrl(url as string);
+          const url = await api.getBestSupernodeUrl(pastelId);
+          setSupernodeUrl(url);
 
-          const { data: menu } = await window.axios.get("/get-inference-model-menu");
-          setModelMenu(menu as ModelMenu);
+          const menu = await api.getInferenceModelMenu();
+          setModelMenu(menu);
         }
       } catch (error) {
         console.error("Initialization error:", error);

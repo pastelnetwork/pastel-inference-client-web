@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import BrowserRPCReplacement from '../lib/BrowserRPCReplacement'
+import { CreditPack } from '@/app/types'
 import * as api from '../lib/api'
 
 interface WalletState {
@@ -9,7 +10,7 @@ interface WalletState {
   pastelId: string
   balance: number
   addresses: string[]
-  creditPacks: any[]
+  creditPacks: CreditPack[]
 }
 
 interface WalletActions {
@@ -18,7 +19,7 @@ interface WalletActions {
   setPastelId: (id: string) => void
   setBalance: (balance: number) => void
   setAddresses: (addresses: string[]) => void
-  setCreditPacks: (packs: any[]) => void
+  setCreditPacks: (packs: CreditPack[]) => void
   initializeWallet: () => Promise<void>
   lockWallet: () => Promise<void>
   unlockWallet: (password: string) => Promise<void>

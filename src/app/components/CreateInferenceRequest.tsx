@@ -78,7 +78,7 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
     setInferenceResult(null);
 
     try {
-      let modelInputData: Record<string, any> = {};
+      let modelInputData: Record<string, string | null> = {};
       let fileData: string | null = null;
 
       if (inferenceType === 'text_completion') {

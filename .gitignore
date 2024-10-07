@@ -41,8 +41,8 @@ package-lock.json
 package-lock.json
 bun.lockb
 /bun.lockb
-public/
-/public
+# public/
+# /public
 /public/favicons/*
 public/favicons/*.png
 public/favicons/*.jpg

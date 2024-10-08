@@ -1,21 +1,22 @@
 // src/app/lib/storage.ts
 
-'use client'
+"use client";
 
-import BrowserRPCReplacement from "./BrowserRPCReplacement";
-import { BrowserDatabase } from './BrowserDatabase';
-import { PastelID } from '@/app/types';
-import browserLogger from '@/app/lib/logger';
+import { BrowserDatabase } from "./BrowserDatabase";
+import { PastelID } from "@/app/types";
+import browserLogger from "@/app/lib/logger";
+import type BrowserRPCReplacementType from "./BrowserRPCReplacement";
 
+let BrowserRPCReplacement: typeof BrowserRPCReplacementType;
 
 class BrowserStorage {
   private browserDB: BrowserDatabase;
-  private rpcReplacement: BrowserRPCReplacement;
+  private rpcReplacement: BrowserRPCReplacementType | null;
   private storageInitialized: boolean;
 
   constructor() {
     this.browserDB = new BrowserDatabase();
-    this.rpcReplacement = new BrowserRPCReplacement();
+    this.rpcReplacement = null;
     this.storageInitialized = false;
   }
 
@@ -23,11 +24,20 @@ class BrowserStorage {
     if (!this.storageInitialized) {
       try {
         await this.browserDB.initializeDatabase();
+        // Lazy load BrowserRPCReplacement
+        if (!BrowserRPCReplacement) {
+          const importedModule = await import("./BrowserRPCReplacement");
+          BrowserRPCReplacement = importedModule.default;
+        }
+        this.rpcReplacement = new BrowserRPCReplacement();
         browserLogger.info("Storage initialized successfully");
         this.storageInitialized = true;
       } catch (error) {
         browserLogger.error(
-          `Error initializing storage: ${(error as Error).message.slice(0, 100)}`
+          `Error initializing storage: ${(error as Error).message.slice(
+            0,
+            100
+          )}`
         );
         throw error;
       }
@@ -49,13 +59,18 @@ class BrowserStorage {
       return { pastelID, passphrase };
     } catch (error) {
       browserLogger.error(
-        `Error retrieving PastelID and passphrase: ${(error as Error).message.slice(0, 100)}`
+        `Error retrieving PastelID and passphrase: ${(
+          error as Error
+        ).message.slice(0, 100)}`
       );
       return { pastelID: null, passphrase: null };
     }
   }
 
-  async setPastelIdAndPassphrase(pastelID: string, passphrase: string): Promise<void> {
+  async setPastelIdAndPassphrase(
+    pastelID: string,
+    passphrase: string
+  ): Promise<void> {
     if (!pastelID || !passphrase) {
       browserLogger.error("Attempted to set empty PastelID or passphrase");
       throw new Error("PastelID and passphrase must not be empty");
@@ -68,7 +83,9 @@ class BrowserStorage {
       browserLogger.info(`Set PastelID: ${pastelID}`);
     } catch (error) {
       browserLogger.error(
-        `Error setting PastelID and passphrase: ${(error as Error).message.slice(0, 100)}`
+        `Error setting PastelID and passphrase: ${(
+          error as Error
+        ).message.slice(0, 100)}`
       );
       throw error;
     }
@@ -79,12 +96,19 @@ class BrowserStorage {
     return this.browserDB.addData(storeName, data);
   }
 
-  async retrieveData<T>(storeName: string, id: IDBValidKey): Promise<T | undefined> {
+  async retrieveData<T>(
+    storeName: string,
+    id: IDBValidKey
+  ): Promise<T | undefined> {
     await this.initializeStorage();
     return this.browserDB.getData<T>(storeName, id);
   }
 
-  async updateData<T>(storeName: string, id: IDBValidKey, data: T): Promise<IDBValidKey> {
+  async updateData<T>(
+    storeName: string,
+    id: IDBValidKey,
+    data: T
+  ): Promise<IDBValidKey> {
     await this.initializeStorage();
     return this.browserDB.updateData(storeName, id, data);
   }
@@ -94,16 +118,24 @@ class BrowserStorage {
     return this.browserDB.deleteData(storeName, id);
   }
 
-  async performRPCOperation<T>(method: keyof BrowserRPCReplacement, ...args: unknown[]): Promise<T> {
-    return (this.rpcReplacement[method] as (...args: unknown[]) => Promise<T>)(...args);
+  async performRPCOperation<T>(
+    method: keyof BrowserRPCReplacementType,
+    ...args: unknown[]
+  ): Promise<T> {
+    if (!this.rpcReplacement) {
+      throw new Error("RPC replacement not initialized");
+    }
+    return (this.rpcReplacement[method] as (...args: unknown[]) => Promise<T>)(
+      ...args
+    );
   }
 
   async getNetworkFromLocalStorage(): Promise<string> {
-    return localStorage.getItem('PASTEL_NETWORK') || 'Mainnet';
+    return localStorage.getItem("PASTEL_NETWORK") || "Mainnet";
   }
 
   async setNetworkInLocalStorage(network: string): Promise<void> {
-    localStorage.setItem('PASTEL_NETWORK', network);
+    localStorage.setItem("PASTEL_NETWORK", network);
   }
 }
 
@@ -114,26 +146,35 @@ export default browserStorage;
 
 // Utility functions
 export async function getCurrentPastelIdAndPassphrase(): Promise<PastelID> {
+  await browserStorage.initializeStorage();
   return browserStorage.getCurrentPastelIdAndPassphrase();
 }
 
-export async function setPastelIdAndPassphrase(pastelID: string, passphrase: string): Promise<void> {
+export async function setPastelIdAndPassphrase(
+  pastelID: string,
+  passphrase: string
+): Promise<void> {
+  await browserStorage.initializeStorage();
   return browserStorage.setPastelIdAndPassphrase(pastelID, passphrase);
 }
 
 export async function getNetworkFromLocalStorage(): Promise<string> {
+  await browserStorage.initializeStorage();
   return browserStorage.getNetworkFromLocalStorage();
 }
 
 export async function setNetworkInLocalStorage(network: string): Promise<void> {
+  await browserStorage.initializeStorage();
   return browserStorage.setNetworkInLocalStorage(network);
 }
 
 export async function storeSecureContainer(
-    pastelID: string,
-    secureContainer: string,
-    network: string
-  ): Promise<void> {
-    const key = `secureContainer_${pastelID}_${network}`;
-    localStorage.setItem(key, secureContainer);
-  }
+  pastelID: string,
+  secureContainer: string,
+  network: string
+): Promise<void> {
+  localStorage.setItem(
+    `secureContainer_${pastelID}_${network}`,
+    secureContainer
+  );
+}

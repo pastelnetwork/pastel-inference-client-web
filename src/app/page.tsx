@@ -12,21 +12,17 @@ import PreviousRequests from "./components/PreviousRequests";
 import MessageSystem from "./components/MessageSystem";
 import WalletManagement from "./components/WalletManagement";
 import Terminal from "./components/Terminal";
-import { ModelMenu, NetworkInfo } from "./types";
+import { ModelMenu } from "./types";
 import * as api from './lib/api';
 
 export default function Home() {
   const [pastelId, setPastelId] = useState<string | null>(null);
-  const [networkName, setNetworkName] = useState<string>("");
   const [supernodeUrl, setSupernodeUrl] = useState<string>("");
   const [modelMenu, setModelMenu] = useState<ModelMenu | null>(null);
 
   useEffect(() => {
     const initialize = async () => {
       try {
-        const networkInfo = await api.getNetworkInfo();
-        setNetworkName(networkInfo.network);
-
         if (pastelId) {
           const url = await api.getBestSupernodeUrl(pastelId);
           setSupernodeUrl(url);

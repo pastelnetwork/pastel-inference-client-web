@@ -1,4 +1,7 @@
-import BrowserRPCReplacement from "./BrowserRPCReplacement";
+// src/app/lib/api.ts
+
+"use client";
+
 import { BrowserDatabase } from "./BrowserDatabase";
 import PastelInferenceClient from "./PastelInferenceClient";
 import {
@@ -23,14 +26,23 @@ import {
   WalletInfo,
   SendToAddressResult,
 } from "@/app/types";
+import type BrowserRPCReplacementType from "./BrowserRPCReplacement";
 
-const rpc = new BrowserRPCReplacement();
+let BrowserRPCReplacement: typeof BrowserRPCReplacementType;
+let rpc: BrowserRPCReplacementType;
+
 const db = new BrowserDatabase();
 
 let network: string;
 let burnAddress: string;
 
 export async function initializeApp(): Promise<void> {
+  if (!BrowserRPCReplacement) {
+    const importedModule = await import("./BrowserRPCReplacement");
+    BrowserRPCReplacement = importedModule.default;
+    rpc = new BrowserRPCReplacement();
+  }
+
   await db.initializeDatabase();
   await rpc.initialize();
   const { network: configuredNetwork, burnAddress: configuredBurnAddress } =
@@ -378,12 +390,18 @@ export async function checkTrackingAddressBalance(
   return { address: trackingAddress, balance: balance };
 }
 
-export async function importPastelID(fileContent: string, network: string): Promise<{ success: boolean; message: string }> {
+export async function importPastelID(
+  fileContent: string,
+  network: string
+): Promise<{ success: boolean; message: string }> {
   try {
     await rpc.importPastelID(fileContent, network);
     return { success: true, message: "PastelID imported successfully!" };
   } catch (error) {
     console.error("Error importing PastelID:", error);
-    return { success: false, message: `Failed to import PastelID: ${(error as Error).message}` };
+    return {
+      success: false,
+      message: `Failed to import PastelID: ${(error as Error).message}`,
+    };
   }
 }

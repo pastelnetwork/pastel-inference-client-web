@@ -1,96 +1,9 @@
 // src/app/lib/BrowserRPCReplacement.ts
 
-'use client'
+'use client';
 
-import {
-  SupernodeInfo,
-  WalletInfo,
-  PastelIDTicket,
-  NetworkMode,
-  TransactionDetail,
-  BlockInfo,
-  MempoolInfo,
-  BlockchainInfo,
-  TxOutSetInfo,
-  ChainTip,
-  BlockHeader,
-  TxOutInfo,
-  MemoryInfo,
-  BlockSubsidy,
-  BlockTemplate,
-  MiningInfo,
-  NetworkSolPs,
-  NodeInfo,
-  PeerInfo,
-  DecodedRawTransaction,
-  DecodedScript,
-  ValidatedAddress,
-  PastelIDInfo,
-} from "@/app/types";
-import {
-  getNetworkFromLocalStorage,
-  setNetworkInLocalStorage,
-} from "@/app/lib/storage";
-
-declare global {
-  interface Window {
-    Module: {
-      Pastel: new () => PastelInstance;
-    };
-  }
-}
-
-interface PastelInstance {
-  VerifyWithPastelID: (
-    pastelid: string,
-    messageToVerify: string,
-    pastelIDSignatureOnMessage: string,
-    network: string
-  ) => string;
-  SignWithPastelID: (
-    pastelid: string,
-    messageToSign: string,
-    type: string,
-    network: string
-  ) => string;
-  CreateNewWallet: (password: string) => string;
-  ImportWallet: (serializedWallet: string) => string;
-  ExportWallet: () => string;
-  MakeNewAddress: (networkMode: NetworkMode) => string;
-  GetAddress: (index: number, networkMode: NetworkMode) => string;
-  GetAddressesCount: () => number;
-  MakeNewPastelID: (makeFullPair: boolean) => string;
-  GetPastelIDByIndex: (index: number, type: string) => string;
-  GetPastelIDsCount: () => number;
-  CreateSendToTransaction: (
-    networkMode: NetworkMode,
-    sendToJson: string,
-    fromAddress: string,
-    utxosJson: string,
-    blockHeight: number,
-    fee: number
-  ) => string;
-  CreateRegisterPastelIdTransaction: (
-    networkMode: NetworkMode,
-    pastelID: string,
-    fundingAddress: string,
-    utxosJson: string,
-    blockHeight: number,
-    fee: number
-  ) => string;
-  SignWithWalletKey: (message: string) => string;
-  UnlockWallet: (password: string) => string;
-  LockWallet: () => string;
-  GetWalletPubKey: () => string;
-  DumpPrivKey: (tAddr: string) => string;
-  ImportPrivKey: (privKey: string, label: string, rescan: boolean) => string;
-  RegisterPastelID: (
-    pastelid: string,
-    passphrase: string,
-    address: string
-  ) => string;
-  CreateWalletFromMnemonic: (password: string, mnemonic: string) => string;
-}
+import { NetworkMode, PastelInstance, SupernodeInfo, WalletInfo, PastelIDTicket, TransactionDetail, BlockInfo, MempoolInfo, BlockchainInfo, TxOutSetInfo, ChainTip, BlockHeader, TxOutInfo, MemoryInfo, BlockSubsidy, BlockTemplate, MiningInfo, NetworkSolPs, NodeInfo, PeerInfo, DecodedRawTransaction, DecodedScript, ValidatedAddress, PastelIDInfo } from "@/app/types";
+import { getNetworkFromLocalStorage, setNetworkInLocalStorage } from "@/app/lib/storage";
 
 class BrowserRPCReplacement {
   private apiBaseUrl: string;
@@ -102,7 +15,7 @@ class BrowserRPCReplacement {
     this.pastelInstance = null;
     this.isInitialized = false;
   }
-
+  
   async initialize(): Promise<void> {
     if (!this.isInitialized) {
       if (

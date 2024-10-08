@@ -1,9 +1,4 @@
-// src/app/lib/wasmLoader.ts
-
-'use client'
-
 import { PastelInstance } from '@/app/types';
-import { useEffect, useState } from 'react';
 
 type PastelModule = {
   Pastel: new () => PastelInstance;
@@ -27,8 +22,25 @@ export async function initWasm(): Promise<PastelModule | null> {
   }
 
   try {
-    // Use dynamic import with a more specific path
-    await import('/libpastel_wasm.js');
+    // Load the WASM module
+    await import('../../../public/libpastel_wasm.js');
+    
+    // Wait for the module to be fully initialized
+    await new Promise<void>((resolve) => {
+      if (window.Module) {
+        resolve();
+      } else {
+        const checkModule = () => {
+          if (window.Module) {
+            resolve();
+          } else {
+            setTimeout(checkModule, 10);
+          }
+        };
+        checkModule();
+      }
+    });
+
     wasmModule = window.Module;
     return wasmModule;
   } catch (error) {
@@ -38,11 +50,5 @@ export async function initWasm(): Promise<PastelModule | null> {
 }
 
 export function useWasm(): PastelModule | null {
-  const [wasm, setWasm] = useState<PastelModule | null>(null);
-
-  useEffect(() => {
-    initWasm().then(setWasm);
-  }, []);
-
-  return wasm;
+  return wasmModule;
 }

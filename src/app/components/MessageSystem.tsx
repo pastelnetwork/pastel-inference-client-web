@@ -5,12 +5,10 @@
 import React, { useState, useEffect } from 'react';
 import * as api from '@/app/lib/api';
 import { UserMessage } from "@/app/types";
+import useStore from '../store/useStore';
 
-interface MessageSystemProps {
-  pastelId: string | null;
-}
-
-export default function MessageSystem({ pastelId }: MessageSystemProps) {
+export default function MessageSystem() {
+  const { pastelId } = useStore();
   const [toPastelID, setToPastelID] = useState<string>('jXXiVgtFzLto4eYziePHjjb1hj3c6eXdABej5ndnQ62B8ouv1GYveJaD5QUMfainQM3b4MTieQuzFEmJexw8Cr');
   const [messageBody, setMessageBody] = useState<string>('Hello, this is a brand 🍉 NEW test message from a regular user!');
   const [receivedMessages, setReceivedMessages] = useState<Record<string, UserMessage[]>>({});

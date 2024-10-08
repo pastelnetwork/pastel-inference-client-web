@@ -2,7 +2,8 @@
 
 'use client';
 
-import { useState, useEffect } from "react";
+import React, { useEffect } from "react";
+import dynamic from 'next/dynamic';
 import Header from "./components/Header";
 import UserInfo from "./components/UserInfo";
 import CreateCreditPackTicket from "./components/CreateCreditPackTicket";
@@ -11,51 +12,77 @@ import CreateInferenceRequest from "./components/CreateInferenceRequest";
 import PreviousRequests from "./components/PreviousRequests";
 import MessageSystem from "./components/MessageSystem";
 import WalletManagement from "./components/WalletManagement";
-import dynamic from 'next/dynamic';
-import { ModelMenu } from "./types";
-import * as api from './lib/api';
+import ErrorBoundary from './components/ErrorBoundary';
+import useStore from './store/useStore';
+import browserLogger from "./lib/logger";
 
 const DynamicTerminal = dynamic(() => import('./components/Terminal'), { ssr: false });
 
 export default function Home() {
-  const [pastelId, setPastelId] = useState<string | null>(null);
-  const [supernodeUrl, setSupernodeUrl] = useState<string>("");
-  const [modelMenu, setModelMenu] = useState<ModelMenu | null>(null);
+  const { 
+    initializeWallet, 
+    isLoading, 
+    error, 
+    pastelId, 
+    modelMenu, 
+    fetchModelMenu,
+    isInitialized,
+    setError
+  } = useStore();
 
   useEffect(() => {
-    const initialize = async () => {
+    const init = async () => {
+      browserLogger.info("Initializing wallet...");
       try {
-        if (pastelId) {
-          const url = await api.getBestSupernodeUrl(pastelId);
-          setSupernodeUrl(url);
-
-          const menu = await api.getInferenceModelMenu();
-          setModelMenu(menu);
-        }
-      } catch (error) {
-        console.error("Initialization error:", error);
+        await initializeWallet();
+        browserLogger.info("Wallet initialized successfully");
+      } catch (err) {
+        browserLogger.error("Initialization error:", err);
+        setError("Failed to initialize the application. Please refresh and try again.");
       }
     };
+    init();
+  }, [initializeWallet, setError]);
 
-    initialize();
-  }, [pastelId]);
+  useEffect(() => {
+    const fetchData = async () => {
+      if (isInitialized && pastelId) {
+        browserLogger.info("Fetching model menu...");
+        try {
+          await fetchModelMenu();
+          browserLogger.info("Model menu fetched successfully");
+        } catch (err) {
+          browserLogger.error("Data fetching error:", err);
+          setError("Failed to fetch necessary data. Please try again.");
+        }
+      }
+    };
+    fetchData();
+  }, [isInitialized, pastelId, fetchModelMenu, setError]);
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-screen">Initializing application...</div>;
+  }
+
+  if (error) {
+    return <div className="flex justify-center items-center h-screen text-red-500">{error}</div>;
+  }
 
   return (
-    <main className="flex flex-col gap-6 transition-all duration-300 bg-bw-50">
-      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
-        <Header />
-        <UserInfo pastelId={pastelId} setPastelId={setPastelId} />
-        <CreateCreditPackTicket />
-        <SelectCreditPackTicket />
-        <CreateInferenceRequest
-          modelMenu={modelMenu}
-          supernodeUrl={supernodeUrl}
-        />
-        <PreviousRequests />
-        <MessageSystem pastelId={pastelId} />
-        <WalletManagement />
-        <DynamicTerminal />
-      </div>
-    </main>
+    <ErrorBoundary>
+      <main className="flex flex-col gap-6 transition-all duration-300 bg-bw-50">
+        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
+          <Header />
+          <UserInfo />
+          <CreateCreditPackTicket />
+          <SelectCreditPackTicket />
+          <CreateInferenceRequest modelMenu={modelMenu} />
+          <PreviousRequests />
+          <MessageSystem />
+          <WalletManagement />
+          <DynamicTerminal />
+        </div>
+      </main>
+    </ErrorBoundary>
   );
 }

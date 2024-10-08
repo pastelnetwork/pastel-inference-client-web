@@ -6,13 +6,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import browserLogger from "@/app/lib/logger";
 import * as api from '@/app/lib/api';
 import * as utils from '@/app/lib/utils';
+import useStore from '../store/useStore';
 
-interface UserInfoProps {
-  pastelId: string | null;
-  setPastelId: (pastelId: string | null) => void;
-}
-
-export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
+export default function UserInfo() {
+  const { setPastelId } = useStore();
   const [walletBalance, setWalletBalance] = useState<string>("Loading...");
   const [pastelIDs, setPastelIDs] = useState<string[]>([]);
   const [selectedPastelID, setSelectedPastelID] = useState<string>("");
@@ -237,7 +234,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) { // 
   
       if (extraMessage) {
         browserLogger.info(`Additional information: ${extraMessage}`);
-        setMessage(extraMessage); // Assuming setMessage is a function to display messages to the user
+        setMessage(extraMessage);
       }
   
       if (!storedPassphrase && !isNewlyImportedPromoPack) {
@@ -267,7 +264,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) { // 
       }
     }
   };
-  
+
   const postPassphrase = async (pastelID: string, encodedPassphrase: string) => {
     try {
       await api.setPastelIdAndPassphrase(pastelID, atob(encodedPassphrase));

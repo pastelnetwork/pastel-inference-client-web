@@ -27,7 +27,7 @@ export default function RootLayout({
       </head>
       <body className={montserrat.className}>
         {children}
-        <Script src="/libpastel_wasm.js" strategy="beforeInteractive" />
+        <Script src="/public/libpastel_wasm.js" strategy="beforeInteractive" />
         <Script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js" strategy="beforeInteractive" />
         <Script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js" strategy="beforeInteractive" />
         <Script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js" strategy="beforeInteractive" />
@@ -37,16 +37,6 @@ export default function RootLayout({
         <Script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.min.js" strategy="beforeInteractive" />
         <Script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.9.3/sha3.min.js" strategy="beforeInteractive" />
         <Script src="https://cdn.jsdelivr.net/gh/MarketingPipeline/Markdown-Tag/markdown-tag.js" strategy="beforeInteractive" />
-        <Script id="wasm-loader">
-          {`
-            window.Module = {
-              onRuntimeInitialized: function() {
-                console.log('WASM module initialized');
-                window.dispatchEvent(new Event('wasmLoaded'));
-              }
-            };
-          `}
-        </Script>
       </body>
     </html>
   )

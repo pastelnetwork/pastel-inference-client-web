@@ -10,7 +10,6 @@ import * as api from '@/app/lib/api';
 
 interface CreateInferenceRequestProps {
   modelMenu: ModelMenu | null;
-  supernodeUrl: string;
 }
 
 export default function CreateInferenceRequest({ modelMenu }: CreateInferenceRequestProps) {

@@ -1,11 +1,8 @@
 // src/app/lib/BrowserRPCReplacement.ts
 
-'use client';
-
 import { initWasm } from './wasmLoader';
-import { NetworkMode, PastelInstance, SupernodeInfo, WalletInfo, PastelIDTicket, TransactionDetail, BlockInfo, MempoolInfo, BlockchainInfo, TxOutSetInfo, ChainTip, BlockHeader, TxOutInfo, MemoryInfo, BlockSubsidy, BlockTemplate, MiningInfo, NetworkSolPs, NodeInfo, PeerInfo, DecodedRawTransaction, DecodedScript, ValidatedAddress, PastelIDInfo } from "@/app/types";
+import { PastelInstance, NetworkMode, SupernodeInfo, WalletInfo, PastelIDTicket, TransactionDetail, BlockInfo, MempoolInfo, BlockchainInfo, TxOutSetInfo, ChainTip, BlockHeader, TxOutInfo, MemoryInfo, BlockSubsidy, BlockTemplate, MiningInfo, NetworkSolPs, NodeInfo, PeerInfo, DecodedRawTransaction, DecodedScript, ValidatedAddress, PastelIDInfo } from "@/app/types";
 import { getNetworkFromLocalStorage, setNetworkInLocalStorage } from "@/app/lib/storage";
-
 
 class BrowserRPCReplacement {
   private apiBaseUrl: string;
@@ -43,6 +40,20 @@ class BrowserRPCReplacement {
     };
     return modeMap[mode] || NetworkMode.Mainnet;
   }
+  
+  async getBurnAddress(): Promise<string> {
+    const { network } = await this.getNetworkInfo();
+    switch (network) {
+      case "Mainnet":
+        return "PtpasteLBurnAddressXXXXXXXXXXbJ5ndd";
+      case "Testnet":
+        return "tPpasteLBurnAddressXXXXXXXXXXX3wy7u";
+      case "Devnet":
+        return "44oUgmZSL997veFEQDq569wv5tsT6KXf9QY7";
+      default:
+        throw new Error(`Unsupported network: ${network}`);
+    }
+  }
 
   private executeWasmMethod<T>(method: () => string | number): T {
     if (!this.pastelInstance) {
@@ -53,30 +64,15 @@ class BrowserRPCReplacement {
       if (typeof result === 'number') {
         return result as T;
       }
-      return this.parseWasmResponse<T>(result);
-    } catch (error) {
-      console.error("WASM method execution failed:", error);
-      throw new Error(
-        `WASM method execution failed: ${(error as Error).message}`
-      );
-    }
-  }
-
-  private parseWasmResponse<T>(response: string): T {
-    try {
-      const parsedResponse = JSON.parse(response);
-      if (parsedResponse.result) {
-        return parsedResponse.data as T;
+      const response = JSON.parse(result);
+      if (response.result) {
+        return response.data as T;
       } else {
-        throw new Error(
-          parsedResponse.error || "Unknown error in WASM response"
-        );
+        throw new Error(response.error || "Unknown error in WASM response");
       }
     } catch (error) {
-      console.error("Error parsing WASM response:", error);
-      throw new Error(
-        `Error parsing WASM response: ${(error as Error).message}`
-      );
+      console.error("WASM method execution failed:", error);
+      throw error;
     }
   }
 
@@ -86,11 +82,18 @@ class BrowserRPCReplacement {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      return (await response.json()) as T;
+      return await response.json();
     } catch (error) {
       console.error(`Error fetching from ${endpoint}:`, error);
       throw error;
     }
+  }
+
+  async createWalletFromMnemonic(password: string, mnemonic: string): Promise<string> {
+    this.ensureInitialized();
+    return this.executeWasmMethod<string>(() =>
+      this.pastelInstance!.CreateWalletFromMnemonic(password, mnemonic)
+    );
   }
 
   async checkMasternodeTop(): Promise<SupernodeInfo[]> {
@@ -113,7 +116,7 @@ class BrowserRPCReplacement {
     messageToVerify: string,
     pastelIDSignatureOnMessage: string
   ): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.VerifyWithPastelID(
         pastelid,
@@ -123,9 +126,45 @@ class BrowserRPCReplacement {
       )
     );
   }
+  
+  async importPastelID(fileContent: string, network: string): Promise<{ success: boolean; message: string }> {
+    // This looks wrong... 
+    await this.ensureInitialized();
+    try {
+      // Parse the file content (assuming it's JSON)
+      const pastelIDData = JSON.parse(fileContent);
+      
+      // Extract necessary information from the parsed data
+      const { pastelID } = pastelIDData;
+      
+      // Import the PastelID using the WASM method
+      this.executeWasmMethod<void>(() =>
+        this.pastelInstance!.ImportWallet(JSON.stringify(pastelIDData))
+      );
+      
+      // Verify the import by checking if the PastelID is now available
+      const pastelIDCount = this.executeWasmMethod<number>(() =>
+        this.pastelInstance!.GetPastelIDsCount()
+      );
+      
+      const importedPastelID = this.executeWasmMethod<string>(() =>
+        this.pastelInstance!.GetPastelIDByIndex(pastelIDCount - 1, "PastelID")
+      );
+      
+      if (importedPastelID === pastelID) {
+        console.log(`PastelID ${pastelID} imported successfully on network ${network}`);
+        return { success: true, message: "PastelID imported successfully!" };
+      } else {
+        throw new Error("PastelID import could not be verified");
+      }
+    } catch (error) {
+      console.error("Error importing PastelID:", error);
+      return { success: false, message: `Failed to import PastelID: ${(error as Error).message}` };
+    }
+  }
 
   async sendToAddress(address: string, amount: number): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const sendTo = [{ address, amount }];
     const fromAddress = await this.getMyPslAddressWithLargestBalance();
     return this.createSendToTransaction(sendTo, fromAddress);
@@ -134,7 +173,7 @@ class BrowserRPCReplacement {
   async sendMany(
     amounts: { address: string; amount: number }[]
   ): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const fromAddress = await this.getMyPslAddressWithLargestBalance();
     return this.createSendToTransaction(amounts, fromAddress);
   }
@@ -148,7 +187,7 @@ class BrowserRPCReplacement {
   async checkIfAddressIsAlreadyImportedInLocalWallet(
     addressToCheck: string
   ): Promise<boolean> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const addresses = await this.getAllAddresses();
     return addresses.includes(addressToCheck);
   }
@@ -184,7 +223,7 @@ class BrowserRPCReplacement {
   }
 
   async importAddress(address: string): Promise<void> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const importedAddresses = JSON.parse(
       localStorage.getItem("importedAddresses") || "[]"
     ) as string[];
@@ -206,12 +245,12 @@ class BrowserRPCReplacement {
     return this.fetchJson<BlockInfo>(`/getblock/${blockHash}`);
   }
 
-async signMessageWithPastelID(
+  async signMessageWithPastelID(
     pastelid: string,
     messageToSign: string,
     passphrase: string
   ): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.SignWithPastelID(
         pastelid,
@@ -221,10 +260,11 @@ async signMessageWithPastelID(
       )
     );
   }
+
   async createAndFundNewPSLCreditTrackingAddress(
     amountOfPSLToFundAddressWith: number
   ): Promise<{ newCreditTrackingAddress: string; txid: string }> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const newAddress = await this.makeNewAddress();
     const txid = await this.sendToAddress(
       newAddress,
@@ -246,7 +286,7 @@ async signMessageWithPastelID(
     PastelID: string;
     PastelIDRegistrationTXID: string;
   }> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const pastelID = await this.makeNewPastelID(true);
     const fundingAddress = await this.getMyPslAddressWithLargestBalance();
     const txid = await this.createRegisterPastelIdTransaction(
@@ -261,7 +301,7 @@ async signMessageWithPastelID(
   }
 
   async getBalance(): Promise<number> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const addresses = await this.getAllAddresses();
     let totalBalance = 0;
     for (const address of addresses) {
@@ -272,7 +312,7 @@ async signMessageWithPastelID(
   }
 
   async getWalletInfo(): Promise<WalletInfo> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const balance = await this.getBalance();
     return {
       walletversion: 1,
@@ -288,12 +328,12 @@ async signMessageWithPastelID(
   }
 
   async getNewAddress(): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.makeNewAddress();
   }
 
   async getMyPslAddressWithLargestBalance(): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const addresses = await this.getAllAddresses();
     let maxBalance = -1;
     let addressWithMaxBalance = "";
@@ -308,7 +348,7 @@ async signMessageWithPastelID(
   }
 
   async getAllAddresses(mode: string = "Mainnet"): Promise<string[]> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const addressCount = await this.getAddressesCount();
     const addresses: string[] = [];
     for (let i = 0; i < addressCount; i++) {
@@ -325,65 +365,66 @@ async signMessageWithPastelID(
   }
 
   async createNewWallet(password: string): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.CreateNewWallet(password)
     );
   }
 
   async importWallet(serializedWallet: string): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.ImportWallet(serializedWallet)
     );
   }
 
   async exportWallet(): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.ExportWallet()
     );
   }
 
   async makeNewAddress(mode: string = "Mainnet"): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.MakeNewAddress(this.getNetworkMode(mode))
     );
   }
 
   async getAddress(index: number, mode: string = "Mainnet"): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.GetAddress(index, this.getNetworkMode(mode))
     );
   }
 
   async getAddressesCount(): Promise<number> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<number>(() =>
       this.pastelInstance!.GetAddressesCount()
     );
   }
 
   async makeNewPastelID(makeFullPair: boolean = false): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.MakeNewPastelID(makeFullPair)
     );
   }
+
   async getPastelIDByIndex(
     index: number,
     type: string = "PastelID"
   ): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.GetPastelIDByIndex(index, type)
     );
   }
 
   async getPastelIDsCount(): Promise<number> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<number>(() =>
       this.pastelInstance!.GetPastelIDsCount()
     );
@@ -394,7 +435,7 @@ async signMessageWithPastelID(
     fromAddress: string,
     mode: string = "Mainnet"
   ): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const utxos = await this.getAddressUtxos(fromAddress);
     const blockHeight = await this.getCurrentPastelBlockHeight();
     const networkMode = this.getNetworkMode(mode);
@@ -418,7 +459,7 @@ async signMessageWithPastelID(
     fundingAddress: string,
     mode: string = "Mainnet"
   ): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const utxos = await this.getAddressUtxos(fundingAddress);
     const blockHeight = await this.getCurrentPastelBlockHeight();
     const networkMode = this.getNetworkMode(mode);
@@ -437,28 +478,28 @@ async signMessageWithPastelID(
   }
 
   async signWithWalletKey(message: string): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.SignWithWalletKey(message)
     );
   }
 
   async unlockWallet(password: string): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.UnlockWallet(password)
     );
   }
 
   async lockWallet(): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.LockWallet()
     );
   }
 
   async getWalletPubKey(): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.GetWalletPubKey()
     );
@@ -514,26 +555,12 @@ async signMessageWithPastelID(
     );
   }
 
-  async isPastelIDRegistered(pastelID: string): Promise<boolean> {
-    return this.fetchJson<boolean>(`/tickets/id/is_registered/${pastelID}`);
-  }
-
-  async dumpPrivKey(tAddr: string): Promise<string> {
-    await this.ensureInitialized();
-    console.warn(
-      "dumpPrivKey called in browser context. This operation may expose sensitive information."
-    );
-    return this.executeWasmMethod<string>(() =>
-      this.pastelInstance!.DumpPrivKey(tAddr)
-    );
-  }
-
   async importPrivKey(
     privKey: string,
     label: string = "",
     rescan: boolean = true
   ): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     console.warn(
       "importPrivKey called in browser context. This operation may expose sensitive information."
     );
@@ -545,7 +572,7 @@ async signMessageWithPastelID(
   async listAddressAmounts(
     includeEmpty: boolean = false
   ): Promise<{ [address: string]: number }> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const addresses = await this.getAllAddresses();
     const result: { [address: string]: number } = {};
     for (const address of addresses) {
@@ -558,7 +585,7 @@ async signMessageWithPastelID(
   }
 
   async checkForRegisteredPastelID(): Promise<string | null> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const pastelIDs = await this.getAllPastelIDs();
     for (const pastelID of pastelIDs) {
       const isRegistered = await this.isPastelIDRegistered(pastelID);
@@ -570,7 +597,7 @@ async signMessageWithPastelID(
   }
 
   async getAllPastelIDs(): Promise<string[]> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const count = await this.getPastelIDsCount();
     const pastelIDs: string[] = [];
     for (let i = 0; i < count; i++) {
@@ -583,7 +610,7 @@ async signMessageWithPastelID(
     pastelID: string;
     txid: string;
   }> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const pastelID = await this.makeNewPastelID(true);
     const fundingAddress = await this.getMyPslAddressWithLargestBalance();
     const txid = await this.createRegisterPastelIdTransaction(
@@ -606,7 +633,7 @@ async signMessageWithPastelID(
   async ensureTrackingAddressesHaveMinimalPSLBalance(
     addressesList: string[] | null = null
   ): Promise<void> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     const addresses = addressesList || (await this.getAllAddresses());
 
     for (const address of addresses) {
@@ -760,181 +787,24 @@ async signMessageWithPastelID(
     passphrase: string,
     address: string
   ): Promise<string> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.RegisterPastelID(pastelid, passphrase, address)
     );
   }
 
-  async importPastelID(fileContent: string, network: string): Promise<{ success: boolean; message: string }> {
-    await this.ensureInitialized();
-    try {
-      // Parse the file content (assuming it's JSON)
-      const pastelIDData = JSON.parse(fileContent);
-      
-      // Extract necessary information from the parsed data
-      const { pastelID } = pastelIDData;
-      
-      // Import the PastelID using the WASM method
-      this.executeWasmMethod<void>(() =>
-        this.pastelInstance!.ImportWallet(JSON.stringify(pastelIDData))
-      );
-      
-      // Verify the import by checking if the PastelID is now available
-      const pastelIDCount = this.executeWasmMethod<number>(() =>
-        this.pastelInstance!.GetPastelIDsCount()
-      );
-      
-      const importedPastelID = this.executeWasmMethod<string>(() =>
-        this.pastelInstance!.GetPastelIDByIndex(pastelIDCount - 1, "PastelID")
-      );
-      
-      if (importedPastelID === pastelID) {
-        console.log(`PastelID ${pastelID} imported successfully on network ${network}`);
-        return { success: true, message: "PastelID imported successfully!" };
-      } else {
-        throw new Error("PastelID import could not be verified");
-      }
-    } catch (error) {
-      console.error("Error importing PastelID:", error);
-      return { success: false, message: `Failed to import PastelID: ${(error as Error).message}` };
-    }
-  }
-  
-  async checkPSLAddressBalanceAlternative(
-    addressToCheck: string
-  ): Promise<number> {
-    const addressAmounts = await this.listAddressAmounts();
-    return addressAmounts[addressToCheck] || 0;
+  async isPastelIDRegistered(pastelID: string): Promise<boolean> {
+    return this.fetchJson<boolean>(`/tickets/id/is_registered/${pastelID}`);
   }
 
-  async createWalletFromMnemonic(
-    password: string,
-    mnemonic: string
-  ): Promise<string> {
-    await this.ensureInitialized();
+  async dumpPrivKey(tAddr: string): Promise<string> {
+    this.ensureInitialized();
+    console.warn(
+      "dumpPrivKey called in browser context. This operation may expose sensitive information."
+    );
     return this.executeWasmMethod<string>(() =>
-      this.pastelInstance!.CreateWalletFromMnemonic(password, mnemonic)
+      this.pastelInstance!.DumpPrivKey(tAddr)
     );
-  }
-
-  async loadWallet(
-    serializedWallet: string,
-    password: string
-  ): Promise<boolean> {
-    await this.ensureInitialized();
-    await this.importWallet(serializedWallet);
-    if (password) {
-      await this.unlockWallet(password);
-    }
-    return true;
-  }
-
-  async downloadWallet(
-    filename: string = "pastel_wallet.dat"
-  ): Promise<boolean> {
-    await this.ensureInitialized();
-    const content = await this.exportWallet();
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.style.display = "none";
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    return true;
-  }
-
-  async selectAndReadWalletFile(): Promise<string> {
-    return new Promise((resolve) => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.onchange = (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.readAsText(file, "UTF-8");
-          reader.onload = (readerEvent) => {
-            const content = readerEvent.target?.result as string;
-            resolve(content);
-          };
-        }
-      };
-      input.click();
-    });
-  }
-
-  private async waitForConfirmation<T, Args extends unknown[]>(
-    checkFunction: (...args: Args) => Promise<T>,
-    ...checkFunctionArgs: Args
-  ): Promise<T | false> {
-    const maxRetries = 30;
-    const retryDelay = 10000; // 10 seconds
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const result = await checkFunction(...checkFunctionArgs);
-        if (result) {
-          return result;
-        }
-      } catch (error) {
-        console.warn(
-          `Error in attempt ${attempt}: ${(error as Error).message}`
-        );
-      }
-
-      if (attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, retryDelay));
-      }
-    }
-
-    return false;
-  }
-
-  async waitForPastelIDRegistration(pastelID: string): Promise<boolean> {
-    return this.waitForConfirmation(
-      this.isPastelIDRegistered.bind(this),
-      pastelID
-    ) as Promise<boolean>;
-  }
-
-  async waitForCreditPackConfirmation(txid: string): Promise<boolean> {
-    return this.waitForConfirmation(
-      this.isCreditPackConfirmed.bind(this),
-      txid
-    ) as Promise<boolean>;
-  }
-
-  private async storeSecureContainer(
-    pastelID: string,
-    secureContainer: string,
-    network: string
-  ): Promise<void> {
-    localStorage.setItem(
-      `secureContainer_${pastelID}_${network}`,
-      secureContainer
-    );
-  }
-
-  private async getLocalRPCSettings(): Promise<{ rpcport: string }> {
-    const rpcport = localStorage.getItem("rpcport") || "9932"; // Default to mainnet
-    return { rpcport };
-  }
-
-  async getBurnAddress(): Promise<string> {
-    const { network } = await this.getNetworkInfo();
-    switch (network) {
-      case "Mainnet":
-        return "PtpasteLBurnAddressXXXXXXXXXXbJ5ndd";
-      case "Testnet":
-        return "tPpasteLBurnAddressXXXXXXXXXXX3wy7u";
-      case "Devnet":
-        return "44oUgmZSL997veFEQDq569wv5tsT6KXf9QY7";
-      default:
-        throw new Error(`Unsupported network: ${network}`);
-    }
   }
 
   async changeNetwork(
@@ -943,7 +813,6 @@ async signMessageWithPastelID(
     if (["Mainnet", "Testnet", "Devnet"].includes(newNetwork)) {
       await setNetworkInLocalStorage(newNetwork);
       await this.configureRPCAndSetBurnAddress();
-      // Re-initialize connection with new network settings
       await this.initialize();
       return { success: true, message: `Network changed to ${newNetwork}` };
     } else {
@@ -985,4 +854,4 @@ async signMessageWithPastelID(
   }
 }
 
-export default BrowserRPCReplacement;
+export default BrowserRPCReplacement;  

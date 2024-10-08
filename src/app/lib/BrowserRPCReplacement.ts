@@ -2,37 +2,36 @@
 
 'use client';
 
+import { initWasm } from './wasmLoader';
 import { NetworkMode, PastelInstance, SupernodeInfo, WalletInfo, PastelIDTicket, TransactionDetail, BlockInfo, MempoolInfo, BlockchainInfo, TxOutSetInfo, ChainTip, BlockHeader, TxOutInfo, MemoryInfo, BlockSubsidy, BlockTemplate, MiningInfo, NetworkSolPs, NodeInfo, PeerInfo, DecodedRawTransaction, DecodedScript, ValidatedAddress, PastelIDInfo } from "@/app/types";
 import { getNetworkFromLocalStorage, setNetworkInLocalStorage } from "@/app/lib/storage";
 
+
 class BrowserRPCReplacement {
   private apiBaseUrl: string;
-  private pastelInstance: PastelInstance | null;
-  private isInitialized: boolean;
+  private pastelInstance: PastelInstance | null = null;
+  private isInitialized: boolean = false;
 
   constructor(apiBaseUrl: string = "https://opennode-fastapi.pastel.network") {
     this.apiBaseUrl = apiBaseUrl;
     this.pastelInstance = null;
     this.isInitialized = false;
   }
-  
+
   async initialize(): Promise<void> {
     if (!this.isInitialized) {
-      if (
-        typeof window === "undefined" ||
-        !window.Module ||
-        !window.Module.Pastel
-      ) {
+      const wasmModule = await initWasm();
+      if (!wasmModule) {
         throw new Error("WASM module not loaded");
       }
-      this.pastelInstance = new window.Module.Pastel();
+      this.pastelInstance = new wasmModule.Pastel();
       this.isInitialized = true;
     }
   }
 
-  async ensureInitialized(): Promise<void> {
+  private ensureInitialized(): void {
     if (!this.isInitialized) {
-      await this.initialize();
+      throw new Error("RPC not initialized. Call initialize first.");
     }
   }
 

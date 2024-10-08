@@ -1,3 +1,5 @@
+// src/app/lib/wasmLoader.ts
+
 import { PastelInstance } from '@/app/types';
 
 type PastelModule = {
@@ -6,7 +8,7 @@ type PastelModule = {
 
 declare global {
   interface Window {
-    Module: PastelModule;
+    Module: Partial<PastelModule>;
   }
 }
 
@@ -22,27 +24,47 @@ export async function initWasm(): Promise<PastelModule | null> {
   }
 
   try {
-    // Load the WASM module
-    await import('../../../public/libpastel_wasm.js');
-    
-    // Wait for the module to be fully initialized
-    await new Promise<void>((resolve) => {
-      if (window.Module) {
-        resolve();
-      } else {
+    // Initialize Module as a partial PastelModule
+    window.Module = {} as Partial<PastelModule>;
+
+    // Create and append the script
+    const script = document.createElement('script');
+    script.src = '/libpastel_wasm.js';
+    script.async = true;
+
+    // Wait for the script to load and the module to initialize
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('WASM module initialization timed out'));
+      }, 10000); // 10 second timeout
+
+      script.onload = () => {
         const checkModule = () => {
-          if (window.Module) {
+          if (window.Module && window.Module.Pastel) {
+            clearTimeout(timeout);
             resolve();
           } else {
-            setTimeout(checkModule, 10);
+            setTimeout(checkModule, 100);
           }
         };
         checkModule();
-      }
+      };
+
+      script.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error('Failed to load WASM script'));
+      };
+
+      document.body.appendChild(script);
     });
 
-    wasmModule = window.Module;
-    return wasmModule;
+    // Ensure the module is fully initialized before assigning
+    if (window.Module && window.Module.Pastel) {
+      wasmModule = window.Module as PastelModule;
+      return wasmModule;
+    } else {
+      throw new Error('WASM module did not initialize correctly');
+    }
   } catch (error) {
     console.error('Failed to load WASM module:', error);
     return null;

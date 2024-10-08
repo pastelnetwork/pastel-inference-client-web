@@ -5,6 +5,7 @@ import { persist } from "zustand/middleware";
 import * as api from "../lib/api";
 import { CreditPack, ModelMenu } from "@/app/types";
 import browserLogger from "@/app/lib/logger";
+import { initWasm } from "../lib/wasmLoader";
 
 interface WalletState {
   isLocked: boolean;
@@ -60,26 +61,24 @@ const useStore = create<WalletState & WalletActions>()(
       setModelMenu: (menu) => set({ modelMenu: menu }),
       setLoading: (isLoading) => set({ isLoading }),
       setError: (error) => set({ error }),
-      setInitialized: (isInitialized: boolean) => set({ isInitialized }),
 
       initializeWallet: async () => {
         set({ isLoading: true, error: null });
         try {
+          const wasmModule = await initWasm();
+          if (!wasmModule) {
+            throw new Error("Failed to initialize WASM module");
+          }
           await api.initializeApp();
           const networkInfo = await api.getNetworkInfo();
           set({
-            networkMode: networkInfo.network as
-              | "Mainnet"
-              | "Testnet"
-              | "Devnet",
-            isInitialized: true, // Add this line
+            networkMode: networkInfo.network as "Mainnet" | "Testnet" | "Devnet",
+            isInitialized: true,
           });
           await get().refreshWalletData();
         } catch (error) {
-          browserLogger.error("Failed to initialize wallet:", error);
-          set({
-            error: `Failed to initialize wallet: ${(error as Error).message}`,
-          });
+          console.error("Failed to initialize wallet:", error);
+          set({ error: `Failed to initialize wallet: ${(error as Error).message}` });
         } finally {
           set({ isLoading: false });
         }

@@ -1,3 +1,5 @@
+// src/app/layout.tsx
+
 import type { Metadata } from 'next'
 import Script from 'next/script'
 import './globals.css'
@@ -27,7 +29,6 @@ export default function RootLayout({
       </head>
       <body className={montserrat.className}>
         {children}
-        <Script src="/public/libpastel_wasm.js" strategy="beforeInteractive" />
         <Script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js" strategy="beforeInteractive" />
         <Script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js" strategy="beforeInteractive" />
         <Script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js" strategy="beforeInteractive" />

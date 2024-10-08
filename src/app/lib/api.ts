@@ -1,12 +1,10 @@
 // src/app/lib/api.ts
 
 import { getRPC } from './initializeApp';
-import { BrowserDatabase } from "./BrowserDatabase";
 import PastelInferenceClient from "./PastelInferenceClient";
 import {
   getNetworkFromLocalStorage,
   setNetworkInLocalStorage,
-  getCurrentPastelIdAndPassphrase,
   setPastelIdAndPassphrase as storageSetPastelIdAndPassphrase,
 } from "./storage";
 import * as endToEndFunctions from "./endToEndFunctions";
@@ -25,37 +23,16 @@ import {
   WalletInfo,
   SendToAddressResult,
 } from "@/app/types";
-
-const db = new BrowserDatabase();
+import BrowserRPCReplacement from './BrowserRPCReplacement';
 
 let network: string = "Mainnet"; // Default value
 let burnAddress: string = "PtpasteLBurnAddressXXXXXXXXXXbJ5ndd"; // Default Mainnet burn address
+let rpc: BrowserRPCReplacement | null = null;
 
 export async function initializeApp(): Promise<void> {
-  const isServer = typeof window === 'undefined';
-
-  if (!isServer) {
-    await db.initializeDatabase();
-    const { network: configuredNetwork, burnAddress: configuredBurnAddress } =
-      await configureRPCAndSetBurnAddress();
-    network = configuredNetwork;
-    burnAddress = configuredBurnAddress;
-
-    const { pastelID, passphrase } = await getCurrentPastelIdAndPassphrase();
-    if (pastelID && passphrase) {
-      pastelGlobals.setPastelIdAndPassphrase(pastelID, passphrase);
-      console.log(`Successfully set global PastelID`);
-    } else {
-      console.warn(`Failed to set global PastelID and passphrase from storage`);
-    }
-
-    const rpc = getRPC();
-    const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
-    if (!validMasternodeListFullDF) {
-      throw new Error(
-        "The Pastel Daemon is not fully synced, and thus the Supernode information commands are not returning complete information. Finish fully syncing and try again."
-      );
-    }
+  if (!rpc) {
+    rpc = new BrowserRPCReplacement();
+    await rpc.initialize();
   }
 }
 

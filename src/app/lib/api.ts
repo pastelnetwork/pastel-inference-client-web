@@ -29,46 +29,55 @@ import {
 import type BrowserRPCReplacementType from "./BrowserRPCReplacement";
 
 let BrowserRPCReplacement: typeof BrowserRPCReplacementType;
-let rpc: BrowserRPCReplacementType;
+let rpc: BrowserRPCReplacementType | null = null;
 
 const db = new BrowserDatabase();
 
-let network: string;
-let burnAddress: string;
+let network: string = "Mainnet"; // Default value
+let burnAddress: string = "PtpasteLBurnAddressXXXXXXXXXXbJ5ndd"; // Default Mainnet burn address
 
 export async function initializeApp(): Promise<void> {
-  if (!BrowserRPCReplacement) {
-    const importedModule = await import("./BrowserRPCReplacement");
-    BrowserRPCReplacement = importedModule.default;
-    rpc = new BrowserRPCReplacement();
-  }
+  const isServer = typeof window === "undefined";
 
-  await db.initializeDatabase();
-  await rpc.initialize();
-  const { network: configuredNetwork, burnAddress: configuredBurnAddress } =
-    await configureRPCAndSetBurnAddress();
-  network = configuredNetwork;
-  burnAddress = configuredBurnAddress;
+  if (!isServer) {
+    if (!BrowserRPCReplacement) {
+      const importedModule = await import("./BrowserRPCReplacement");
+      BrowserRPCReplacement = importedModule.default;
+      rpc = new BrowserRPCReplacement();
+    }
 
-  const { pastelID, passphrase } = await getCurrentPastelIdAndPassphrase();
-  if (pastelID && passphrase) {
-    pastelGlobals.setPastelIdAndPassphrase(pastelID, passphrase);
-    console.log(`Successfully set global PastelID`);
-  } else {
-    console.warn(`Failed to set global PastelID and passphrase from storage`);
-  }
+    await db.initializeDatabase();
+    if (rpc) {
+      await rpc.initialize();
+    }
+    const { network: configuredNetwork, burnAddress: configuredBurnAddress } =
+      await configureRPCAndSetBurnAddress();
+    network = configuredNetwork;
+    burnAddress = configuredBurnAddress;
 
-  const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
-  if (!validMasternodeListFullDF) {
-    throw new Error(
-      "The Pastel Daemon is not fully synced, and thus the Supernode information commands are not returning complete information. Finish fully syncing and try again."
-    );
+    const { pastelID, passphrase } = await getCurrentPastelIdAndPassphrase();
+    if (pastelID && passphrase) {
+      pastelGlobals.setPastelIdAndPassphrase(pastelID, passphrase);
+      console.log(`Successfully set global PastelID`);
+    } else {
+      console.warn(`Failed to set global PastelID and passphrase from storage`);
+    }
+
+    if (rpc) {
+      const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
+      if (!validMasternodeListFullDF) {
+        throw new Error(
+          "The Pastel Daemon is not fully synced, and thus the Supernode information commands are not returning complete information. Finish fully syncing and try again."
+        );
+      }
+    }
   }
 }
 
 export async function changeNetwork(
   newNetwork: string
 ): Promise<{ success: boolean; message: string }> {
+  if (!rpc) throw new Error("RPC not initialized");
   if (["Mainnet", "Testnet", "Devnet"].includes(newNetwork)) {
     await setNetworkInLocalStorage(newNetwork);
     const { network: configuredNetwork, burnAddress: configuredBurnAddress } =
@@ -117,6 +126,7 @@ export async function getNetworkInfo(): Promise<{ network: string }> {
 export async function getBestSupernodeUrl(
   userPastelID: string
 ): Promise<string> {
+  if (!rpc) throw new Error("RPC not initialized");
   const supernodeListDF = await rpc.checkSupernodeList();
   const { url: supernodeURL } = await utils.getClosestSupernodeToPastelIDURL(
     userPastelID,
@@ -194,6 +204,7 @@ export async function getMyValidCreditPacks(): Promise<CreditPack[]> {
 }
 
 export async function getMyPslAddressWithLargestBalance(): Promise<string> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.getMyPslAddressWithLargestBalance();
 }
 
@@ -206,6 +217,7 @@ export async function createInferenceRequest(
 export async function checkSupernodeList(): Promise<{
   validMasternodeListFullDF: SupernodeInfo[];
 }> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.checkSupernodeList();
 }
 
@@ -214,6 +226,7 @@ export async function registerPastelID(
   passphrase: string,
   address: string
 ): Promise<string> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.registerPastelID(pastelid, passphrase, address);
 }
 
@@ -221,10 +234,12 @@ export async function listPastelIDTickets(
   filter: string = "mine",
   minheight: number | null = null
 ): Promise<PastelIDTicket[]> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.listPastelIDTickets(filter, minheight);
 }
 
 export async function findPastelIDTicket(key: string): Promise<PastelIDTicket> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.findPastelIDTicket(key);
 }
 
@@ -232,6 +247,7 @@ export async function getPastelTicket(
   txid: string,
   decodeProperties: boolean = true
 ): Promise<unknown> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.getPastelTicket(txid, decodeProperties);
 }
 
@@ -239,6 +255,7 @@ export async function listContractTickets(
   ticketTypeIdentifier: string,
   startingBlockHeight: number = 0
 ): Promise<unknown[]> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.listContractTickets(
     ticketTypeIdentifier,
     startingBlockHeight
@@ -246,6 +263,7 @@ export async function listContractTickets(
 }
 
 export async function findContractTicket(key: string): Promise<unknown> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.findContractTicket(key);
 }
 
@@ -253,6 +271,7 @@ export async function getContractTicket(
   txid: string,
   decodeProperties: boolean = true
 ): Promise<unknown> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.getContractTicket(txid, decodeProperties);
 }
 
@@ -261,31 +280,38 @@ export async function importPrivKey(
   label: string = "",
   rescan: boolean = true
 ): Promise<string> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.importPrivKey(zcashPrivKey, label, rescan);
 }
 
 export async function importWallet(serializedWallet: string): Promise<string> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.importWallet(serializedWallet);
 }
 
 export async function listAddressAmounts(
   includeEmpty: boolean = false
 ): Promise<{ [address: string]: number }> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.listAddressAmounts(includeEmpty);
 }
 
 export async function getBalance(): Promise<number> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.getBalance();
 }
 
 export async function getWalletInfo(): Promise<WalletInfo> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.getWalletInfo();
 }
 
 export async function createAndFundNewAddress(
   amount: number
 ): Promise<SendToAddressResult> {
+  if (!rpc) throw new Error("RPC not initialized");
   const result = await rpc.createAndFundNewPSLCreditTrackingAddress(amount);
+  if (!rpc) throw new Error("RPC not initialized");
   return {
     success: true,
     newCreditTrackingAddress: result.newCreditTrackingAddress || "",
@@ -294,10 +320,12 @@ export async function createAndFundNewAddress(
 }
 
 export async function checkForPastelID(): Promise<string | null> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.checkForRegisteredPastelID();
 }
 
 export async function isCreditPackConfirmed(txid: string): Promise<boolean> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.isCreditPackConfirmed(txid);
 }
 
@@ -305,10 +333,12 @@ export async function createAndRegisterPastelID(): Promise<{
   pastelID: string;
   txid: string;
 }> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.createAndRegisterPastelID();
 }
 
 export async function isPastelIDRegistered(pastelID: string): Promise<boolean> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.isPastelIDRegistered(pastelID);
 }
 
@@ -323,16 +353,19 @@ export async function setPastelIdAndPassphrase(
 export async function ensureMinimalPSLBalance(
   addresses: string[] | null = null
 ): Promise<void> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.ensureTrackingAddressesHaveMinimalPSLBalance(addresses);
 }
 
 export async function checkPastelIDValidity(
   pastelID: string
 ): Promise<boolean> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.isPastelIDRegistered(pastelID);
 }
 
 export async function dumpPrivKey(tAddr: string): Promise<string> {
+  if (!rpc) throw new Error("RPC not initialized");
   return await rpc.dumpPrivKey(tAddr);
 }
 
@@ -351,6 +384,7 @@ export async function verifyPastelID(
   passphrase: string
 ): Promise<boolean> {
   const testMessage = "Verification test message";
+  if (!rpc) throw new Error("RPC not initialized");
   const signature = await rpc.signMessageWithPastelID(
     safeString(pastelID),
     testMessage,
@@ -366,6 +400,7 @@ export async function verifyPastelID(
 }
 
 export async function verifyTrackingAddress(address: string): Promise<boolean> {
+  if (!rpc) throw new Error("RPC not initialized");
   const balance = await rpc.checkPSLAddressBalance(address);
   return balance !== undefined;
 }
@@ -383,6 +418,7 @@ export async function checkTrackingAddressBalance(
   if (!trackingAddress) {
     throw new Error("Tracking address not found in credit pack ticket");
   }
+  if (!rpc) throw new Error("RPC not initialized");
   const balance = await rpc.checkPSLAddressBalance(trackingAddress);
   if (balance === undefined) {
     throw new Error("Failed to retrieve balance for the tracking address");
@@ -395,6 +431,7 @@ export async function importPastelID(
   network: string
 ): Promise<{ success: boolean; message: string }> {
   try {
+    if (!rpc) throw new Error("RPC not initialized");
     await rpc.importPastelID(fileContent, network);
     return { success: true, message: "PastelID imported successfully!" };
   } catch (error) {

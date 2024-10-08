@@ -24,24 +24,32 @@ const rpc = new BrowserRPCReplacement();
 
 const MAX_CACHE_AGE_MS = 1 * 60 * 1000; // 1 minute in milliseconds
 
+function safeLocalStorage() {
+  if (typeof window !== 'undefined') {
+    return window.localStorage;
+  }
+  return null;
+}
+
 // Constants
 const TARGET_VALUE_PER_CREDIT_IN_USD = parseFloat(
-  localStorage.getItem("TARGET_VALUE_PER_CREDIT_IN_USD") || "0.01"
+  safeLocalStorage()?.getItem("TARGET_VALUE_PER_CREDIT_IN_USD") || "0.01"
 );
 const TARGET_PROFIT_MARGIN = parseFloat(
-  localStorage.getItem("TARGET_PROFIT_MARGIN") || "0.1"
+  safeLocalStorage()?.getItem("TARGET_PROFIT_MARGIN") || "0.1"
 );
 const MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING =
   parseFloat(
-    localStorage.getItem(
+    safeLocalStorage()?.getItem(
       "MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING"
     ) || "0.001"
   );
 const MAXIMUM_LOCAL_PASTEL_BLOCK_HEIGHT_DIFFERENCE_IN_BLOCKS = parseInt(
-  localStorage.getItem(
+  safeLocalStorage()?.getItem(
     "MAXIMUM_LOCAL_PASTEL_BLOCK_HEIGHT_DIFFERENCE_IN_BLOCKS"
   ) || "10"
 );
+
 
 // Helper functions
 export function safeStringify(obj: unknown): string {
@@ -1143,9 +1151,10 @@ export async function filterSupernodes(
       // Replace ping with a simple fetch request for browser compatibility
       const pingStart = performance.now();
       try {
-        await fetch(`http://${ipAddress}:7123/ping`, {
-          signal: AbortSignal.timeout(maxResponseTimeInMilliseconds),
-        });
+        await Promise.race([
+          fetch(`http://${ipAddress}:7123/ping`),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), maxResponseTimeInMilliseconds))
+        ]);
       } catch {
         stats.removedDueToPing++;
         return null;
@@ -1157,13 +1166,17 @@ export async function filterSupernodes(
         return null;
       }
 
-      const performanceResponse = await fetch(
-        `http://${ipAddress}:7123/liveness_ping`,
-        {
-          signal: AbortSignal.timeout(maxResponseTimeInMilliseconds),
-        }
-      );
-      const performanceData = await performanceResponse.json();
+      const performanceResponse = await Promise.race([
+        fetch(`http://${ipAddress}:7123/liveness_ping`),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), maxResponseTimeInMilliseconds))
+      ]) as Response;
+
+      if (!performanceResponse.ok) {
+        throw new Error(`HTTP error! status: ${performanceResponse.status}`);
+      }
+
+      const performanceData: { performance_ratio_score: number } = await performanceResponse.json();
+      
       if (performanceData.performance_ratio_score < minPerformanceRatio) {
         stats.removedDueToPerformance++;
         return null;

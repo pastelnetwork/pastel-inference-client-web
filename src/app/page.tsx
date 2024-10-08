@@ -11,9 +11,11 @@ import CreateInferenceRequest from "./components/CreateInferenceRequest";
 import PreviousRequests from "./components/PreviousRequests";
 import MessageSystem from "./components/MessageSystem";
 import WalletManagement from "./components/WalletManagement";
-import Terminal from "./components/Terminal";
+import dynamic from 'next/dynamic';
 import { ModelMenu } from "./types";
 import * as api from './lib/api';
+
+const DynamicTerminal = dynamic(() => import('./components/Terminal'), { ssr: false });
 
 export default function Home() {
   const [pastelId, setPastelId] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export default function Home() {
         <PreviousRequests />
         <MessageSystem pastelId={pastelId} />
         <WalletManagement />
-        <Terminal />
+        <DynamicTerminal />
       </div>
     </main>
   );

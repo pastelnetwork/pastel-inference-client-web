@@ -104,7 +104,7 @@ export default function MessageSystem({ pastelId }: MessageSystemProps) {
               <div key={`${fromPastelId}-${index}`} className="mb-4 border border-gray-300 rounded-lg p-4">
                 <p className="text-sm font-medium text-gray-600 mb-2">From: {fromPastelId}</p>
                 <p className="text-base text-gray-800 mb-2">{message.message_body}</p>
-                <p className="text-xs text-gray-500">{new Date(message.timestamp).toLocaleString()}</p>
+                <p className="text-xs text-gray-500">{new Date(message.timestamp || Date.now()).toLocaleString()}</p>
               </div>
             ))
           ))}

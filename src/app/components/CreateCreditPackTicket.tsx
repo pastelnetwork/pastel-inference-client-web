@@ -3,8 +3,7 @@
 'use client';
 
 import * as api from '@/app/lib/api';
-import { CreditPackCreationResult, CreditPackTicketInfo } from "@/app/types";
-
+import { CreditPackCreationResult } from '@/app/types';
 import React, { useState, useEffect, useCallback } from "react";
 
 interface CreditPackTicketDetails {
@@ -84,20 +83,27 @@ export default function CreateCreditPackTicket() {
     setIsLoading(true);
     setStatus("Initializing ticket creation...");
     setNewTicketDetails(null);
-
+  
     try {
-      const result = await api.createCreditPackTicket(
+      const result: CreditPackCreationResult = await api.createCreditPackTicket(
         parseInt(numCredits.replace(/,/g, "")),
         maxPerCreditPrice,
         parseFloat(maxTotalPrice.replace(/,/g, "")),
         parseFloat(maxPerCreditPrice.replace(/,/g, ""))
       );
-
+  
       if (result) {
         setStatus("Credit pack ticket created successfully.");
-        setNewTicketDetails(result.creditPackPurchaseRequestConfirmation);
+        const confirmation = result.creditPackPurchaseRequestConfirmation;
+        const ticketDetails: CreditPackTicketDetails = {
+          pastel_api_credit_pack_ticket_registration_txid: confirmation.pastel_api_credit_pack_ticket_registration_txid as string,
+          sha3_256_hash_of_credit_pack_purchase_request_fields: confirmation.sha3_256_hash_of_credit_pack_purchase_request_fields,
+          responding_supernode_pastelid: result.creditPackPurchaseRequestConfirmationResponse?.responding_supernode_pastelid || '',
+          credit_pack_confirmation_outcome_string: result.creditPackPurchaseRequestConfirmationResponse?.credit_pack_confirmation_outcome_string || '',
+        };
+        setNewTicketDetails(ticketDetails);
         pollCreditPackStatus(
-          result.creditPackPurchaseRequestConfirmation.pastel_api_credit_pack_ticket_registration_txid
+          confirmation.pastel_api_credit_pack_ticket_registration_txid as string
         );
       } else {
         throw new Error("Failed to create new credit pack ticket");
@@ -111,6 +117,7 @@ export default function CreateCreditPackTicket() {
       setIsLoading(false);
     }
   };
+  
 
   const pollCreditPackStatus = async (txid: string) => {
     const pollInterval = 30000; // 30 seconds

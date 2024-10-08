@@ -377,3 +377,13 @@ export async function checkTrackingAddressBalance(
   }
   return { address: trackingAddress, balance: balance };
 }
+
+export async function importPastelID(fileContent: string, network: string): Promise<{ success: boolean; message: string }> {
+  try {
+    await rpc.importPastelID(fileContent, network);
+    return { success: true, message: "PastelID imported successfully!" };
+  } catch (error) {
+    console.error("Error importing PastelID:", error);
+    return { success: false, message: `Failed to import PastelID: ${(error as Error).message}` };
+  }
+}

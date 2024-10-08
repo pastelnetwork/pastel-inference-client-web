@@ -854,6 +854,41 @@ async signMessageWithPastelID(
     );
   }
 
+  async importPastelID(fileContent: string, network: string): Promise<{ success: boolean; message: string }> {
+    await this.ensureInitialized();
+    try {
+      // Parse the file content (assuming it's JSON)
+      const pastelIDData = JSON.parse(fileContent);
+      
+      // Extract necessary information from the parsed data
+      const { pastelID } = pastelIDData;
+      
+      // Import the PastelID using the WASM method
+      this.executeWasmMethod<void>(() =>
+        this.pastelInstance!.ImportWallet(JSON.stringify(pastelIDData))
+      );
+      
+      // Verify the import by checking if the PastelID is now available
+      const pastelIDCount = this.executeWasmMethod<number>(() =>
+        this.pastelInstance!.GetPastelIDsCount()
+      );
+      
+      const importedPastelID = this.executeWasmMethod<string>(() =>
+        this.pastelInstance!.GetPastelIDByIndex(pastelIDCount - 1, "PastelID")
+      );
+      
+      if (importedPastelID === pastelID) {
+        console.log(`PastelID ${pastelID} imported successfully on network ${network}`);
+        return { success: true, message: "PastelID imported successfully!" };
+      } else {
+        throw new Error("PastelID import could not be verified");
+      }
+    } catch (error) {
+      console.error("Error importing PastelID:", error);
+      return { success: false, message: `Failed to import PastelID: ${(error as Error).message}` };
+    }
+  }
+  
   async checkPSLAddressBalanceAlternative(
     addressToCheck: string
   ): Promise<number> {

@@ -12,7 +12,7 @@ interface UserInfoProps {
   setPastelId: (pastelId: string | null) => void;
 }
 
-export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
+export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
   const [walletBalance, setWalletBalance] = useState<string>("Loading...");
   const [pastelIDs, setPastelIDs] = useState<string[]>([]);
   const [selectedPastelID, setSelectedPastelID] = useState<string>("");
@@ -220,21 +220,26 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
 
   const setSelectedPastelIDAndPassphrase = async (
     selectedPastelID: string,
-    _extraMessage: string = "",
+    extraMessage: string = "",
     isNewlyImportedPromoPack: boolean = false
   ) => {
     const storedPassphrase = localStorage.getItem(selectedPastelID);
-
+  
     try {
       const isValid = await api.checkPastelIDValidity(selectedPastelID);
-
+  
       if (!isValid) {
         browserLogger.info(`PastelID ${selectedPastelID} is not valid. Removing from localStorage.`);
         localStorage.removeItem(selectedPastelID);
         fetchPastelIDs();
         return;
       }
-
+  
+      if (extraMessage) {
+        browserLogger.info(`Additional information: ${extraMessage}`);
+        setMessage(extraMessage); // Assuming setMessage is a function to display messages to the user
+      }
+  
       if (!storedPassphrase && !isNewlyImportedPromoPack) {
         setMessage("Passphrase required. Please implement a user input for the passphrase.");
       } else {
@@ -247,10 +252,10 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
         }
         await postPassphrase(selectedPastelID, storedPassphrase!);
       }
-
+  
       setSelectedPastelID(selectedPastelID);
       setPastelId(selectedPastelID);
-
+  
       await fetchModelMenu();
       await fetchReceivedMessages();
     } catch (error) {
@@ -262,7 +267,7 @@ export default function UserInfo({ pastelId, setPastelId }: UserInfoProps) {
       }
     }
   };
-
+  
   const postPassphrase = async (pastelID: string, encodedPassphrase: string) => {
     try {
       await api.setPastelIdAndPassphrase(pastelID, atob(encodedPassphrase));

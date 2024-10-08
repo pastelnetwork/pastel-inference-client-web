@@ -2,41 +2,20 @@
 
 'use client';
 
-import React, { useState, useRef, useCallback } from "react";
-import { CreditPackTicketInfo, CreditPackPurchaseRequestResponse } from "@/app/types";
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { CreditPack } from "@/app/types";
 import * as api from '@/app/lib/api';
 
-// 1. Define an extended interface to include augmented fields
-interface ExtendedCreditPackPurchaseRequestResponse extends CreditPackPurchaseRequestResponse {
-  credit_pack_registration_txid: string;
-  requested_initial_credits_in_credit_pack: number;
-  credit_pack_current_credit_balance: number;
-  credit_purchase_request_confirmation_pastel_block_height: number;
-}
-
-// 2. Define an extended ticket interface
-interface ExtendedCreditPackTicketInfo extends CreditPackTicketInfo {
-  requestResponse: ExtendedCreditPackPurchaseRequestResponse;
-}
-
-// 3. Define the response structure
-interface GetValidCreditPacksResponse {
-  success: boolean;
-  result: ExtendedCreditPackTicketInfo[];
-  message?: string;
-}
-
 export default function SelectCreditPackTicket() {
-  // 4. Update the state to use the extended ticket info
-  const [creditPackTickets, setCreditPackTickets] = useState<ExtendedCreditPackTicketInfo[]>([]);
+  const [creditPackTickets, setCreditPackTickets] = useState<CreditPack[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
-  const getMyValidCreditPacks = useCallback(async (forceRefresh = false) => {
+  const getMyValidCreditPacks = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await api.getMyValidCreditPacks();
+      const data: CreditPack[] = await api.getMyValidCreditPacks();
       const validTickets = data.filter(
         (ticket) => ticket.credit_pack_current_credit_balance > 0
       );
@@ -51,13 +30,21 @@ export default function SelectCreditPackTicket() {
     }
   }, [selectedTicket]);
 
+  useEffect(() => {
+    getMyValidCreditPacks();
+  }, [getMyValidCreditPacks]);
+
+  const handleTicketSelection = (txid: string) => {
+    setSelectedTicket(txid);
+  };
+
   const showTooltip = (
     event: React.MouseEvent<HTMLTableRowElement>,
-    ticket: ExtendedCreditPackTicketInfo
+    ticket: CreditPack
   ) => {
     if (tooltipRef.current) {
       const tooltip = tooltipRef.current;
-      const tooltipContent = Object.entries(ticket.requestResponse)
+      const tooltipContent = Object.entries(ticket)
         .filter(
           ([key]) =>
             ![
@@ -66,6 +53,10 @@ export default function SelectCreditPackTicket() {
               "credit_pack_current_credit_balance",
               "credit_usage_tracking_psl_address",
               "credit_purchase_request_confirmation_pastel_block_height",
+              "id",
+              "credits",
+              "balance",
+              "address",
             ].includes(key)
         )
         .map(
@@ -154,7 +145,7 @@ export default function SelectCreditPackTicket() {
                 credit_pack_current_credit_balance,
                 credit_usage_tracking_psl_address,
                 credit_purchase_request_confirmation_pastel_block_height,
-              } = ticket.requestResponse;
+              } = ticket;
 
               return (
                 <tr
@@ -167,7 +158,9 @@ export default function SelectCreditPackTicket() {
                   onClick={() =>
                     handleTicketSelection(credit_pack_registration_txid)
                   }
-                  onMouseEnter={(e) => showTooltip(e, ticket)}
+                  onMouseEnter={(e: React.MouseEvent<HTMLTableRowElement>) =>
+                    showTooltip(e, ticket)
+                  }
                   onMouseLeave={hideTooltip}
                 >
                   <td className="flex items-center space-x-2">
@@ -242,7 +235,7 @@ export default function SelectCreditPackTicket() {
         <button
           id="refreshButton"
           className="btn success outline p-4 relative"
-          onClick={() => getMyValidCreditPacks(true)}
+          onClick={getMyValidCreditPacks}
           disabled={isLoading}
         >
           Manually Refresh Credit Pack Tickets

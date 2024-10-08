@@ -1,5 +1,73 @@
 // src/app/types/index.ts
 
+export interface PastelInstance {
+  // Wallet management
+  CreateNewWallet: (password: string) => string;
+  ImportWallet: (serializedWallet: string) => string;
+  ExportWallet: () => string;
+  UnlockWallet: (password: string) => string;
+  LockWallet: () => string;
+  GetWalletPubKey: () => string;
+
+  // Address management
+  MakeNewAddress: (networkMode: NetworkMode) => string;
+  GetAddress: (index: number, networkMode: NetworkMode) => string;
+  GetAddressesCount: () => number;
+
+  // PastelID management
+  MakeNewPastelID: (makeFullPair: boolean) => string;
+  GetPastelIDByIndex: (index: number, type: string) => string;
+  GetPastelIDsCount: () => number;
+
+  // Transaction management
+  CreateSendToTransaction: (
+    networkMode: NetworkMode,
+    sendToJson: string,
+    fromAddress: string,
+    utxosJson: string,
+    blockHeight: number,
+    fee: number
+  ) => string;
+  CreateRegisterPastelIdTransaction: (
+    networkMode: NetworkMode,
+    pastelID: string,
+    fundingAddress: string,
+    utxosJson: string,
+    blockHeight: number,
+    fee: number
+  ) => string;
+
+  // Signing and verification
+  SignWithWalletKey: (message: string) => string;
+  VerifyWithPastelID: (
+    pastelid: string,
+    messageToVerify: string,
+    pastelIDSignatureOnMessage: string,
+    network: string
+  ) => string;
+  SignWithPastelID: (
+    pastelid: string,
+    messageToSign: string,
+    type: string,
+    network: string
+  ) => string;
+
+  // Key management
+  DumpPrivKey: (tAddr: string) => string;
+  ImportPrivKey: (privKey: string, label: string, rescan: boolean) => string;
+
+  // Other utilities
+  RegisterPastelID: (pastelid: string, passphrase: string, address: string) => string;
+  CreateWalletFromMnemonic: (password: string, mnemonic: string) => string;
+}
+
+// Ensure this enum is also defined in your types file
+export enum NetworkMode {
+  Mainnet,
+  Testnet,
+  Devnet,
+}
+
 export interface LogEntry {
   level: string;
   msg: string;
@@ -256,31 +324,31 @@ export interface CreditPack extends ValidCreditPackTicket {
 }
 
 // Define specific interfaces for each inference type
-interface ModelInputDataTextCompletion {
+export interface ModelInputDataTextCompletion {
   prompt: string;
 }
 
-interface ModelInputDataImageGeneration {
+export interface ModelInputDataImageGeneration {
   imagePrompt: string;
 }
 
-interface ModelInputDataAskQuestionAboutImage {
+export interface ModelInputDataAskQuestionAboutImage {
   image: string;
   question: string;
 }
 
-interface ModelInputDataEmbeddingDocument {
+export interface ModelInputDataEmbeddingDocument {
   document?: string;
   question: string;
 }
 
-interface ModelInputDataEmbeddingAudio {
+export interface ModelInputDataEmbeddingAudio {
   audio?: string;
   question: string;
 }
 
 // Union type for all possible model input data
-type ModelInputData = 
+export type ModelInputData = 
   | ModelInputDataTextCompletion
   | ModelInputDataImageGeneration
   | ModelInputDataAskQuestionAboutImage
@@ -313,12 +381,6 @@ export interface PastelIDTicket {
     pastelID: string;
     [key: string]: unknown;
   };
-}
-
-export enum NetworkMode {
-  Mainnet,
-  Testnet,
-  Devnet,
 }
 
 export interface TransactionDetail {

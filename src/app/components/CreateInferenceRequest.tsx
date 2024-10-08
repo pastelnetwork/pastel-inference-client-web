@@ -13,7 +13,7 @@ interface CreateInferenceRequestProps {
   supernodeUrl: string;
 }
 
-export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: CreateInferenceRequestProps) {
+export default function CreateInferenceRequest({ modelMenu }: CreateInferenceRequestProps) {
   const [inferenceType, setInferenceType] = useState<string>('text_completion');
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [prompt, setPrompt] = useState<string>('Write me a Shakespeare-style sonnet about Pastel Network and how it\'s really decentralized and powerful.');
@@ -77,44 +77,55 @@ export default function CreateInferenceRequest({ modelMenu, supernodeUrl }: Crea
     setIsLoading(true);
     setStatus('Creating new inference request...');
     setInferenceResult(null);
-
+  
     try {
-      let modelInputData: Record<string, string | null> = {};
-      let fileData: string | null = null;
-
+      let modelInputData: InferenceRequestParams['modelInputData'];
+  
       if (inferenceType === 'text_completion') {
-        modelInputData.prompt = prompt;
+        modelInputData = { prompt };
       } else if (inferenceType === 'text_to_image') {
-        modelInputData.imagePrompt = imagePrompt;
+        modelInputData = { imagePrompt };
       } else if (inferenceType === 'ask_question_about_an_image') {
+        let fileData = '';
         if (fileInputRef.current && fileInputRef.current.files && fileInputRef.current.files[0]) {
           fileData = await compressAndEncodeImage(fileInputRef.current.files[0]);
         }
         modelInputData = { image: fileData, question };
-      } else if (inferenceType === 'embedding_document' || inferenceType === 'embedding_audio') {
+      } else if (inferenceType === 'embedding_document') {
+        let fileData = '';
         if (fileInputRef.current && fileInputRef.current.files && fileInputRef.current.files[0]) {
           fileData = await encodeFile(fileInputRef.current.files[0]);
         }
-        const semanticQueryString = document.querySelector<HTMLInputElement>(
-          inferenceType === 'embedding_document' ? '#document_semantic_query_string' : '#audio_semantic_query_string'
-        )?.value || '';
-        modelInputData = { 
-          [inferenceType === 'embedding_document' ? 'document' : 'audio']: fileData,
-          question: semanticQueryString
-        };
+        const semanticQueryString = document.querySelector<HTMLInputElement>('#document_semantic_query_string')?.value || '';
+        modelInputData = { document: fileData, question: semanticQueryString };
+      } else if (inferenceType === 'embedding_audio') {
+        let fileData = '';
+        if (fileInputRef.current && fileInputRef.current.files && fileInputRef.current.files[0]) {
+          fileData = await encodeFile(fileInputRef.current.files[0]);
+        }
+        const semanticQueryString = document.querySelector<HTMLInputElement>('#audio_semantic_query_string')?.value || '';
+        modelInputData = { audio: fileData, question: semanticQueryString };
+      } else {
+        throw new Error('Invalid inference type');
       }
-
+  
+      const selectedCreditPackTicket = document.querySelector<HTMLInputElement>('input[name="creditPackTicket"]:checked')?.value;
+  
+      if (!selectedCreditPackTicket) {
+        throw new Error('No credit pack ticket selected');
+      }
+  
       const params: InferenceRequestParams = {
-        selectedCreditPackTicketId: (document.querySelector('input[name="creditPackTicket"]:checked') as HTMLInputElement)?.value,
+        creditPackTicketPastelTxid: selectedCreditPackTicket,
         modelInputData,
         requestedModelCanonicalString: selectedModel,
         modelInferenceTypeString: inferenceType,
         modelParameters,
         maximumInferenceCostInCredits: parseFloat(maxCost),
       };
-
+  
       const result = await api.createInferenceRequest(params);
-
+  
       if (result) {
         setStatus('Inference request created successfully.');
         setInferenceResult(result);

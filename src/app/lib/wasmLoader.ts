@@ -1,15 +1,9 @@
-import { useEffect, useState } from 'react';
+// src/app/lib/wasmLoader.ts
 
-interface PastelInstance {
-  CreateNewWallet: (password: string) => string;
-  ImportWallet: (serializedWallet: string) => void;
-  UnlockWallet: (password: string) => boolean;
-  GetBalance: () => number;
-  GetPastelIDsCount: () => number;
-  GetPastelIDByIndex: (index: number, type: string) => string;
-  MakeNewPastelID: (makeFullPair: boolean) => string;
-  // Add other methods as needed
-}
+'use client'
+
+import { PastelInstance } from '@/app/types';
+import { useEffect, useState } from 'react';
 
 type PastelModule = {
   Pastel: new () => PastelInstance;

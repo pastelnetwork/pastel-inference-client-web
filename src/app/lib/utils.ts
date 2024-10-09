@@ -1317,6 +1317,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
   try {
     // Initialize WASM
     browserLogger.info("Initializing WASM...");
+    const rpc = BrowserRPCReplacement.getInstance();
     await rpc.initialize();
     browserLogger.info("WASM initialized successfully");
 
@@ -1337,54 +1338,36 @@ export async function importPromotionalPack(jsonData: string): Promise<{
       const pack = packData[i];
       browserLogger.info(`Processing pack ${i + 1} of ${packData.length}`);
 
-      // 1. Save the PastelID secure container
+      // 1. Import PastelID
       const network = await storage.getNetworkFromLocalStorage();
-      await storage.storeSecureContainer(
-        pack.pastel_id_pubkey,
-        pack.secureContainerBase64,
-        network
-      );
+      const importResult = await rpc.importPastelID(pack.secureContainerBase64, network);
+      
+      if (importResult.success) {
+        browserLogger.info(`PastelID ${pack.pastel_id_pubkey} imported successfully`);
+      } else {
+        throw new Error(`Failed to import PastelID: ${importResult.message}`);
+      }
 
       // 2. Import the tracking address private key
       browserLogger.info(
         `Importing private key for tracking address: ${pack.psl_credit_usage_tracking_address}`
       );
 
-      const importResult = await rpc.importPrivKey(
+      const importPrivKeyResult = await rpc.importPrivKey(
         pack.psl_credit_usage_tracking_address_private_key,
         "Imported from promotional pack",
         true
       );
-      if (importResult) {
+      if (importPrivKeyResult) {
         browserLogger.info(
-          `Private key imported successfully for tracking address: ${importResult}`
+          `Private key imported successfully for tracking address: ${pack.psl_credit_usage_tracking_address}`
         );
       } else {
         browserLogger.warn("Failed to import private key");
       }
 
-      // 3. Log other important information
-      browserLogger.info(`PastelID: ${pack.pastel_id_pubkey}`);
-      browserLogger.info(`Passphrase: ${pack.pastel_id_passphrase}`);
-      browserLogger.info(
-        `Credit Pack Ticket: ${JSON.stringify(pack, null, 2)}`
-      );
-
-      processedPacks.push({
-        pub_key: pack.pastel_id_pubkey,
-        passphrase: pack.pastel_id_passphrase,
-      });
-
-      browserLogger.info(`Pack ${i + 1} processed successfully`);
-    }
-
-    // Verify PastelID import and functionality
-    for (let i = 0; i < packData.length; i++) {
-      const pack = packData[i];
-      browserLogger.info(`Verifying PastelID import for pack ${i + 1}`);
-
+      // 3. Verify PastelID import and functionality
       try {
-        // Verify PastelID functionality
         const testMessage = "This is a test message for PastelID verification";
         const signature = await rpc.signMessageWithPastelID(
           pack.pastel_id_pubkey,
@@ -1401,7 +1384,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
           signature
         );
 
-        if (verificationResult) {
+        if (verificationResult === "OK") {
           browserLogger.info(
             `PastelID ${pack.pastel_id_pubkey} verified successfully`
           );
@@ -1411,11 +1394,17 @@ export async function importPromotionalPack(jsonData: string): Promise<{
           );
         }
 
-        // We can't wait for blockchain confirmation in browser context,
-        // so we'll just log that we've processed the credit pack ticket
-        browserLogger.info(
-          `Credit Pack Ticket for ${pack.requested_initial_credits_in_credit_pack} credits processed`
-        );
+        processedPacks.push({
+          pub_key: pack.pastel_id_pubkey,
+          passphrase: pack.pastel_id_passphrase,
+        });
+
+        // Log other important information
+        browserLogger.info(`Credit Pack Ticket: ${JSON.stringify({
+          requested_initial_credits_in_credit_pack: pack.requested_initial_credits_in_credit_pack,
+          psl_credit_usage_tracking_address: pack.psl_credit_usage_tracking_address,
+        }, null, 2)}`);
+
       } catch (error) {
         browserLogger.error(
           `Error verifying pack ${i + 1}: ${(error as Error).message}`

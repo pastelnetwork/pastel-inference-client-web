@@ -327,8 +327,7 @@ export async function checkTrackingAddressBalance(creditPackTicketId: string): P
 export async function importPastelID(fileContent: string, network: string): Promise<{ success: boolean; message: string }> {
   try {
     const rpc = BrowserRPCReplacement.getInstance();
-    await rpc.importPastelID(fileContent, network);
-    return { success: true, message: "PastelID imported successfully!" };
+    return await rpc.importPastelID(fileContent, network);
   } catch (error) {
     console.error("Error importing PastelID:", error);
     return { success: false, message: `Failed to import PastelID: ${(error as Error).message}` };

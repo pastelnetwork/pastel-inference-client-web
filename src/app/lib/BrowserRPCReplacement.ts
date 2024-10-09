@@ -6,7 +6,7 @@ import {
   TransactionDetail, BlockInfo, MempoolInfo, BlockchainInfo, TxOutSetInfo, 
   ChainTip, BlockHeader, TxOutInfo, MemoryInfo, BlockSubsidy, BlockTemplate, 
   MiningInfo, NetworkSolPs, NodeInfo, PeerInfo, DecodedRawTransaction, 
-  DecodedScript, ValidatedAddress, PastelIDInfo 
+  DecodedScript, ValidatedAddress, PastelIDInfo, PastelIDType
 } from "@/app/types";
 import { getNetworkFromLocalStorage, setNetworkInLocalStorage } from "@/app/lib/storage";
 
@@ -145,22 +145,48 @@ class BrowserRPCReplacement {
   async importPastelID(fileContent: string, network: string): Promise<{ success: boolean; message: string }> {
     this.ensureInitialized();
     try {
-      const pastelIDData = JSON.parse(fileContent);
-      const { pastelID } = pastelIDData;
-      this.executeWasmMethod<void>(() =>
-        this.pastelInstance!.ImportWallet(JSON.stringify(pastelIDData))
-      );
-      const pastelIDCount = this.executeWasmMethod<number>(() =>
-        this.pastelInstance!.GetPastelIDsCount()
-      );
-      const importedPastelID = this.executeWasmMethod<string>(() =>
-        this.pastelInstance!.GetPastelIDByIndex(pastelIDCount - 1, "PastelID")
-      );
-      if (importedPastelID === pastelID) {
-        console.log(`PastelID ${pastelID} imported successfully on network ${network}`);
-        return { success: true, message: "PastelID imported successfully!" };
+      if (!this.pastelInstance) {
+        throw new Error("Pastel instance not initialized");
+      }
+  
+      // Decode the base64 encoded binary data
+      const binaryString = atob(fileContent);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+  
+      // Ensure the directory exists in the Emscripten FS
+      const dirPath = '/wallet_data';
+      try {
+        (this.pastelInstance as unknown as { FS: { mkdir: (path: string) => void } }).FS.mkdir(dirPath);
+      } catch (e) {
+        if ((e as { code?: string }).code !== 'EEXIST') throw e;
+      }
+  
+      // Generate a unique filename for the PastelID
+      const pastelID = `pastelid_${Date.now()}.key`;
+      const filePath = `${dirPath}/${pastelID}`;
+  
+      // Write the decoded binary data to the Emscripten FS
+      (this.pastelInstance as unknown as { FS: { writeFile: (path: string, data: Uint8Array) => void } }).FS.writeFile(filePath, bytes);
+      (this.pastelInstance as unknown as { FS: { syncfs: (sync: boolean) => void } }).FS.syncfs(false);
+  
+      // Import the PastelID keys
+      const passPhrase = ""; // You might want to get this from the user or generate it
+      const result = this.pastelInstance.ImportPastelIDKeys(pastelID, passPhrase, dirPath);
+  
+      if (result) {
+        // Verify the import by retrieving the PastelID
+        const importedPastelID = this.pastelInstance.GetPastelID(pastelID, PastelIDType.PastelID);
+        if (importedPastelID) {
+          console.log(`PastelID ${importedPastelID} imported successfully on network ${network}`);
+          return { success: true, message: "PastelID imported successfully!" };
+        } else {
+          throw new Error("PastelID import could not be verified");
+        }
       } else {
-        throw new Error("PastelID import could not be verified");
+        throw new Error("Failed to import PastelID");
       }
     } catch (error) {
       console.error("Error importing PastelID:", error);

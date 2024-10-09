@@ -1,5 +1,10 @@
 // src/app/types/index.ts
 
+export enum PastelIDType {
+  PastelID = "PastelID",
+  LegRoast = "LegRoast"
+}
+
 export interface PastelInstance {
   // Wallet management
   CreateNewWallet: (password: string) => string;
@@ -18,6 +23,8 @@ export interface PastelInstance {
   MakeNewPastelID: (makeFullPair: boolean) => string;
   GetPastelIDByIndex: (index: number, type: string) => string;
   GetPastelIDsCount: () => number;
+  ImportPastelIDKeys: (pastelID: string, passPhrase: string, dirPath: string) => boolean;
+  GetPastelID: (pastelID: string, type: PastelIDType) => string;
 
   // Transaction management
   CreateSendToTransaction: (

@@ -2,49 +2,53 @@
 
 "use client";
 
+import BrowserRPCReplacement from "./BrowserRPCReplacement";
 import { BrowserDatabase } from "./BrowserDatabase";
 import { PastelID } from "@/app/types";
 import browserLogger from "@/app/lib/logger";
-import type BrowserRPCReplacementType from "./BrowserRPCReplacement";
 
-let BrowserRPCReplacement: typeof BrowserRPCReplacementType;
+// Define RPCMethod as keys of BrowserRPCReplacement
+type RPCMethod = keyof BrowserRPCReplacement;
 
+// Singleton BrowserStorage class
 class BrowserStorage {
+  private static instance: BrowserStorage;
   private browserDB: BrowserDatabase;
-  private rpcReplacement: BrowserRPCReplacementType | null;
+  private rpcReplacement: BrowserRPCReplacement;
   private storageInitialized: boolean;
 
-  constructor() {
-    this.browserDB = new BrowserDatabase();
-    this.rpcReplacement = null;
+  // Private constructor to prevent direct instantiation
+  private constructor() {
+    this.browserDB = BrowserDatabase.getInstance();
+    this.rpcReplacement = BrowserRPCReplacement.getInstance();
     this.storageInitialized = false;
   }
 
-  async initializeStorage(): Promise<void> {
+  public static getInstance(): BrowserStorage {
+    if (!BrowserStorage.instance) {
+      BrowserStorage.instance = new BrowserStorage();
+    }
+    return BrowserStorage.instance;
+  }
+
+  public async initializeStorage(): Promise<void> {
     if (!this.storageInitialized) {
       try {
         await this.browserDB.initializeDatabase();
-        // Lazy load BrowserRPCReplacement
-        if (!BrowserRPCReplacement) {
-          const importedModule = await import("./BrowserRPCReplacement");
-          BrowserRPCReplacement = importedModule.default;
-        }
-        this.rpcReplacement = new BrowserRPCReplacement();
         browserLogger.info("Storage initialized successfully");
         this.storageInitialized = true;
       } catch (error) {
         browserLogger.error(
-          `Error initializing storage: ${(error as Error).message.slice(
-            0,
-            100
-          )}`
+          `Error initializing storage: ${
+            (error as Error).message.slice(0, 100)
+          }`
         );
         throw error;
       }
     }
   }
 
-  async getCurrentPastelIdAndPassphrase(): Promise<PastelID> {
+  public async getCurrentPastelIdAndPassphrase(): Promise<PastelID> {
     try {
       await this.initializeStorage();
       const pastelID = localStorage.getItem("MY_LOCAL_PASTELID");
@@ -67,7 +71,7 @@ class BrowserStorage {
     }
   }
 
-  async setPastelIdAndPassphrase(
+  public async setPastelIdAndPassphrase(
     pastelID: string,
     passphrase: string
   ): Promise<void> {
@@ -91,12 +95,18 @@ class BrowserStorage {
     }
   }
 
-  async storeData<T>(storeName: string, data: T): Promise<IDBValidKey> {
+  /**
+   * Stores data in the specified object store.
+   * @param {string} storeName - The name of the object store.
+   * @param {T} data - The data to store.
+   * @returns {Promise<IDBValidKey>} The key of the stored data.
+   */
+  public async storeData<T>(storeName: string, data: T): Promise<IDBValidKey> {
     await this.initializeStorage();
     return this.browserDB.addData(storeName, data);
   }
 
-  async retrieveData<T>(
+  public async retrieveData<T>(
     storeName: string,
     id: IDBValidKey
   ): Promise<T | undefined> {
@@ -104,7 +114,7 @@ class BrowserStorage {
     return this.browserDB.getData<T>(storeName, id);
   }
 
-  async updateData<T>(
+  public async updateData<T>(
     storeName: string,
     id: IDBValidKey,
     data: T
@@ -113,40 +123,53 @@ class BrowserStorage {
     return this.browserDB.updateData(storeName, id, data);
   }
 
-  async deleteData(storeName: string, id: IDBValidKey): Promise<void> {
+  public async deleteData(storeName: string, id: IDBValidKey): Promise<void> {
     await this.initializeStorage();
     return this.browserDB.deleteData(storeName, id);
   }
 
-  async performRPCOperation<T>(
-    method: keyof BrowserRPCReplacementType,
+  public async performRPCOperation<T>(
+    method: RPCMethod,
     ...args: unknown[]
   ): Promise<T> {
     if (!this.rpcReplacement) {
       throw new Error("RPC replacement not initialized");
+    }
+    if (typeof this.rpcReplacement[method] !== "function") {
+      throw new Error(`RPC method ${method} does not exist`);
     }
     return (this.rpcReplacement[method] as (...args: unknown[]) => Promise<T>)(
       ...args
     );
   }
 
-  async getNetworkFromLocalStorage(): Promise<string> {
+  public async getNetworkFromLocalStorage(): Promise<string> {
     return localStorage.getItem("PASTEL_NETWORK") || "Mainnet";
   }
 
-  async setNetworkInLocalStorage(network: string): Promise<void> {
+  public async setNetworkInLocalStorage(network: string): Promise<void> {
     localStorage.setItem("PASTEL_NETWORK", network);
+  }
+
+  public async storeSecureContainer(
+    pastelID: string,
+    secureContainer: string,
+    network: string
+  ): Promise<void> {
+    localStorage.setItem(
+      `secureContainer_${pastelID}_${network}`,
+      secureContainer
+    );
   }
 }
 
-// Create and export a singleton instance
-const browserStorage = new BrowserStorage();
-
+// Export the singleton instance of BrowserStorage
+const browserStorage = BrowserStorage.getInstance();
 export default browserStorage;
 
-// Utility functions
+// Utility functions that utilize the singleton BrowserStorage instance
+
 export async function getCurrentPastelIdAndPassphrase(): Promise<PastelID> {
-  await browserStorage.initializeStorage();
   return browserStorage.getCurrentPastelIdAndPassphrase();
 }
 
@@ -154,17 +177,14 @@ export async function setPastelIdAndPassphrase(
   pastelID: string,
   passphrase: string
 ): Promise<void> {
-  await browserStorage.initializeStorage();
   return browserStorage.setPastelIdAndPassphrase(pastelID, passphrase);
 }
 
 export async function getNetworkFromLocalStorage(): Promise<string> {
-  await browserStorage.initializeStorage();
   return browserStorage.getNetworkFromLocalStorage();
 }
 
 export async function setNetworkInLocalStorage(network: string): Promise<void> {
-  await browserStorage.initializeStorage();
   return browserStorage.setNetworkInLocalStorage(network);
 }
 
@@ -173,8 +193,45 @@ export async function storeSecureContainer(
   secureContainer: string,
   network: string
 ): Promise<void> {
-  localStorage.setItem(
-    `secureContainer_${pastelID}_${network}`,
-    secureContainer
+  return browserStorage.storeSecureContainer(
+    pastelID,
+    secureContainer,
+    network
   );
+}
+
+export async function storeData<T>(
+  storeName: string,
+  data: T
+): Promise<IDBValidKey> {
+  return browserStorage.storeData(storeName, data);
+}
+
+export async function retrieveData<T>(
+  storeName: string,
+  id: IDBValidKey
+): Promise<T | undefined> {
+  return browserStorage.retrieveData(storeName, id);
+}
+
+export async function updateData<T>(
+  storeName: string,
+  id: IDBValidKey,
+  data: T
+): Promise<IDBValidKey> {
+  return browserStorage.updateData(storeName, id, data);
+}
+
+export async function deleteData(
+  storeName: string,
+  id: IDBValidKey
+): Promise<void> {
+  return browserStorage.deleteData(storeName, id);
+}
+
+export async function performRPCOperation<T>(
+  method: RPCMethod,
+  ...args: unknown[]
+): Promise<T> {
+  return browserStorage.performRPCOperation<T>(method, ...args);
 }

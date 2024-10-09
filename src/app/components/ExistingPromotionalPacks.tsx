@@ -5,7 +5,7 @@
 import { Button, Select } from "antd";
 
 export default function ExistingPromotionalPacks() {
-  const handleExistingPacksChange = (value: string) => {
+  const handleExistingPacksChange = () => {
 
   }
   const downloadExistingPack = () => {

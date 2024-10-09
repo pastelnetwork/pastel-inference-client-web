@@ -24,26 +24,27 @@ import {
   CreditPackStorageRetryRequestResponse,
   CreditPackPurchaseRequestConfirmationResponse,
   CreditPackRequestStatusCheck,
+  CreditPackPurchaseRequestStatus,
   InferenceRequestData,
   InferenceAPIUsageResponse,
   InferenceAPIOutputResult,
   InferenceConfirmationData,
   CreditPackPurchaseRequestRejection,
   CreditPackPurchaseRequestResponseTermination,
-  CreditPackPurchaseRequestStatus,
   AuditResult,
 } from "@/app/types";
 
-const rpc = new BrowserRPCReplacement();
-const db = new BrowserDatabase();
+const db = BrowserDatabase.getInstance();
 
 class PastelInferenceClient {
   private pastelID: string;
   private passphrase: string;
+  private rpc: BrowserRPCReplacement;
 
   constructor(config: PastelInferenceClientConfig) {
     this.pastelID = config.pastelID;
     this.passphrase = config.passphrase;
+    this.rpc = BrowserRPCReplacement.getInstance();
   }
 
   public getPastelID(): string {
@@ -60,7 +61,7 @@ class PastelInferenceClient {
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
       const { challenge, challenge_id } = await response.json();
-      const challenge_signature = await rpc.signMessageWithPastelID(
+      const challenge_signature = await this.rpc.signMessageWithPastelID(
         this.pastelID,
         challenge,
         this.passphrase
@@ -159,7 +160,7 @@ class PastelInferenceClient {
     const minimumNumberOfResponses = 5;
     const retryLimit = 1;
     try {
-      const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
+      const { validMasternodeListFullDF } = await this.rpc.checkSupernodeList();
       const closestSupernodes = await utils.getNClosestSupernodesToPastelIDURLs(
         60,
         this.pastelID,
@@ -380,7 +381,10 @@ class PastelInferenceClient {
       );
 
       const response = await fetch(
-        `${supernodeURL}/get_credit_pack_ticket_from_txid?${params}`
+        `${supernodeURL}/get_credit_pack_ticket_from_txid?${params}`,
+        {
+          method: "POST",
+        }
       );
 
       if (!response.ok) {
@@ -519,7 +523,7 @@ class PastelInferenceClient {
     return Math.abs(quotedPrice - estimatedPrice) / estimatedPrice;
   }
 
-  private async confirmPreliminaryPriceQuote(
+  async confirmPreliminaryPriceQuote(
     preliminaryPriceQuote: PreliminaryPriceQuote,
     maximumTotalCreditPackPriceInPSL: number,
     maximumPerCreditPriceInPSL: number
@@ -664,7 +668,7 @@ class PastelInferenceClient {
         preliminary_price_quote_response_timestamp_utc_iso_string:
           new Date().toISOString(),
         preliminary_price_quote_response_pastel_block_height:
-          await rpc.getCurrentPastelBlockHeight(),
+          await this.rpc.getCurrentPastelBlockHeight(),
         preliminary_price_quote_response_message_version_string: "1.0",
         requesting_end_user_pastelid:
           creditPackRequest.requesting_end_user_pastelid,
@@ -674,25 +678,22 @@ class PastelInferenceClient {
           "",
       };
 
-      // Compute hashes and signatures
       priceQuoteResponse.sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_response_fields =
         await utils.computeSHA3256HashOfSQLModelResponseFields(
           priceQuoteResponse
         );
       priceQuoteResponse.requesting_end_user_pastelid_signature_on_preliminary_price_quote_response_hash =
-        await rpc.signMessageWithPastelID(
+        await this.rpc.signMessageWithPastelID(
           creditPackRequest.requesting_end_user_pastelid,
           priceQuoteResponse.sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_response_fields,
           this.passphrase
         );
 
-      // Validate the price quote response
       const validatedPriceQuoteResponse =
         validationSchemas.creditPackPurchaseRequestPreliminaryPriceQuoteResponseSchema.parse(
           priceQuoteResponse
         );
 
-      // Prepare model for endpoint before sending
       const preparedPriceQuoteResponse = await utils.prepareModelForEndpoint(
         validatedPriceQuoteResponse
       );
@@ -701,7 +702,6 @@ class PastelInferenceClient {
       preparedPriceQuoteResponse.agree_with_preliminary_price_quote =
         preparedPriceQuoteResponse.agree_with_preliminary_price_quote ? 1 : 0;
 
-      // Prepare and send the payload to the supernode
       const { challenge, challenge_id, challenge_signature } =
         await this.requestAndSignChallenge(supernodeURL);
       const completePriceQuoteResponse = {
@@ -836,7 +836,7 @@ class PastelInferenceClient {
           creditPackPurchaseRequestHash,
         requesting_end_user_pastelid: this.pastelID,
         requesting_end_user_pastelid_signature_on_sha3_256_hash_of_credit_pack_purchase_request_fields:
-          await rpc.signMessageWithPastelID(
+          await this.rpc.signMessageWithPastelID(
             this.pastelID,
             creditPackPurchaseRequestHash,
             this.passphrase
@@ -904,6 +904,11 @@ class PastelInferenceClient {
         validationSchemas.creditPackPurchaseRequestConfirmationSchema.parse(
           creditPackPurchaseRequestConfirmation
         );
+
+      await db.addData(
+        "CreditPackPurchaseRequestConfirmation",
+        validatedConfirmation
+      );
 
       const { challenge, challenge_id, challenge_signature } =
         await this.requestAndSignChallenge(supernodeURL);
@@ -991,7 +996,9 @@ class PastelInferenceClient {
         result
       );
 
-      const transformedResult = await utils.prepareModelForValidation(result);
+      const transformedResult = await utils.prepareModelForValidation(
+        result
+      );
       const validatedResponse =
         validationSchemas.creditPackStorageRetryRequestResponseSchema.parse(
           transformedResult
@@ -1030,7 +1037,9 @@ class PastelInferenceClient {
       const { challenge, challenge_id, challenge_signature } =
         await this.requestAndSignChallenge(supernodeURL);
 
-      const payload = await utils.prepareModelForEndpoint(validatedResponse);
+      const payload = await utils.prepareModelForEndpoint(
+        validatedResponse
+      );
       utils.logActionWithPayload(
         "sending",
         "storage retry completion announcement message",
@@ -1050,9 +1059,9 @@ class PastelInferenceClient {
           }),
         }
       );
-
-      if (!response.ok)
+      if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
+      }
     } catch (error) {
       console.error(
         `Error sending credit pack storage retry completion announcement: ${utils.safeStringify(
@@ -1232,7 +1241,11 @@ class PastelInferenceClient {
       const payload = await utils.prepareModelForEndpoint(
         validatedConfirmation
       );
-      utils.logActionWithPayload("sending", "inference confirmation", payload);
+      utils.logActionWithPayload(
+        "sending",
+        "inference confirmation",
+        payload
+      );
       const response = await fetch(
         `${supernodeURL}/confirm_inference_request`,
         {
@@ -1354,7 +1367,7 @@ class PastelInferenceClient {
     inferenceResponseID: string
   ): Promise<InferenceAPIUsageResponse> {
     try {
-      const signature = await rpc.signMessageWithPastelID(
+      const signature = await this.rpc.signMessageWithPastelID(
         this.pastelID,
         inferenceResponseID,
         this.passphrase
@@ -1397,7 +1410,7 @@ class PastelInferenceClient {
     inferenceResponseID: string
   ): Promise<InferenceAPIOutputResult> {
     try {
-      const signature = await rpc.signMessageWithPastelID(
+      const signature = await this.rpc.signMessageWithPastelID(
         this.pastelID,
         inferenceResponseID,
         this.passphrase
@@ -1439,7 +1452,7 @@ class PastelInferenceClient {
     inferenceResponseID: string
   ): Promise<AuditResult[]> {
     try {
-      const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
+      const { validMasternodeListFullDF } = await this.rpc.checkSupernodeList();
       const filteredSupernodes = await utils.filterSupernodes(
         validMasternodeListFullDF
       );
@@ -1577,7 +1590,7 @@ class PastelInferenceClient {
     const timeoutPeriod = 3000;
 
     try {
-      const { validMasternodeListFullDF } = await rpc.checkSupernodeList();
+      const { validMasternodeListFullDF } = await this.rpc.checkSupernodeList();
       const filteredSupernodes = await utils.filterSupernodes(
         validMasternodeListFullDF
       );
@@ -1597,9 +1610,9 @@ class PastelInferenceClient {
             url,
             responseTime: Date.now() - startTime,
           })),
-          new Promise((_, reject) =>
+          new Promise<null>((_, reject) =>
             setTimeout(() => reject(new Error("Timeout")), timeoutPeriod)
-          ),
+          ).catch(() => null),
         ]).catch(() => null);
       });
 
@@ -1615,7 +1628,8 @@ class PastelInferenceClient {
             responseTime: number;
           }> => res.status === "fulfilled" && res.value !== null
         )
-        .map((res) => res.value);
+        .map((res) => res.value)
+        .filter(({ result }) => result);
 
       const sortedResponses = validResponses.sort(
         (a, b) => a.responseTime - b.responseTime

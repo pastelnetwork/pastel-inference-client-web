@@ -1,23 +1,38 @@
 // src/app/lib/BrowserRPCReplacement.ts
 
-import { useWasm } from './wasmLoader';
-import { PastelInstance, NetworkMode, SupernodeInfo, WalletInfo, PastelIDTicket, TransactionDetail, BlockInfo, MempoolInfo, BlockchainInfo, TxOutSetInfo, ChainTip, BlockHeader, TxOutInfo, MemoryInfo, BlockSubsidy, BlockTemplate, MiningInfo, NetworkSolPs, NodeInfo, PeerInfo, DecodedRawTransaction, DecodedScript, ValidatedAddress, PastelIDInfo } from "@/app/types";
+import { initWasm } from './wasmLoader';
+import { 
+  PastelInstance, NetworkMode, SupernodeInfo, WalletInfo, PastelIDTicket, 
+  TransactionDetail, BlockInfo, MempoolInfo, BlockchainInfo, TxOutSetInfo, 
+  ChainTip, BlockHeader, TxOutInfo, MemoryInfo, BlockSubsidy, BlockTemplate, 
+  MiningInfo, NetworkSolPs, NodeInfo, PeerInfo, DecodedRawTransaction, 
+  DecodedScript, ValidatedAddress, PastelIDInfo 
+} from "@/app/types";
 import { getNetworkFromLocalStorage, setNetworkInLocalStorage } from "@/app/lib/storage";
 
 class BrowserRPCReplacement {
+  private static instance: BrowserRPCReplacement | null = null;
+
   private apiBaseUrl: string;
   private pastelInstance: PastelInstance | null = null;
   private isInitialized: boolean = false;
 
-  constructor(apiBaseUrl: string = "https://opennode-fastapi.pastel.network") {
+  private constructor(apiBaseUrl: string = "https://opennode-fastapi.pastel.network") {
     this.apiBaseUrl = apiBaseUrl;
     this.pastelInstance = null;
     this.isInitialized = false;
   }
 
-  async initialize(): Promise<void> {
+  public static getInstance(apiBaseUrl?: string): BrowserRPCReplacement {
+    if (!BrowserRPCReplacement.instance) {
+      BrowserRPCReplacement.instance = new BrowserRPCReplacement(apiBaseUrl);
+    }
+    return BrowserRPCReplacement.instance;
+  }
+
+  public async initialize(): Promise<void> {
     if (!this.isInitialized) {
-      const wasmModule = await useWasm();
+      const wasmModule = await initWasm();
       if (!wasmModule) {
         throw new Error("WASM module not loaded");
       }
@@ -89,7 +104,7 @@ class BrowserRPCReplacement {
     }
   }
 
-  async createWalletFromMnemonic(password: string, mnemonic: string): Promise<string> {
+  public async createWalletFromMnemonic(password: string, mnemonic: string): Promise<string> {
     this.ensureInitialized();
     return this.executeWasmMethod<string>(() =>
       this.pastelInstance!.CreateWalletFromMnemonic(password, mnemonic)
@@ -128,29 +143,19 @@ class BrowserRPCReplacement {
   }
   
   async importPastelID(fileContent: string, network: string): Promise<{ success: boolean; message: string }> {
-    // This looks wrong... 
-    await this.ensureInitialized();
+    this.ensureInitialized();
     try {
-      // Parse the file content (assuming it's JSON)
       const pastelIDData = JSON.parse(fileContent);
-      
-      // Extract necessary information from the parsed data
       const { pastelID } = pastelIDData;
-      
-      // Import the PastelID using the WASM method
       this.executeWasmMethod<void>(() =>
         this.pastelInstance!.ImportWallet(JSON.stringify(pastelIDData))
       );
-      
-      // Verify the import by checking if the PastelID is now available
       const pastelIDCount = this.executeWasmMethod<number>(() =>
         this.pastelInstance!.GetPastelIDsCount()
       );
-      
       const importedPastelID = this.executeWasmMethod<string>(() =>
         this.pastelInstance!.GetPastelIDByIndex(pastelIDCount - 1, "PastelID")
       );
-      
       if (importedPastelID === pastelID) {
         console.log(`PastelID ${pastelID} imported successfully on network ${network}`);
         return { success: true, message: "PastelID imported successfully!" };
@@ -854,4 +859,4 @@ class BrowserRPCReplacement {
   }
 }
 
-export default BrowserRPCReplacement;  
+export default BrowserRPCReplacement;

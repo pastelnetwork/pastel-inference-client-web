@@ -14,6 +14,10 @@ declare global {
 
 let wasmModule: PastelModule | null = null;
 
+/**
+ * Initializes the WASM module by loading the script and setting up the module.
+ * @returns A promise that resolves to the initialized PastelModule or null if initialization fails.
+ */
 export async function initWasm(): Promise<PastelModule | null> {
   if (typeof window === 'undefined') {
     return null; // Return null on the server side
@@ -71,6 +75,10 @@ export async function initWasm(): Promise<PastelModule | null> {
   }
 }
 
-export function useWasm(): PastelModule | null {
+/**
+ * Retrieves the initialized WASM module.
+ * @returns The initialized PastelModule or null if not initialized.
+ */
+export function getWasmModule(): PastelModule | null {
   return wasmModule;
 }

@@ -28,8 +28,9 @@ import {
   CreditPackStorageRetryRequestResponse,
 } from "@/app/types";
 
-const rpc = new BrowserRPCReplacement();
-const db = new BrowserDatabase();
+// Utilize singleton instances
+const rpc = BrowserRPCReplacement.getInstance();
+const db = BrowserDatabase.getInstance();
 
 function getIsoStringWithMicroseconds(): string {
   const now = new Date();
@@ -152,7 +153,6 @@ export async function sendMessageAndCheckForNewIncomingMessages(
     );
 
     const receivedMessages = await checkForNewIncomingMessages();
-
 
     return {
       sent_messages: sendResults,
@@ -517,10 +517,10 @@ async function initiateStorageRetry(
           supernodePastelID,
           validMasternodeListFullDF
         );
-await inferenceClient.creditPackPurchaseCompletionAnnouncement(
-  supernodeURL,
-  creditPackStorageRetryRequestResponse as unknown as CreditPackPurchaseRequestConfirmation
-);
+        await inferenceClient.creditPackPurchaseCompletionAnnouncement(
+          supernodeURL,
+          creditPackStorageRetryRequestResponse as unknown as CreditPackPurchaseRequestConfirmation
+        );
       } catch {
         // Silently ignore errors in completion announcements
       }

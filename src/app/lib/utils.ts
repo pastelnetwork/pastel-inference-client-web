@@ -20,7 +20,7 @@ import {
   SupernodeWithDistance,
 } from "@/app/types";
 
-const rpc = new BrowserRPCReplacement();
+const rpc = BrowserRPCReplacement.getInstance();
 
 const MAX_CACHE_AGE_MS = 1 * 60 * 1000; // 1 minute in milliseconds
 

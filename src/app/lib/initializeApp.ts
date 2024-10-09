@@ -1,17 +1,24 @@
 // src/app/lib/initializeApp.ts
-import { initWasm } from './wasmLoader';
 import BrowserRPCReplacement from './BrowserRPCReplacement';
 
-let rpc: BrowserRPCReplacement | null = null;
-
-export async function initializeApp() {
-  rpc = new BrowserRPCReplacement();
+/**
+ * Initializes the BrowserRPCReplacement singleton instance.
+ * @returns The initialized BrowserRPCReplacement instance.
+ */
+export async function initializeApp(): Promise<BrowserRPCReplacement> {
+  const rpc = BrowserRPCReplacement.getInstance();
   await rpc.initialize();
   return rpc;
 }
 
-export function getRPC() {
-  if (!rpc) {
+/**
+ * Retrieves the initialized BrowserRPCReplacement singleton instance.
+ * @returns The BrowserRPCReplacement instance.
+ * @throws Error if RPC is not initialized.
+ */
+export function getRPC(): BrowserRPCReplacement {
+  const rpc = BrowserRPCReplacement.getInstance();
+  if (!rpc) { // This check is redundant in Singleton, but kept for safety
     throw new Error('RPC not initialized. Call initializeApp first.');
   }
   return rpc;

@@ -1,6 +1,6 @@
 // src/app/lib/BrowserDatabase.ts
 
-'use client'
+'use client';
 
 import {
   SupernodeList,
@@ -24,14 +24,34 @@ import {
   InferenceConfirmation,
 } from "@/app/types";
 
+/**
+ * Singleton BrowserDatabase class for managing IndexedDB interactions.
+ */
 export class BrowserDatabase {
+  private static instance: BrowserDatabase;
   private db: IDBDatabase | null = null;
   private readonly dbName = "PastelInferenceClientDB";
   private readonly dbVersion = 1;
 
-  constructor() {}
+  // Private constructor to prevent direct instantiation
+  private constructor() {}
 
-  async initializeDatabase(): Promise<void> {
+  /**
+   * Retrieves the singleton instance of BrowserDatabase.
+   * @returns {BrowserDatabase} The singleton instance.
+   */
+  public static getInstance(): BrowserDatabase {
+    if (!BrowserDatabase.instance) {
+      BrowserDatabase.instance = new BrowserDatabase();
+    }
+    return BrowserDatabase.instance;
+  }
+
+  /**
+   * Initializes the IndexedDB database.
+   * @returns {Promise<void>} A promise that resolves when the database is initialized.
+   */
+  public async initializeDatabase(): Promise<void> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion);
 
@@ -56,6 +76,10 @@ export class BrowserDatabase {
     });
   }
 
+  /**
+   * Creates the necessary object stores and indexes in the database.
+   * @param {IDBDatabase} db - The IDBDatabase instance.
+   */
   private createObjectStores(db: IDBDatabase): void {
     const storeDefinitions = [
       {
@@ -250,7 +274,13 @@ export class BrowserDatabase {
     });
   }
 
-  async addData<T>(storeName: string, data: T): Promise<IDBValidKey> {
+  /**
+   * Adds data to a specified object store.
+   * @param {string} storeName - The name of the object store.
+   * @param {T} data - The data to add.
+   * @returns {Promise<IDBValidKey>} A promise that resolves with the key of the added data.
+   */
+  public async addData<T>(storeName: string, data: T): Promise<IDBValidKey> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
         reject(new Error("Database not initialized"));
@@ -271,7 +301,13 @@ export class BrowserDatabase {
     });
   }
 
-  async getData<T>(storeName: string, id: IDBValidKey): Promise<T | undefined> {
+  /**
+   * Retrieves data by primary key from a specified object store.
+   * @param {string} storeName - The name of the object store.
+   * @param {IDBValidKey} id - The primary key of the data.
+   * @returns {Promise<T | undefined>} A promise that resolves with the retrieved data or undefined if not found.
+   */
+  public async getData<T>(storeName: string, id: IDBValidKey): Promise<T | undefined> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
         reject(new Error("Database not initialized"));
@@ -292,7 +328,14 @@ export class BrowserDatabase {
     });
   }
 
-  async updateData<T>(
+  /**
+   * Updates data in a specified object store.
+   * @param {string} storeName - The name of the object store.
+   * @param {IDBValidKey} id - The primary key of the data to update.
+   * @param {T} data - The updated data.
+   * @returns {Promise<IDBValidKey>} A promise that resolves with the key of the updated data.
+   */
+  public async updateData<T>(
     storeName: string,
     id: IDBValidKey,
     data: T
@@ -317,7 +360,13 @@ export class BrowserDatabase {
     });
   }
 
-  async deleteData(storeName: string, id: IDBValidKey): Promise<void> {
+  /**
+   * Deletes data from a specified object store.
+   * @param {string} storeName - The name of the object store.
+   * @param {IDBValidKey} id - The primary key of the data to delete.
+   * @returns {Promise<void>} A promise that resolves when the data is deleted.
+   */
+  public async deleteData(storeName: string, id: IDBValidKey): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
         reject(new Error("Database not initialized"));
@@ -338,7 +387,12 @@ export class BrowserDatabase {
     });
   }
 
-  async getAllData<T>(storeName: string): Promise<T[]> {
+  /**
+   * Retrieves all data from a specified object store.
+   * @param {string} storeName - The name of the object store.
+   * @returns {Promise<T[]>} A promise that resolves with an array of all data.
+   */
+  public async getAllData<T>(storeName: string): Promise<T[]> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
         reject(new Error("Database not initialized"));
@@ -359,7 +413,14 @@ export class BrowserDatabase {
     });
   }
 
-  async findByIndex<T>(
+  /**
+   * Finds data in a specified object store using an index.
+   * @param {string} storeName - The name of the object store.
+   * @param {string} indexName - The name of the index to use.
+   * @param {IDBValidKey} value - The value to search for.
+   * @returns {Promise<T | undefined>} A promise that resolves with the found data or undefined.
+   */
+  public async findByIndex<T>(
     storeName: string,
     indexName: string,
     value: IDBValidKey
@@ -386,8 +447,12 @@ export class BrowserDatabase {
   }
 }
 
-const browserDB = new BrowserDatabase();
-
+/**
+ * Factory function to create model methods for a given store.
+ * @template T - The type of the model.
+ * @param {string} storeName - The name of the object store.
+ * @returns {ModelMethods<T>} An object containing CRUD methods for the model.
+ */
 type ModelMethods<T> = {
   create: (data: T) => Promise<IDBValidKey>;
   findByPk: (id: IDBValidKey) => Promise<T | undefined>;
@@ -400,23 +465,28 @@ type ModelMethods<T> = {
 };
 
 function createModelMethods<T>(storeName: string): ModelMethods<T> {
+  const db = BrowserDatabase.getInstance();
+
   return {
-    create: async (data) => await browserDB.addData<T>(storeName, data),
-    findByPk: async (id) => await browserDB.getData<T>(storeName, id),
+    create: async (data) => await db.addData<T>(storeName, data),
+    findByPk: async (id) => await db.getData<T>(storeName, id),
     update: async (id, data) =>
-      await browserDB.updateData<T>(storeName, id, data),
-    destroy: async (id) => await browserDB.deleteData(storeName, id),
-    findAll: async () => await browserDB.getAllData<T>(storeName),
+      await db.updateData<T>(storeName, id, data),
+    destroy: async (id) => await db.deleteData(storeName, id),
+    findAll: async () => await db.getAllData<T>(storeName),
     findOne: async (options) => {
       if (options.where) {
         const [key, value] = Object.entries(options.where)[0];
-        return await browserDB.findByIndex<T>(storeName, key, value);
+        return await db.findByIndex<T>(storeName, key, value);
       }
       return undefined;
     },
   };
 }
 
+/**
+ * Exported models with CRUD methods.
+ */
 export const models = {
   SupernodeList: createModelMethods<SupernodeList>("SupernodeList"),
   Message: createModelMethods<Message>("Message"),
@@ -482,9 +552,14 @@ export const models = {
   ),
 };
 
+/**
+ * Initializes the database by calling the singleton's initializeDatabase method.
+ * @returns {Promise<void>} A promise that resolves when the database is initialized.
+ */
 export async function initializeDatabase(): Promise<void> {
   try {
-    await browserDB.initializeDatabase();
+    const db = BrowserDatabase.getInstance();
+    await db.initializeDatabase();
     console.log("Database initialized successfully");
   } catch (error) {
     console.error("Failed to initialize database:", error);

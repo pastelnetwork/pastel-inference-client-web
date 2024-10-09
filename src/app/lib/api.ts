@@ -23,18 +23,9 @@ import {
   WalletInfo,
   SendToAddressResult,
 } from "@/app/types";
-import BrowserRPCReplacement from './BrowserRPCReplacement';
 
 let network: string = "Mainnet"; // Default value
 let burnAddress: string = "PtpasteLBurnAddressXXXXXXXXXXbJ5ndd"; // Default Mainnet burn address
-let rpc: BrowserRPCReplacement | null = null;
-
-export async function initializeApp(): Promise<void> {
-  if (!rpc) {
-    rpc = new BrowserRPCReplacement();
-    await rpc.initialize();
-  }
-}
 
 export async function changeNetwork(
   newNetwork: string
@@ -594,7 +585,6 @@ export async function getBlock(blockHash: string): Promise<unknown> {
 }
 
 const api = {
-  initializeApp,
   changeNetwork,
   getNetworkInfo,
   getBestSupernodeUrl,

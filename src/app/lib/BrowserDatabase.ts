@@ -27,19 +27,15 @@ import {
 /**
  * Singleton BrowserDatabase class for managing IndexedDB interactions.
  */
+
 export class BrowserDatabase {
   private static instance: BrowserDatabase;
   private db: IDBDatabase | null = null;
   private readonly dbName = "PastelInferenceClientDB";
   private readonly dbVersion = 1;
 
-  // Private constructor to prevent direct instantiation
   private constructor() {}
 
-  /**
-   * Retrieves the singleton instance of BrowserDatabase.
-   * @returns {BrowserDatabase} The singleton instance.
-   */
   public static getInstance(): BrowserDatabase {
     if (!BrowserDatabase.instance) {
       BrowserDatabase.instance = new BrowserDatabase();
@@ -47,19 +43,12 @@ export class BrowserDatabase {
     return BrowserDatabase.instance;
   }
 
-  /**
-   * Initializes the IndexedDB database.
-   * @returns {Promise<void>} A promise that resolves when the database is initialized.
-   */
   public async initializeDatabase(): Promise<void> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion);
 
       request.onerror = (event: Event) => {
-        console.error(
-          "Error opening database:",
-          (event.target as IDBOpenDBRequest).error
-        );
+        console.error("Error opening database:", (event.target as IDBOpenDBRequest).error);
         reject((event.target as IDBOpenDBRequest).error);
       };
 
@@ -565,3 +554,6 @@ export async function initializeDatabase(): Promise<void> {
     console.error("Failed to initialize database:", error);
   }
 }
+
+export default BrowserDatabase;
+

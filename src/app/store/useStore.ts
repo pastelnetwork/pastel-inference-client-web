@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import * as api from "../lib/api";
+import api from "../lib/api";
 import * as initializeApp from "../lib/initializeApp";
 import { CreditPack, ModelMenu } from "@/app/types";
 import browserLogger from "@/app/lib/logger";

@@ -1,26 +1,18 @@
 // src/app/lib/storage.ts
 
-"use client";
+'use client';
 
-import BrowserRPCReplacement from "./BrowserRPCReplacement";
-import { BrowserDatabase } from "./BrowserDatabase";
+import BrowserDatabase from "./BrowserDatabase";
 import { PastelID } from "@/app/types";
 import browserLogger from "@/app/lib/logger";
 
-// Define RPCMethod as keys of BrowserRPCReplacement
-type RPCMethod = keyof BrowserRPCReplacement;
-
-// Singleton BrowserStorage class
 class BrowserStorage {
   private static instance: BrowserStorage;
   private browserDB: BrowserDatabase;
-  private rpcReplacement: BrowserRPCReplacement;
   private storageInitialized: boolean;
 
-  // Private constructor to prevent direct instantiation
   private constructor() {
     this.browserDB = BrowserDatabase.getInstance();
-    this.rpcReplacement = BrowserRPCReplacement.getInstance();
     this.storageInitialized = false;
   }
 
@@ -95,12 +87,6 @@ class BrowserStorage {
     }
   }
 
-  /**
-   * Stores data in the specified object store.
-   * @param {string} storeName - The name of the object store.
-   * @param {T} data - The data to store.
-   * @returns {Promise<IDBValidKey>} The key of the stored data.
-   */
   public async storeData<T>(storeName: string, data: T): Promise<IDBValidKey> {
     await this.initializeStorage();
     return this.browserDB.addData(storeName, data);
@@ -128,21 +114,6 @@ class BrowserStorage {
     return this.browserDB.deleteData(storeName, id);
   }
 
-  public async performRPCOperation<T>(
-    method: RPCMethod,
-    ...args: unknown[]
-  ): Promise<T> {
-    if (!this.rpcReplacement) {
-      throw new Error("RPC replacement not initialized");
-    }
-    if (typeof this.rpcReplacement[method] !== "function") {
-      throw new Error(`RPC method ${method} does not exist`);
-    }
-    return (this.rpcReplacement[method] as (...args: unknown[]) => Promise<T>)(
-      ...args
-    );
-  }
-
   public async getNetworkFromLocalStorage(): Promise<string> {
     return localStorage.getItem("PASTEL_NETWORK") || "Mainnet";
   }
@@ -163,11 +134,8 @@ class BrowserStorage {
   }
 }
 
-// Export the singleton instance of BrowserStorage
 const browserStorage = BrowserStorage.getInstance();
 export default browserStorage;
-
-// Utility functions that utilize the singleton BrowserStorage instance
 
 export async function getCurrentPastelIdAndPassphrase(): Promise<PastelID> {
   return browserStorage.getCurrentPastelIdAndPassphrase();
@@ -227,11 +195,4 @@ export async function deleteData(
   id: IDBValidKey
 ): Promise<void> {
   return browserStorage.deleteData(storeName, id);
-}
-
-export async function performRPCOperation<T>(
-  method: RPCMethod,
-  ...args: unknown[]
-): Promise<T> {
-  return browserStorage.performRPCOperation<T>(method, ...args);
 }

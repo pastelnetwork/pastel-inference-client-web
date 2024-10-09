@@ -159,13 +159,13 @@ const useStore = create<WalletState & WalletActions>()(
           const balance = await api.getBalance();
           const addressAmounts = await api.listAddressAmounts();
           const addresses = Object.keys(addressAmounts);
-          const pastelIDs = await api.listPastelIDTickets();
+          const pastelIDs = await api.listPastelIDs();
           const creditPacks = await api.getMyValidCreditPacks();
 
           set({
             balance,
             addresses,
-            pastelId: pastelIDs[0]?.ticket.pastelID || "",
+            pastelId: pastelIDs[0] || "",
             creditPacks,
           });
         } catch (error) {

@@ -2,7 +2,7 @@
 
 import { initWasm } from './wasmLoader';
 import { 
-  PastelInstance, NetworkMode, SupernodeInfo, WalletInfo, PastelIDTicket, 
+  PastelInstance, NetworkMode, SupernodeInfo, WalletInfo, 
   TransactionDetail, BlockInfo, MempoolInfo, BlockchainInfo, TxOutSetInfo, 
   ChainTip, BlockHeader, TxOutInfo, MemoryInfo, BlockSubsidy, BlockTemplate, 
   MiningInfo, NetworkSolPs, NodeInfo, PeerInfo, DecodedRawTransaction, 
@@ -512,21 +512,6 @@ class BrowserRPCReplacement {
 
   async getAddressUtxos(address: string): Promise<unknown[]> {
     return this.fetchJson<unknown[]>(`/get_address_utxos?addresses=${address}`);
-  }
-
-  async listPastelIDTickets(
-    filter: string = "mine",
-    minheight: number | null = null
-  ): Promise<PastelIDTicket[]> {
-    let endpoint = `/tickets/id/list/${filter}`;
-    if (minheight !== null) {
-      endpoint += `/${minheight}`;
-    }
-    return this.fetchJson<PastelIDTicket[]>(endpoint);
-  }
-
-  async findPastelIDTicket(key: string): Promise<PastelIDTicket> {
-    return this.fetchJson<PastelIDTicket>(`/tickets/id/find/${key}`);
   }
 
   async getPastelTicket(

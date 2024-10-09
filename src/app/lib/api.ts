@@ -20,7 +20,6 @@ import {
   CreditPackCreationResult,
   CreditPackTicketInfo,
   UserMessage,
-  PastelIDTicket,
   WalletInfo,
   SendToAddressResult,
 } from "@/app/types";
@@ -169,15 +168,6 @@ export async function registerPastelID(pastelid: string, passphrase: string, add
   return await rpc.registerPastelID(pastelid, passphrase, address);
 }
 
-export async function listPastelIDTickets(filter: string = "mine", minheight: number | null = null): Promise<PastelIDTicket[]> {
-  const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.listPastelIDTickets(filter, minheight);
-}
-
-export async function findPastelIDTicket(key: string): Promise<PastelIDTicket> {
-  const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.findPastelIDTicket(key);
-}
 
 export async function getPastelTicket(txid: string, decodeProperties: boolean = true): Promise<unknown> {
   const rpc = BrowserRPCReplacement.getInstance();
@@ -232,6 +222,26 @@ export async function createAndFundNewAddress(amount: number): Promise<SendToAdd
     newCreditTrackingAddress: result.newCreditTrackingAddress || "",
     txid: result.txid || "",
   };
+}
+
+export async function listPastelIDs(): Promise<string[]> {
+  try {
+    const rpc = BrowserRPCReplacement.getInstance();
+    await rpc.initialize(); // Ensure RPC is initialized
+
+    const count = await rpc.getPastelIDsCount();
+    const ids: string[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const pastelID = await rpc.getPastelIDByIndex(i);
+      ids.push(pastelID);
+    }
+
+    return ids;
+  } catch (error) {
+    console.error("Error listing PastelIDs:", error);
+    throw error; // or handle the error as appropriate for your application
+  }
 }
 
 export async function checkForPastelID(): Promise<string | null> {
@@ -504,9 +514,8 @@ const api = {
   createInferenceRequest,
   checkSupernodeList,
   registerPastelID,
-  listPastelIDTickets,
-  findPastelIDTicket,
   getPastelTicket,
+  listPastelIDs,
   listContractTickets,
   findContractTicket,
   getContractTicket,

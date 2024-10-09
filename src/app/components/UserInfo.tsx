@@ -39,8 +39,7 @@ export default function UserInfo() {
 
   const fetchPastelIDs = useCallback(async () => {
     try {
-      const tickets = await api.listPastelIDTickets('mine');
-      const ids = tickets.map(ticket => ticket.ticket.pastelID);
+      const ids = await api.listPastelIDs();
       setPastelIDs(ids);
       if (ids.length > 0) {
         setSelectedPastelID(ids[0]);

@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import * as api from "../lib/api";
+import * as initializeApp from "../lib/initializeApp";
 import { CreditPack, ModelMenu } from "@/app/types";
 import browserLogger from "@/app/lib/logger";
 import { initWasm } from "../lib/wasmLoader";
@@ -63,13 +64,16 @@ const useStore = create<WalletState & WalletActions>()(
       setError: (error) => set({ error }),
 
       initializeWallet: async () => {
+        if (get().isLoading) {
+          return
+        }
         set({ isLoading: true, error: null });
         try {
           const wasmModule = await initWasm();
           if (!wasmModule) {
             throw new Error("Failed to initialize WASM module");
           }
-          await api.initializeApp();
+          await initializeApp.initializeApp();
           const networkInfo = await api.getNetworkInfo();
           set({
             networkMode: networkInfo.network as "Mainnet" | "Testnet" | "Devnet",

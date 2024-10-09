@@ -5,7 +5,6 @@ import BrowserRPCReplacement from './BrowserRPCReplacement';
 let rpc: BrowserRPCReplacement | null = null;
 
 export async function initializeApp() {
-  await initWasm();
   rpc = new BrowserRPCReplacement();
   await rpc.initialize();
   return rpc;

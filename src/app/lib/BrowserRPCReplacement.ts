@@ -1,6 +1,6 @@
 // src/app/lib/BrowserRPCReplacement.ts
 
-import { initWasm } from './wasmLoader';
+import { useWasm } from './wasmLoader';
 import { PastelInstance, NetworkMode, SupernodeInfo, WalletInfo, PastelIDTicket, TransactionDetail, BlockInfo, MempoolInfo, BlockchainInfo, TxOutSetInfo, ChainTip, BlockHeader, TxOutInfo, MemoryInfo, BlockSubsidy, BlockTemplate, MiningInfo, NetworkSolPs, NodeInfo, PeerInfo, DecodedRawTransaction, DecodedScript, ValidatedAddress, PastelIDInfo } from "@/app/types";
 import { getNetworkFromLocalStorage, setNetworkInLocalStorage } from "@/app/lib/storage";
 
@@ -17,7 +17,7 @@ class BrowserRPCReplacement {
 
   async initialize(): Promise<void> {
     if (!this.isInitialized) {
-      const wasmModule = await initWasm();
+      const wasmModule = await useWasm();
       if (!wasmModule) {
         throw new Error("WASM module not loaded");
       }

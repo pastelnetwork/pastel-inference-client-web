@@ -19,12 +19,12 @@ import browserLogger from "./lib/logger";
 const DynamicTerminal = dynamic(() => import('./components/Terminal'), { ssr: false });
 
 export default function Home() {
-  const { 
-    initializeWallet, 
-    isLoading, 
-    error, 
-    pastelId, 
-    modelMenu, 
+  const {
+    initializeWallet,
+    isLoading,
+    error,
+    pastelId,
+    modelMenu,
     fetchModelMenu,
     isInitialized,
     setError
@@ -60,7 +60,7 @@ export default function Home() {
     fetchData();
   }, [isInitialized, pastelId, fetchModelMenu, setError]);
 
-  if (isLoading) {
+  if (isLoading || !isInitialized) {
     return <div className="flex justify-center items-center h-screen">Initializing application...</div>;
   }
 

@@ -27,7 +27,7 @@ export default function RootLayout({
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/default.min.css" />
       </head>
-      <body className={montserrat.className}>
+      <body className={montserrat.className} suppressHydrationWarning={true}>
         {children}
         <Script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js" strategy="beforeInteractive" />
         <Script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js" strategy="beforeInteractive" />

@@ -26,20 +26,13 @@ import {
   ValidatedAddress,
   PastelIDInfo,
   PastelIDType,
+  EmscriptenModule
 } from "@/app/types";
 import {
   getNetworkFromLocalStorage,
   setNetworkInLocalStorage,
 } from "@/app/lib/storage";
-
-declare const Module: {
-  onRuntimeInitialized?: () => void;
-  calledRun?: boolean;
-  FS?: {
-    mkdir: (path: string) => void;
-    writeFile: (path: string, data: Uint8Array) => void;
-  };
-};
+declare const Module: EmscriptenModule;
 
 class BrowserRPCReplacement {
   private static instance: BrowserRPCReplacement | null = null;
@@ -167,6 +160,7 @@ class BrowserRPCReplacement {
   ): Promise<{ success: boolean; message: string }> {
     this.ensureInitialized();
     let tempFilePath: string | null = null;
+    let contentLength = 0;
     try {
       if (!this.pastelInstance) {
         throw new Error("Pastel instance not initialized");
@@ -189,8 +183,9 @@ class BrowserRPCReplacement {
   
       // Decode the base64 encoded secure container
       const binaryString = atob(fileContent);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
+      contentLength = binaryString.length;
+      const bytes = new Uint8Array(contentLength);
+      for (let i = 0; i < contentLength; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
   
@@ -211,6 +206,19 @@ class BrowserRPCReplacement {
   
       // Write the decoded binary data to the Emscripten FS
       FS.writeFile(tempFilePath, bytes);
+  
+      // Sync the file system
+      await new Promise<void>((resolve, reject) => {
+        FS.syncfs(false, (err: Error | null) => {
+          if (err) {
+            console.error('Error syncing file system:', err);
+            reject(err);
+          } else {
+            console.log('File system synced successfully.');
+            resolve();
+          }
+        });
+      });
   
       // Import the PastelID keys
       const passPhrase = ""; // Empty passphrase as per the original secure container
@@ -253,10 +261,23 @@ class BrowserRPCReplacement {
         try {
           const FS = Module.FS;
           if (FS) {
-            // Assuming a reasonable maximum file size (e.g., 100kb)
-            const maxSize = 1024 * 100;
-            const zeroBuffer = new Uint8Array(maxSize);
+            const zeroBuffer = new Uint8Array(contentLength);
             FS.writeFile(tempFilePath, zeroBuffer);
+            
+            // Sync the file system after cleanup
+            await new Promise<void>((resolve) => {
+              FS.syncfs(false, (err: Error | null) => {
+                if (err) {
+                  console.error('Error syncing file system during cleanup:', err);
+                } else {
+                  console.log('File system synced successfully during cleanup.');
+                }
+                resolve();
+              });
+            });
+  
+            // Delete the temporary file
+            FS.unlink(tempFilePath);
           }
         } catch (error) {
           console.error("Error cleaning up temporary file:", error);

@@ -2,6 +2,21 @@
 
 //WASM library related types:
 
+// First, let's define an improved interface for the FS object
+export interface EmscriptenFS {
+  mkdir: (path: string) => void;
+  writeFile: (path: string, data: Uint8Array) => void;
+  unlink: (path: string) => void;
+  syncfs: (populate: boolean, callback: (err: Error | null) => void) => void;
+}
+
+// Update the Module interface to include the FS property
+export interface EmscriptenModule {
+  FS: EmscriptenFS;
+  calledRun: boolean;
+  onRuntimeInitialized: () => void;
+}
+
 export enum NetworkMode {
   Mainnet,
   Testnet,

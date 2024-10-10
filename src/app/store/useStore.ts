@@ -4,18 +4,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import api from "../lib/api";
 import * as initializeApp from "../lib/initializeApp";
-import { CreditPack, ModelMenu, InferenceRequestParams, InferenceResult, CreditPackCreationResult, CreditPackTicketInfo, UserMessage, PastelIDType, SupernodeInfo } from "@/app/types";
+import { CreditPack, ModelMenu, InferenceRequestParams, InferenceResult, CreditPackCreationResult, CreditPackTicketInfo, UserMessage, PastelIDType, SupernodeInfo, EmscriptenModule } from "@/app/types";
 import browserLogger from "@/app/lib/logger";
 import { initWasm } from "../lib/wasmLoader";
-
-declare const Module: {
-  onRuntimeInitialized?: () => void;
-  calledRun?: boolean;
-  FS?: {
-    mkdir: (path: string) => void;
-    writeFile: (path: string, data: Uint8Array) => void;
-  };
-};
+declare const Module: EmscriptenModule;
 
 interface WalletState {
   isLocked: boolean;

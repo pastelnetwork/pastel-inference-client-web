@@ -19,6 +19,8 @@ interface WalletState {
   isLoading: boolean;
   error: string | null;
   isInitialized: boolean;
+  promoGeneratorMessage: string | null;
+  isGeneratingPromotionalPacks: boolean;
 }
 
 interface WalletActions {
@@ -37,6 +39,8 @@ interface WalletActions {
   createNewAddress: () => Promise<void>;
   refreshWalletData: () => Promise<void>;
   fetchModelMenu: () => Promise<void>;
+  setPromoGeneratorMessage: (message: string | null) => void;
+  setGeneratingPromotionalPacks: (status: boolean) => void;
 }
 
 const useStore = create<WalletState & WalletActions>()(
@@ -52,6 +56,8 @@ const useStore = create<WalletState & WalletActions>()(
       isLoading: false,
       error: null,
       isInitialized: false,
+      promoGeneratorMessage: '',
+      isGeneratingPromotionalPacks: false,
 
       setLocked: (isLocked) => set({ isLocked }),
       setNetworkMode: (mode) => set({ networkMode: mode }),
@@ -62,6 +68,8 @@ const useStore = create<WalletState & WalletActions>()(
       setModelMenu: (menu) => set({ modelMenu: menu }),
       setLoading: (isLoading) => set({ isLoading }),
       setError: (error) => set({ error }),
+      setPromoGeneratorMessage: (promoGeneratorMessage) => set({ promoGeneratorMessage }),
+      setGeneratingPromotionalPacks: (isGeneratingPromotionalPacks) => set({ isGeneratingPromotionalPacks }),
 
       initializeWallet: async () => {
         if (get().isLoading) {

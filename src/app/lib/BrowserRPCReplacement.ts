@@ -148,14 +148,14 @@ class BrowserRPCReplacement {
       if (!this.pastelInstance) {
         throw new Error("Pastel instance not initialized");
       }
-  
+
       // Decode the base64 encoded binary data
       const binaryString = atob(fileContent);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-  
+
       // Ensure the directory exists in the Emscripten FS
       const dirPath = '/wallet_data';
       try {
@@ -167,7 +167,7 @@ class BrowserRPCReplacement {
       // Generate a unique filename for the PastelID
       const pastelID = `pastelid_${Date.now()}.key`;
       const filePath = `${dirPath}/${pastelID}`;
-  
+
       // Write the decoded binary data to the Emscripten FS
       (this.pastelInstance as unknown as { FS: { writeFile: (path: string, data: Uint8Array) => void } }).FS.writeFile(filePath, bytes);
       (this.pastelInstance as unknown as { FS: { syncfs: (sync: boolean) => void } }).FS.syncfs(false);
@@ -581,7 +581,7 @@ class BrowserRPCReplacement {
       "importPrivKey called in browser context. This operation may expose sensitive information."
     );
     return this.executeWasmMethod<string>(() =>
-      this.pastelInstance!.ImportPrivKey(privKey, label, rescan)
+      this.pastelInstance!.ImportLegacyPrivateKey(privKey, label)
     );
   }
 

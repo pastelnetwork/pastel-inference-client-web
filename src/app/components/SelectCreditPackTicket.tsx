@@ -240,8 +240,8 @@ export default function SelectCreditPackTicket() {
         >
           Manually Refresh Credit Pack Tickets
           {isLoading && (
-            <span className="loader absolute inset-0 flex items-center justify-center">
-              <div className="btn is-loading"></div>
+            <span className="loader flex items-center justify-center h-auto">
+              <div className="btn is-loading p-0"></div>
             </span>
           )}
         </button>

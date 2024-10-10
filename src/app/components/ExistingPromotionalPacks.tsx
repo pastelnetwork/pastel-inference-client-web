@@ -2,15 +2,28 @@
 
 'use client'
 
+import { useState } from 'react';
 import { Button, Select } from "antd";
 
+import useStore from '../store/useStore';
+
 export default function ExistingPromotionalPacks() {
-  const handleExistingPacksChange = () => {
+  const { setPromoGeneratorMessage } = useStore();
+  const [selectedExistingPacks, setSelectedExistingPacks] = useState('');
 
+  const handleExistingPacksChange = (value: string) => {
+    setSelectedExistingPacks(value);
   }
+
   const downloadExistingPack = () => {
-
+    if (!selectedExistingPacks) {
+      setPromoGeneratorMessage('Please select a pack to download.');
+      return;
+    }
+    setPromoGeneratorMessage('');
+    console.log(selectedExistingPacks)
   }
+
   const downloadAllPromoPacks = () => {
 
   }

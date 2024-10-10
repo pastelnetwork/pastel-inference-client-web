@@ -175,7 +175,7 @@ class BrowserRPCReplacement {
         }
       });
   
-      // Access FS through the WASM module
+      // Access FS directly from Module
       const FS = Module.FS;
       if (!FS) {
         throw new Error("Emscripten file system is not available");

@@ -21,6 +21,14 @@ export default function UserInfo() {
   const [newPastelIDPassphrase, setNewPastelIDPassphrase] = useState<string>("");
   const [myPslAddress, setMyPslAddress] = useState<string>("");
   const [promotionalPackFile, setPromotionalPackFile] = useState<File | null>(null);
+  const [modalContent, setModalContent] = useState<{
+    title: string;
+    message: string
+  }>({
+    title: '',
+    message: '',
+  });
+  const [shoModalMessage, setShowModalMessage] = useState<boolean>(false);
 
   const fetchWalletInfo = useCallback(async () => {
     try {
@@ -185,13 +193,20 @@ export default function UserInfo() {
       return;
     }
 
+    setShowModalMessage(true);
+    setModalContent({
+      title: 'Importing Promotional Pack',
+      message: 'Processing your promotional pack...'
+    })
     try {
       const fileContent = await promotionalPackFile.text();
       const result = await utils.importPromotionalPack(fileContent);
       if (result.success) {
-        setMessage(result.message);
         browserLogger.info("Import details:", result.processedPacks);
-
+        setModalContent({
+          title: 'Import Successful',
+          message: result.message
+        })
         if (result.processedPacks && result.processedPacks.length > 0) {
           result.processedPacks.forEach((pack: { pub_key: string; passphrase: string }) => {
             localStorage.setItem(pack.pub_key, btoa(pack.passphrase));
@@ -201,7 +216,10 @@ export default function UserInfo() {
           await setSelectedPastelIDAndPassphrase(newPastelID, "", true);
         }
 
-        setMessage("Import completed. Refreshing data...");
+        setModalContent({
+          title: 'Import Successful',
+          message: 'Import completed. Refreshing data...'
+        })
 
         // Refresh the page to update all components
         window.location.reload();
@@ -210,7 +228,10 @@ export default function UserInfo() {
       }
     } catch (error) {
       browserLogger.error("Error importing promotional pack:", error);
-      setMessage(`An error occurred while importing the promotional pack: ${(error as Error).message}`);
+      setModalContent({
+        title: 'Import Failed',
+        message: `An error occurred while importing the promotional pack: ${(error as Error).message}`
+      })
     }
   };
 
@@ -233,11 +254,17 @@ export default function UserInfo() {
   
       if (extraMessage) {
         browserLogger.info(`Additional information: ${extraMessage}`);
-        setMessage(extraMessage);
+        setModalContent({
+          title: 'Import Successful',
+          message: extraMessage
+        })
       }
   
       if (!storedPassphrase && !isNewlyImportedPromoPack) {
-        setMessage("Passphrase required. Please implement a user input for the passphrase.");
+        setModalContent({
+          title: 'Import Successful',
+          message: "Passphrase required. Please implement a user input for the passphrase."
+        })
       } else {
         if (isNewlyImportedPromoPack) {
           browserLogger.info("Using stored passphrase for newly imported promo pack.");
@@ -259,7 +286,10 @@ export default function UserInfo() {
       if ((error as { response?: { status: number } }).response?.status === 401) {
         await setSelectedPastelIDAndPassphrase(selectedPastelID, "Invalid Passphrase. Please try again.");
       } else {
-        setMessage("An error occurred while setting PastelID and passphrase. Please try again.");
+        setModalContent({
+          title: 'Import Failed',
+          message: "An error occurred while setting PastelID and passphrase. Please try again."
+        })
       }
     }
   };
@@ -518,6 +548,32 @@ export default function UserInfo() {
           {message}
         </div>
       )}
+
+      {shoModalMessage ?
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+          <div className="fixed inset-0 bg-transparent z-20 w-full h-full" onClick={() => setShowModalMessage(false)}></div>
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white z-50">
+            <div className="mt-3 text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                <svg className="h-6 w-6 text-green-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path className="opacity-75" fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                  </path>
+                </svg>
+              </div>
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mt-5" id="modalTitle">
+              {modalContent.title}
+              </h3>
+              <div className="mt-2 px-7 py-3">
+                <p className="text-sm text-gray-500" id="modalMessage">
+                  {modalContent.message}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div> : null
+      }
     </div>
   );
 }

@@ -62,6 +62,7 @@ export interface PastelInstance {
   // Key management
   DumpPrivKey: (tAddr: string) => string;
   ImportPrivKey: (privKey: string, label: string, rescan: boolean) => string;
+  ImportLegacyPrivateKey: (privKey: string, label: string) => string;
 
   // Other utilities
   RegisterPastelID: (pastelid: string, passphrase: string, address: string) => string;

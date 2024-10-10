@@ -32,6 +32,15 @@ import {
   setNetworkInLocalStorage,
 } from "@/app/lib/storage";
 
+declare const Module: {
+  onRuntimeInitialized?: () => void;
+  calledRun?: boolean;
+  FS?: {
+    mkdir: (path: string) => void;
+    writeFile: (path: string, data: Uint8Array) => void;
+  };
+};
+
 class BrowserRPCReplacement {
   private static instance: BrowserRPCReplacement | null = null;
 
@@ -157,63 +166,74 @@ class BrowserRPCReplacement {
     network: string
   ): Promise<{ success: boolean; message: string }> {
     this.ensureInitialized();
+    let tempFilePath: string | null = null;
     try {
       if (!this.pastelInstance) {
         throw new Error("Pastel instance not initialized");
       }
-
-      // Decode the base64 encoded binary data
+  
+      // Wait for the WASM module to be fully initialized
+      await new Promise<void>((resolve) => {
+        if (Module.calledRun) {
+          resolve();
+        } else {
+          Module.onRuntimeInitialized = resolve;
+        }
+      });
+  
+      // Access FS through the WASM module
+      const FS = Module.FS;
+      if (!FS) {
+        throw new Error("Emscripten file system is not available");
+      }
+  
+      // Decode the base64 encoded secure container
       const binaryString = atob(fileContent);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-
+  
       // Ensure the directory exists in the Emscripten FS
       const dirPath = "/wallet_data";
       try {
-        (
-          this.pastelInstance as unknown as {
-            FS: { mkdir: (path: string) => void };
-          }
-        ).FS.mkdir(dirPath);
+        FS.mkdir(dirPath);
       } catch (e) {
-        if ((e as { code?: string }).code !== "EEXIST") throw e;
+        if ((e as { code?: string }).code !== "EEXIST") {
+          console.error("Error creating directory:", e);
+          throw e;
+        }
       }
-
+  
       // Generate a unique filename for the PastelID
       const pastelID = `pastelid_${Date.now()}.key`;
-      const filePath = `${dirPath}/${pastelID}`;
-
+      tempFilePath = `${dirPath}/${pastelID}`;
+  
       // Write the decoded binary data to the Emscripten FS
-      (
-        this.pastelInstance as unknown as {
-          FS: { writeFile: (path: string, data: Uint8Array) => void };
-        }
-      ).FS.writeFile(filePath, bytes);
-      (
-        this.pastelInstance as unknown as {
-          FS: { syncfs: (sync: boolean) => void };
-        }
-      ).FS.syncfs(false);
-
+      FS.writeFile(tempFilePath, bytes);
+  
       // Import the PastelID keys
-      const passPhrase = ""; // You might want to get this from the user or generate it
-      const result = await this.pastelInstance.ImportPastelIDKeys(
-        pastelID,
-        passPhrase
-      );
-
+      const passPhrase = ""; // Empty passphrase as per the original secure container
+      let result;
+      try {
+        result = await this.pastelInstance.ImportPastelIDKeys(pastelID, passPhrase, dirPath);
+      } catch (error) {
+        console.error("Error in ImportPastelIDKeys:", error);
+        throw new Error(`ImportPastelIDKeys failed: ${(error as Error).message || 'Unknown error'}`);
+      }
+  
       if (result) {
         // Verify the import by retrieving the PastelID
-        const importedPastelID = await this.pastelInstance.GetPastelID(
-          pastelID,
-          PastelIDType.PastelID
-        );
+        let importedPastelID;
+        try {
+          importedPastelID = await this.pastelInstance.GetPastelID(pastelID, PastelIDType.PastelID);
+        } catch (error) {
+          console.error("Error in GetPastelID:", error);
+          throw new Error(`GetPastelID failed: ${(error as Error).message || 'Unknown error'}`);
+        }
+  
         if (importedPastelID) {
-          console.log(
-            `PastelID ${importedPastelID} imported successfully on network ${network}`
-          );
+          console.log(`PastelID ${importedPastelID} imported successfully on network ${network}`);
           return { success: true, message: "PastelID imported successfully!" };
         } else {
           throw new Error("PastelID import could not be verified");
@@ -227,6 +247,21 @@ class BrowserRPCReplacement {
         success: false,
         message: `Failed to import PastelID: ${(error as Error).message}`,
       };
+    } finally {
+      // Clean up: overwrite the temporary file with zeros if it exists
+      if (tempFilePath) {
+        try {
+          const FS = Module.FS;
+          if (FS) {
+            // Assuming a reasonable maximum file size (e.g., 100kb)
+            const maxSize = 1024 * 100;
+            const zeroBuffer = new Uint8Array(maxSize);
+            FS.writeFile(tempFilePath, zeroBuffer);
+          }
+        } catch (error) {
+          console.error("Error cleaning up temporary file:", error);
+        }
+      }
     }
   }
 

@@ -8,6 +8,15 @@ import { CreditPack, ModelMenu, InferenceRequestParams, InferenceResult, CreditP
 import browserLogger from "@/app/lib/logger";
 import { initWasm } from "../lib/wasmLoader";
 
+declare const Module: {
+  onRuntimeInitialized?: () => void;
+  calledRun?: boolean;
+  FS?: {
+    mkdir: (path: string) => void;
+    writeFile: (path: string, data: Uint8Array) => void;
+  };
+};
+
 interface WalletState {
   isLocked: boolean;
   networkMode: "Mainnet" | "Testnet" | "Devnet";
@@ -117,6 +126,16 @@ const useStore = create<WalletState & WalletActions>()(
           if (!wasmModule) {
             throw new Error("Failed to initialize WASM module");
           }
+          
+          // Wait for the runtime to be fully initialized
+          await new Promise<void>((resolve) => {
+            if (Module.calledRun) {
+              resolve();
+            } else {
+              Module.onRuntimeInitialized = resolve;
+            }
+          });
+      
           await initializeApp.initializeApp();
           const networkInfo = await api.getNetworkInfo();
           set({

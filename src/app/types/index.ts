@@ -30,7 +30,7 @@ export interface PastelInstance {
   MakeNewPastelID: (address: string, passphrase: string, networkMode: NetworkMode, makeFullPair: boolean) => Promise<string>;
   GetPastelIDByIndex: (index: number) => Promise<string>;
   GetPastelIDsCount: () => Promise<number>;
-  ImportPastelIDKeys: (pastelID: string, privateKey: string) => Promise<boolean>;
+  ImportPastelIDKeys: (pastelID: string, passPhrase: string, dirPath: string) => Promise<boolean>;
   GetPastelID: (pastelID: string, type: PastelIDType) => Promise<string>;
   GetPastelIDTicketSignature: (pastelID: string, data: string, type: PastelIDType, networkMode: NetworkMode) => Promise<string>;
   GetPastelECDSAKeyPair: (pastelID: string, networkMode: NetworkMode) => Promise<{ publicKey: string; privateKey: string }>;
@@ -44,7 +44,7 @@ export interface PastelInstance {
     blockHeight: number,
     fee: number
   ) => Promise<string>;
-  
+
   CreateRegisterPastelIdTransaction: (
     networkMode: NetworkMode,
     pastelID: string,

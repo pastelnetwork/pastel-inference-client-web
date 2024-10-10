@@ -22,6 +22,7 @@ import {
   UserMessage,
   WalletInfo,
   SendToAddressResult,
+  PastelIDType,
 } from "@/app/types";
 
 let network: string = "Mainnet"; // Default value
@@ -165,9 +166,8 @@ export async function checkSupernodeList(): Promise<{ validMasternodeListFullDF:
 
 export async function registerPastelID(pastelid: string, passphrase: string, address: string): Promise<string> {
   const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.registerPastelID(pastelid, passphrase, address);
+  return await rpc.createRegisterPastelIdTransaction(pastelid, address, passphrase, 0);
 }
-
 
 export async function getPastelTicket(txid: string, decodeProperties: boolean = true): Promise<unknown> {
   const rpc = BrowserRPCReplacement.getInstance();
@@ -189,14 +189,9 @@ export async function getContractTicket(txid: string, decodeProperties: boolean 
   return await rpc.getContractTicket(txid, decodeProperties);
 }
 
-export async function importPrivKey(zcashPrivKey: string, label: string = "", rescan: boolean = true): Promise<string> {
+export async function importPrivKey(zcashPrivKey: string): Promise<string> {
   const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.importPrivKey(zcashPrivKey, label, rescan);
-}
-
-export async function importWallet(serializedWallet: string): Promise<string> {
-  const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.importWallet(serializedWallet);
+  return await rpc.importPrivKey(zcashPrivKey);
 }
 
 export async function listAddressAmounts(includeEmpty: boolean = false): Promise<{ [address: string]: number }> {
@@ -240,7 +235,7 @@ export async function listPastelIDs(): Promise<string[]> {
     return ids;
   } catch (error) {
     console.error("Error listing PastelIDs:", error);
-    throw error; // or handle the error as appropriate for your application
+    throw error;
   }
 }
 
@@ -256,7 +251,10 @@ export async function isCreditPackConfirmed(txid: string): Promise<boolean> {
 
 export async function createAndRegisterPastelID(): Promise<{ pastelID: string; txid: string }> {
   const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.createAndRegisterPastelID();
+  const passphrase = ""; // You might want to get this from the user
+  const fee = 0; // You might want to calculate this or get it from somewhere
+  const result = await rpc.createAndRegisterNewPastelID(passphrase, fee);
+  return { pastelID: result.PastelID, txid: result.PastelIDRegistrationTXID };
 }
 
 export async function isPastelIDRegistered(pastelID: string): Promise<boolean> {
@@ -294,11 +292,12 @@ export function safeString(value: unknown): string {
   return String(value);
 }
 
-export async function verifyPastelID(pastelID: string, passphrase: string): Promise<boolean> {
+export async function verifyPastelID(pastelID: string): Promise<boolean> {
   const testMessage = "Verification test message";
   const rpc = BrowserRPCReplacement.getInstance();
-  const signature = await rpc.signMessageWithPastelID(safeString(pastelID), testMessage, safeString(passphrase));
-  return (await rpc.verifyMessageWithPastelID(safeString(pastelID), testMessage, signature)) === "OK";
+  const { network } = await getNetworkInfo();
+  const signature = await rpc.signMessageWithPastelID(safeString(pastelID), testMessage, network);
+  return await rpc.verifyMessageWithPastelID(safeString(pastelID), testMessage, signature);
 }
 
 export async function verifyTrackingAddress(address: string): Promise<boolean> {
@@ -345,28 +344,24 @@ export async function createWalletFromMnemonic(password: string, mnemonic: strin
   return await rpc.createWalletFromMnemonic(password, mnemonic);
 }
 
-export async function loadWallet(serializedWallet: string, password: string): Promise<boolean> {
-  const rpc = BrowserRPCReplacement.getInstance();
-  await rpc.importWallet(serializedWallet);
-  if (password) {
-    await rpc.unlockWallet(password);
+export async function loadWalletFromDatFile(walletData: ArrayBuffer): Promise<boolean> {
+  try {
+    const rpc = BrowserRPCReplacement.getInstance();
+    return await rpc.loadWalletFromDatFile(walletData);
+  } catch (error) {
+    console.error("Error loading wallet from .dat file:", error);
+    return false;
   }
-  return true;
 }
 
-export async function downloadWallet(filename: string = "pastel_wallet.dat"): Promise<boolean> {
-  const rpc = BrowserRPCReplacement.getInstance();
-  const content = await rpc.exportWallet();
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.style.display = "none";
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  window.URL.revokeObjectURL(url);
-  return true;
+export async function downloadWalletToDatFile(filename: string = "pastel_wallet.dat"): Promise<boolean> {
+  try {
+    const rpc = BrowserRPCReplacement.getInstance();
+    return await rpc.downloadWalletToDatFile(filename);
+  } catch (error) {
+    console.error("Error downloading wallet:", error);
+    return false;
+  }
 }
 
 export async function selectAndReadWalletFile(): Promise<string> {
@@ -428,12 +423,21 @@ export async function getBurnAddress(): Promise<string> {
   }
 }
 
-export async function signMessageWithPastelID(pastelid: string, messageToSign: string, passphrase: string): Promise<string> {
+export async function signMessageWithPastelID(
+  pastelid: string,
+  messageToSign: string,
+  network: string,
+  type: PastelIDType = PastelIDType.PastelID
+): Promise<string> {
   const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.signMessageWithPastelID(pastelid, messageToSign, passphrase);
+  return await rpc.signMessageWithPastelID(pastelid, messageToSign, network, type);
 }
 
-export async function verifyMessageWithPastelID(pastelid: string, messageToVerify: string, pastelIDSignatureOnMessage: string): Promise<string> {
+export async function verifyMessageWithPastelID(
+  pastelid: string,
+  messageToVerify: string,
+  pastelIDSignatureOnMessage: string
+): Promise<boolean> {
   const rpc = BrowserRPCReplacement.getInstance();
   return await rpc.verifyMessageWithPastelID(pastelid, messageToVerify, pastelIDSignatureOnMessage);
 }
@@ -498,6 +502,7 @@ export async function getBlock(blockHash: string): Promise<unknown> {
   return await rpc.getBlock(blockHash);
 }
 
+
 const api = {
   changeNetwork,
   getNetworkInfo,
@@ -519,7 +524,6 @@ const api = {
   findContractTicket,
   getContractTicket,
   importPrivKey,
-  importWallet,
   listAddressAmounts,
   getBalance,
   getWalletInfo,
@@ -538,8 +542,8 @@ const api = {
   importPastelID,
   checkPSLAddressBalanceAlternative,
   createWalletFromMnemonic,
-  loadWallet,
-  downloadWallet,
+  loadWalletFromDatFile,
+  downloadWalletToDatFile,
   selectAndReadWalletFile,
   waitForPastelIDRegistration,
   waitForCreditPackConfirmation,

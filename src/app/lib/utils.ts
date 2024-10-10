@@ -761,7 +761,7 @@ export async function validatePastelIDSignatureFields(
         messageToVerify,
         signature
       );
-      if (verificationResult !== "OK") {
+      if (verificationResult !== true) {
         validationErrors.push({
           message: `PastelID signature in field ${lastSignatureFieldName} failed verification`,
         });
@@ -1353,11 +1353,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
         `Importing private key for tracking address: ${pack.psl_credit_usage_tracking_address}`
       );
 
-      const importPrivKeyResult = await rpc.importPrivKey(
-        pack.psl_credit_usage_tracking_address_private_key,
-        "Imported from promotional pack",
-        true
-      );
+      const importPrivKeyResult = await rpc.importPrivKey(pack.psl_credit_usage_tracking_address_private_key);
       if (importPrivKeyResult) {
         browserLogger.info(
           `Private key imported successfully for tracking address: ${pack.psl_credit_usage_tracking_address}`
@@ -1384,7 +1380,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
           signature
         );
 
-        if (verificationResult === "OK") {
+        if (verificationResult === true) {
           browserLogger.info(
             `PastelID ${pack.pastel_id_pubkey} verified successfully`
           );

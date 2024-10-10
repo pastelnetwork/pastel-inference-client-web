@@ -1,5 +1,13 @@
 // src/app/types/index.ts
 
+//WASM library related types:
+
+export enum NetworkMode {
+  Mainnet,
+  Testnet,
+  Devnet,
+}
+
 export enum PastelIDType {
   PastelID = "PastelID",
   LegRoast = "LegRoast"
@@ -7,24 +15,25 @@ export enum PastelIDType {
 
 export interface PastelInstance {
   // Wallet management
-  CreateNewWallet: (password: string) => string;
-  ImportWallet: (serializedWallet: string) => string;
-  ExportWallet: () => string;
-  UnlockWallet: (password: string) => string;
-  LockWallet: () => string;
-  GetWalletPubKey: () => string;
+  CreateNewWallet: (password: string) => Promise<string>;
+  GetWalletEncryptedMnemonicAndBirthNumber: () => Promise<{ mnemonic: string; birthNumber: number }>;
+  GetWalletSeed: () => Promise<string>;
+  GetWalletMnemonic: () => Promise<string>;
+  CreateWalletFromMnemonic: (password: string, mnemonic: string) => Promise<string>;
 
   // Address management
-  MakeNewAddress: (networkMode: NetworkMode) => string;
-  GetAddress: (index: number, networkMode: NetworkMode) => string;
-  GetAddressesCount: () => number;
+  MakeNewAddress: (networkMode: NetworkMode) => Promise<string>;
+  GetAddress: (index: number, networkMode: NetworkMode) => Promise<string>;
+  GetAddressesCount: () => Promise<number>;
 
   // PastelID management
-  MakeNewPastelID: (makeFullPair: boolean) => string;
-  GetPastelIDByIndex: (index: number, type: string) => string;
-  GetPastelIDsCount: () => number;
-  ImportPastelIDKeys: (pastelID: string, passPhrase: string, dirPath: string) => boolean;
-  GetPastelID: (pastelID: string, type: PastelIDType) => string;
+  MakeNewPastelID: (address: string, passphrase: string, networkMode: NetworkMode, makeFullPair: boolean) => Promise<string>;
+  GetPastelIDByIndex: (index: number) => Promise<string>;
+  GetPastelIDsCount: () => Promise<number>;
+  ImportPastelIDKeys: (pastelID: string, privateKey: string) => Promise<boolean>;
+  GetPastelID: (pastelID: string, type: PastelIDType) => Promise<string>;
+  GetPastelIDTicketSignature: (pastelID: string, data: string, type: PastelIDType, networkMode: NetworkMode) => Promise<string>;
+  GetPastelECDSAKeyPair: (pastelID: string, networkMode: NetworkMode) => Promise<{ publicKey: string; privateKey: string }>;
 
   // Transaction management
   CreateSendToTransaction: (
@@ -34,47 +43,62 @@ export interface PastelInstance {
     utxosJson: string,
     blockHeight: number,
     fee: number
-  ) => string;
+  ) => Promise<string>;
+  
   CreateRegisterPastelIdTransaction: (
     networkMode: NetworkMode,
     pastelID: string,
-    fundingAddress: string,
+    pqKey: string,
+    address: string,
+    passphrase: string,
     utxosJson: string,
-    blockHeight: number,
-    fee: number
-  ) => string;
+    fee: number,
+    blockHeight: number
+  ) => Promise<string>;
 
   // Signing and verification
-  SignWithWalletKey: (message: string) => string;
+  SignWithWalletKey: (message: string) => Promise<string>;
   VerifyWithPastelID: (
     pastelid: string,
     messageToVerify: string,
     pastelIDSignatureOnMessage: string,
-    network: string
-  ) => string;
+    networkMode: NetworkMode
+  ) => Promise<boolean>;
   SignWithPastelID: (
     pastelid: string,
     messageToSign: string,
-    type: string,
-    network: string
-  ) => string;
+    type: PastelIDType,
+    networkMode: NetworkMode
+  ) => Promise<string>;
 
   // Key management
-  DumpPrivKey: (tAddr: string) => string;
-  ImportPrivKey: (privKey: string, label: string, rescan: boolean) => string;
-  ImportLegacyPrivateKey: (privKey: string, label: string) => string;
+  GetAddressSecret: (address: string, networkMode: NetworkMode) => Promise<string>;
+  ImportLegacyPrivateKey: (privKey: string, networkMode: NetworkMode) => Promise<string>;
 
-  // Other utilities
-  RegisterPastelID: (pastelid: string, passphrase: string, address: string) => string;
-  CreateWalletFromMnemonic: (password: string, mnemonic: string) => string;
+  // Ticket management
+  GetTicketTypes: () => Promise<string[]>;
+  GetPastelIDTicketType: (pastelID: string) => Promise<string>;
+  GetPastelIDTicketJson: (pastelID: string) => Promise<string>;
+  CreatePastelIDTicket: (
+    pastelID: string,
+    type: string,
+    ticketDataJson: string,
+    networkMode: NetworkMode
+  ) => Promise<string>;
+  GetPastelIDTicketsCount: () => Promise<number>;
+  GetPastelIDTicketByIndex: (index: number) => Promise<string>;
+
+  // Network and blockchain utilities
+  GetNetworkFee: () => Promise<number>;
+  GetBlockCount: () => Promise<number>;
+  GetTransaction: (txid: string) => Promise<string>;
+  GetBlockHash: (height: number) => Promise<string>;
+  GetRawMempool: () => Promise<string[]>;
+  GetBalance: (address: string) => Promise<number>;
+  GetAddressUTXOs: (address: string) => Promise<string>;
 }
 
-// Ensure this enum is also defined in your types file
-export enum NetworkMode {
-  Mainnet,
-  Testnet,
-  Devnet,
-}
+// Misc other types:
 
 export interface LogEntry {
   level: string;

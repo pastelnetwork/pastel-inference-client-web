@@ -40,10 +40,14 @@ export default function WalletManagement() {
     }
     setIsLoading(true);
     try {
-      const fileContent = await walletFile.text();
-      await api.importWallet(fileContent);
-      alert("Wallet imported successfully!");
-      setWalletFile(null);
+      const arrayBuffer = await walletFile.arrayBuffer();
+      const success = await api.loadWalletFromDatFile(arrayBuffer);
+      if (success) {
+        alert("Wallet imported successfully!");
+        setWalletFile(null);
+      } else {
+        throw new Error("Failed to import wallet");
+      }
     } catch (error) {
       console.error("Error importing wallet:", error);
       alert("Failed to import wallet. Please try again.");
@@ -51,7 +55,7 @@ export default function WalletManagement() {
       setIsLoading(false);
     }
   };
-
+  
   const listAddressAmounts = async () => {
     setIsLoading(true);
     try {

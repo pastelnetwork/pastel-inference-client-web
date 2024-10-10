@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import api from "../lib/api";
 import * as initializeApp from "../lib/initializeApp";
-import { CreditPack, ModelMenu } from "@/app/types";
+import { CreditPack, ModelMenu, InferenceRequestParams, InferenceResult, CreditPackCreationResult, CreditPackTicketInfo, UserMessage, PastelIDType, SupernodeInfo } from "@/app/types";
 import browserLogger from "@/app/lib/logger";
 import { initWasm } from "../lib/wasmLoader";
 
@@ -33,14 +33,52 @@ interface WalletActions {
   setModelMenu: (menu: ModelMenu | null) => void;
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
+  setPromoGeneratorMessage: (message: string | null) => void;
+  setGeneratingPromotionalPacks: (status: boolean) => void;
   initializeWallet: () => Promise<void>;
   lockWallet: () => Promise<void>;
-  unlockWallet: (password: string) => Promise<void>;
   createNewAddress: () => Promise<void>;
   refreshWalletData: () => Promise<void>;
   fetchModelMenu: () => Promise<void>;
-  setPromoGeneratorMessage: (message: string | null) => void;
-  setGeneratingPromotionalPacks: (status: boolean) => void;
+  changeNetwork: (newNetwork: string) => Promise<{ success: boolean; message: string }>;
+  getNetworkInfo: () => Promise<{ network: string }>;
+  getBestSupernodeUrl: (userPastelID: string) => Promise<string>;
+  getInferenceModelMenu: () => Promise<ModelMenu>;
+  estimateCreditPackCost: (desiredNumberOfCredits: number, creditPriceCushionPercentage: number) => Promise<number>;
+  sendMessage: (toPastelID: string, messageBody: string) => Promise<{ sent_messages: UserMessage[]; received_messages: UserMessage[] }>;
+  getReceivedMessages: () => Promise<UserMessage[]>;
+  createCreditPackTicket: (numCredits: number, creditUsageTrackingPSLAddress: string, maxTotalPrice: number, maxPerCreditPrice: number) => Promise<CreditPackCreationResult>;
+  getCreditPackInfo: (txid: string) => Promise<CreditPackTicketInfo>;
+  getMyValidCreditPacks: () => Promise<CreditPack[]>;
+  getMyPslAddressWithLargestBalance: () => Promise<string>;
+  createInferenceRequest: (params: InferenceRequestParams) => Promise<InferenceResult | null>;
+  checkSupernodeList: () => Promise<{ validMasternodeListFullDF: SupernodeInfo[] }>;
+  registerPastelID: (pastelid: string, passphrase: string, address: string) => Promise<string>;
+  listPastelIDs: () => Promise<string[]>;
+  checkForPastelID: () => Promise<string | null>;
+  isCreditPackConfirmed: (txid: string) => Promise<boolean>;
+  createAndRegisterPastelID: () => Promise<{ pastelID: string; txid: string }>;
+  isPastelIDRegistered: (pastelID: string) => Promise<boolean>;
+  setPastelIdAndPassphrase: (pastelID: string, passphrase: string) => Promise<void>;
+  ensureMinimalPSLBalance: (addresses: string[] | null) => Promise<void>;
+  checkPastelIDValidity: (pastelID: string) => Promise<boolean>;
+  verifyPastelID: (pastelID: string) => Promise<boolean>;
+  verifyTrackingAddress: (address: string) => Promise<boolean>;
+  checkTrackingAddressBalance: (creditPackTicketId: string) => Promise<{ address: string; balance: number }>;
+  importPastelID: (fileContent: string, network: string) => Promise<{ success: boolean; message: string }>;
+  createWalletFromMnemonic: (password: string, mnemonic: string) => Promise<string>;
+  loadWalletFromDatFile: (walletData: ArrayBuffer) => Promise<boolean>;
+  downloadWalletToDatFile: (filename?: string) => Promise<boolean>;
+  selectAndReadWalletFile: () => Promise<string>;
+  waitForPastelIDRegistration: (pastelID: string) => Promise<boolean>;
+  waitForCreditPackConfirmation: (txid: string) => Promise<boolean>;
+  getBurnAddress: () => Promise<string>;
+  signMessageWithPastelID: (pastelid: string, messageToSign: string, network: string, type?: PastelIDType) => Promise<string>;
+  verifyMessageWithPastelID: (pastelid: string, messageToVerify: string, pastelIDSignatureOnMessage: string) => Promise<boolean>;
+  getCurrentPastelBlockHeight: () => Promise<number>;
+  getBestBlockHashAndMerkleRoot: () => Promise<[string, string, number]>;
+  sendToAddress: (address: string, amount: number) => Promise<string>;
+  sendMany: (amounts: { address: string; amount: number }[]) => Promise<string>;
 }
 
 const useStore = create<WalletState & WalletActions>()(
@@ -72,9 +110,7 @@ const useStore = create<WalletState & WalletActions>()(
       setGeneratingPromotionalPacks: (isGeneratingPromotionalPacks) => set({ isGeneratingPromotionalPacks }),
 
       initializeWallet: async () => {
-        if (get().isLoading) {
-          return
-        }
+        if (get().isLoading) return;
         set({ isLoading: true, error: null });
         try {
           const wasmModule = await initWasm();
@@ -99,30 +135,11 @@ const useStore = create<WalletState & WalletActions>()(
       lockWallet: async () => {
         set({ isLoading: true, error: null });
         try {
-          // Since there's no lockWallet function in the API, we'll just set the isLocked state
           set({ isLocked: true });
           browserLogger.info("Wallet locked");
         } catch (error) {
           browserLogger.error("Failed to lock wallet:", error);
           set({ error: `Failed to lock wallet: ${(error as Error).message}` });
-        } finally {
-          set({ isLoading: false });
-        }
-      },
-
-      unlockWallet: async (password: string) => {
-        set({ isLoading: true, error: null });
-        try {
-          // Since there's no unlockWallet function in the API, we'll use loadWallet
-          await api.loadWallet("", password);
-          set({ isLocked: false });
-          await get().refreshWalletData();
-        } catch (error) {
-          browserLogger.error("Failed to unlock wallet:", error);
-          set({
-            error: `Failed to unlock wallet: ${(error as Error).message}`,
-          });
-          throw error;
         } finally {
           set({ isLoading: false });
         }
@@ -137,21 +154,14 @@ const useStore = create<WalletState & WalletActions>()(
           const newAddressResult = await api.createAndFundNewAddress(0);
           if (newAddressResult.newCreditTrackingAddress) {
             set((state) => ({
-              addresses: [
-                ...state.addresses,
-                newAddressResult.newCreditTrackingAddress!,
-              ],
+              addresses: [...state.addresses, newAddressResult.newCreditTrackingAddress!],
             }));
           } else {
-            throw new Error(
-              "Failed to create new address: Address is undefined"
-            );
+            throw new Error("Failed to create new address: Address is undefined");
           }
         } catch (error) {
           browserLogger.error("Failed to create new address:", error);
-          set({
-            error: `Failed to create new address: ${(error as Error).message}`,
-          });
+          set({ error: `Failed to create new address: ${(error as Error).message}` });
         } finally {
           set({ isLoading: false });
         }
@@ -178,9 +188,7 @@ const useStore = create<WalletState & WalletActions>()(
           });
         } catch (error) {
           browserLogger.error("Failed to refresh wallet data:", error);
-          set({
-            error: `Failed to refresh wallet data: ${(error as Error).message}`,
-          });
+          set({ error: `Failed to refresh wallet data: ${(error as Error).message}` });
         } finally {
           set({ isLoading: false });
         }
@@ -193,13 +201,51 @@ const useStore = create<WalletState & WalletActions>()(
           set({ modelMenu: menu });
         } catch (error) {
           browserLogger.error("Failed to fetch model menu:", error);
-          set({
-            error: `Failed to fetch model menu: ${(error as Error).message}`,
-          });
+          set({ error: `Failed to fetch model menu: ${(error as Error).message}` });
         } finally {
           set({ isLoading: false });
         }
       },
+
+      changeNetwork: api.changeNetwork,
+      getNetworkInfo: api.getNetworkInfo,
+      getBestSupernodeUrl: api.getBestSupernodeUrl,
+      getInferenceModelMenu: api.getInferenceModelMenu,
+      estimateCreditPackCost: api.estimateCreditPackCost,
+      sendMessage: api.sendMessage,
+      getReceivedMessages: api.getReceivedMessages,
+      createCreditPackTicket: api.createCreditPackTicket,
+      getCreditPackInfo: api.getCreditPackInfo,
+      getMyValidCreditPacks: api.getMyValidCreditPacks,
+      getMyPslAddressWithLargestBalance: api.getMyPslAddressWithLargestBalance,
+      createInferenceRequest: api.createInferenceRequest,
+      checkSupernodeList: api.checkSupernodeList,
+      registerPastelID: api.registerPastelID,
+      listPastelIDs: api.listPastelIDs,
+      checkForPastelID: api.checkForPastelID,
+      isCreditPackConfirmed: api.isCreditPackConfirmed,
+      createAndRegisterPastelID: api.createAndRegisterPastelID,
+      isPastelIDRegistered: api.isPastelIDRegistered,
+      setPastelIdAndPassphrase: api.setPastelIdAndPassphrase,
+      ensureMinimalPSLBalance: api.ensureMinimalPSLBalance,
+      checkPastelIDValidity: api.checkPastelIDValidity,
+      verifyPastelID: api.verifyPastelID,
+      verifyTrackingAddress: api.verifyTrackingAddress,
+      checkTrackingAddressBalance: api.checkTrackingAddressBalance,
+      importPastelID: api.importPastelID,
+      createWalletFromMnemonic: api.createWalletFromMnemonic,
+      loadWalletFromDatFile: api.loadWalletFromDatFile,
+      downloadWalletToDatFile: api.downloadWalletToDatFile,
+      selectAndReadWalletFile: api.selectAndReadWalletFile,
+      waitForPastelIDRegistration: api.waitForPastelIDRegistration,
+      waitForCreditPackConfirmation: api.waitForCreditPackConfirmation,
+      getBurnAddress: api.getBurnAddress,
+      signMessageWithPastelID: api.signMessageWithPastelID,
+      verifyMessageWithPastelID: api.verifyMessageWithPastelID,
+      getCurrentPastelBlockHeight: api.getCurrentPastelBlockHeight,
+      getBestBlockHashAndMerkleRoot: api.getBestBlockHashAndMerkleRoot,
+      sendToAddress: api.sendToAddress,
+      sendMany: api.sendMany,
     }),
     {
       name: "pastel-wallet-storage",

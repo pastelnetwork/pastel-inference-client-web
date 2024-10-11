@@ -78,3 +78,19 @@ export async function initWasm(): Promise<PastelModule | null> {
 export function getWasmModule(): PastelModule | null {
   return wasmModule;
 }
+
+/**
+ * Reads the contents of the '/wallet_data' directory.
+ * @returns An array of file names in the '/wallet_data' directory, or an empty array if not available.
+ */
+export function readWalletDataDirectory(): string[] {
+  if (typeof window !== 'undefined' && window.Module && window.Module.FS) {
+    try {
+      return window.Module.FS.readdir('/wallet_data');
+    } catch (error) {
+      console.error('Error reading /wallet_data directory:', error);
+      return [];
+    }
+  }
+  return [];
+}

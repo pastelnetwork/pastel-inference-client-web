@@ -10,6 +10,7 @@ export interface EmscriptenFS {
   writeFile(path: string, data: Uint8Array): void;
   unlink(path: string): void;
   syncfs(populate: boolean, callback: (err: Error | null) => void): void;
+  readdir(path: string): string[]; 
 }
 
 /**

@@ -1342,7 +1342,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
 
       // 1. Import PastelID
       const network = await storage.getNetworkFromLocalStorage();
-      const importResult = await api.importPastelID(pack.secureContainerBase64, network);
+      const importResult = await api.importPastelID(pack.secureContainerBase64, network, pack.pastel_id_passphrase);
       
       if (importResult.success) {
         browserLogger.info(`PastelID ${pack.pastel_id_pubkey} imported successfully`);

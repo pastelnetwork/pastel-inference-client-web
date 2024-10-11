@@ -336,10 +336,10 @@ export async function checkTrackingAddressBalance(creditPackTicketId: string): P
   return { address: trackingAddress, balance: balance };
 }
 
-export async function importPastelID(fileContent: string, network: string): Promise<{ success: boolean; message: string }> {
+export async function importPastelID(fileContent: string, network: string, passphrase: string): Promise<{ success: boolean; message: string }> {
   try {
     const rpc = BrowserRPCReplacement.getInstance();
-    return await rpc.importPastelIDFromFile(fileContent, network);
+    return await rpc.importPastelIDFromFile(fileContent, network, passphrase);
   } catch (error) {
     console.error("Error importing PastelID:", error);
     return { success: false, message: `Failed to import PastelID: ${(error as Error).message}` };

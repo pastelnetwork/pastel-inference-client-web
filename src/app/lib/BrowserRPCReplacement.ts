@@ -1,6 +1,6 @@
 // src/app/lib/BrowserRPCReplacement.ts
 
-import { initWasm } from "./wasmLoader";
+import { initWasm, readWalletDataDirectory } from "./wasmLoader";
 import {
   PastelInstance,
   NetworkMode,
@@ -945,13 +945,13 @@ class BrowserRPCReplacement {
    * @param network - The network mode (Mainnet, Testnet, Devnet).
    * @returns An object indicating success and a message.
    */
-  public async importPastelIDFromFile(fileContent: string, network: string): Promise<{ success: boolean; message: string }> {
+  public async importPastelIDFromFile(fileContent: string, network: string, passphrase: string): Promise<{ success: boolean; message: string }> {
     this.ensureInitialized();
     let tempFilePath: string | null = null;
     let contentLength = 0;
     try {
       const FS = this.wasmModule!.FS;
-
+  
       // Decode the base64 encoded secure container
       const binaryString = atob(fileContent);
       contentLength = binaryString.length;
@@ -959,7 +959,7 @@ class BrowserRPCReplacement {
       for (let i = 0; i < contentLength; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-
+  
       // Ensure the directory exists in the Emscripten FS
       const dirPath = "/wallet_data";
       try {
@@ -970,14 +970,14 @@ class BrowserRPCReplacement {
           throw e;
         }
       }
-
+  
       // Generate a unique filename for the PastelID
       const pastelID = `pastelid_${Date.now()}.key`;
       tempFilePath = `${dirPath}/${pastelID}`;
-
+  
       // Write the decoded binary data to the Emscripten FS
       FS.writeFile(tempFilePath, bytes);
-
+  
       // Sync the file system
       await new Promise<void>((resolve, reject) => {
         FS.syncfs(false, (err: Error | null) => {
@@ -990,19 +990,22 @@ class BrowserRPCReplacement {
           }
         });
       });
-
+  
+      // Read and log the contents of the /wallet_data directory
+      const walletDataContents = readWalletDataDirectory();
+      console.log('Contents of /wallet_data:', walletDataContents);
+  
       // Import the PastelID keys
-      const passPhrase = ""; // Empty passphrase as per the original secure container
       let result: string;
       try {
         result = await this.executeWasmMethod(() =>
-          this.pastelInstance!.ImportPastelIDKeys(pastelID, passPhrase, dirPath)
+          this.pastelInstance!.ImportPastelIDKeys(pastelID, passphrase, dirPath)
         );
       } catch (error) {
         console.error("Error in ImportPastelIDKeys:", error);
         throw new Error(`ImportPastelIDKeys failed: ${(error as Error).message || "Unknown error"}`);
       }
-
+  
       if (result) {
         // Verify the import by retrieving the PastelID
         let importedPastelID: string;
@@ -1014,7 +1017,7 @@ class BrowserRPCReplacement {
           console.error("Error in GetPastelID:", error);
           throw new Error(`GetPastelID failed: ${(error as Error).message || "Unknown error"}`);
         }
-
+  
         if (importedPastelID) {
           console.log(`PastelID ${importedPastelID} imported successfully on network ${network}`);
           return { success: true, message: "PastelID imported successfully!" };
@@ -1037,7 +1040,7 @@ class BrowserRPCReplacement {
           const FS = this.wasmModule.FS;
           const zeroBuffer = new Uint8Array(contentLength);
           FS.writeFile(tempFilePath, zeroBuffer);
-
+  
           // Sync the file system after cleanup
           await new Promise<void>((resolve) => {
             FS.syncfs(false, (err: Error | null) => {
@@ -1049,7 +1052,7 @@ class BrowserRPCReplacement {
               resolve();
             });
           });
-
+  
           // Delete the temporary file
           FS.unlink(tempFilePath);
         } catch (error) {

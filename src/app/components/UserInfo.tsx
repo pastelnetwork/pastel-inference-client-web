@@ -169,7 +169,7 @@ export default function UserInfo() {
     try {
       const networkInfo = await api.getNetworkInfo();
       const fileContent = await file.text();
-      const result = await api.importPastelID(fileContent, networkInfo.network);
+      const result = await api.importPastelID(fileContent, networkInfo.network, passphrase);
       if (result.success) {
         setMessage("PastelID imported successfully!");
         window.location.reload();

@@ -85,7 +85,7 @@ interface WalletActions {
   verifyPastelID: (pastelID: string) => Promise<boolean>;
   verifyTrackingAddress: (address: string) => Promise<boolean>;
   checkTrackingAddressBalance: (creditPackTicketId: string) => Promise<{ address: string; balance: number }>;
-  importPastelID: (fileContent: string, network: string) => Promise<{ success: boolean; message: string }>;
+  importPastelID: (fileContent: string, network: string, passphrase: string) => Promise<{ success: boolean; message: string }>;
   createWalletFromMnemonic: (password: string, mnemonic: string) => Promise<string>;
   loadWalletFromDatFile: (walletData: ArrayBuffer) => Promise<boolean>;
   downloadWalletToDatFile: (filename?: string) => Promise<boolean>;

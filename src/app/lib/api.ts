@@ -1,7 +1,6 @@
 // src/app/lib/api.ts
 
 import BrowserRPCReplacement from './BrowserRPCReplacement';
-import browserStorage from "./storage";
 import {
   getNetworkFromLocalStorage,
   setNetworkInLocalStorage,
@@ -23,6 +22,7 @@ import {
   WalletInfo,
   SendToAddressResult,
   PastelIDType,
+  NetworkMode
 } from "@/app/types";
 
 let network: string = "Mainnet"; // Default value
@@ -31,7 +31,7 @@ let burnAddress: string = "PtpasteLBurnAddressXXXXXXXXXXbJ5ndd"; // Default Main
 export async function changeNetwork(newNetwork: string): Promise<{ success: boolean; message: string }> {
   const rpc = BrowserRPCReplacement.getInstance();
   if (["Mainnet", "Testnet", "Devnet"].includes(newNetwork)) {
-    await browserStorage.setNetworkInLocalStorage(newNetwork);
+    await setNetworkInLocalStorage(newNetwork);
     const { network: configuredNetwork, burnAddress: configuredBurnAddress } = await configureRPCAndSetBurnAddress();
     network = configuredNetwork;
     burnAddress = configuredBurnAddress;
@@ -164,9 +164,9 @@ export async function checkSupernodeList(): Promise<{ validMasternodeListFullDF:
   return await rpc.checkSupernodeList();
 }
 
-export async function registerPastelID(pastelid: string, passphrase: string, address: string): Promise<string> {
+export async function registerPastelID(pastelid: string, address: string, fee: number = 0): Promise<string> {
   const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.createRegisterPastelIdTransaction(pastelid, address, passphrase, 0);
+  return await rpc.createRegisterPastelIdTransaction(pastelid, address, fee);
 }
 
 export async function getPastelTicket(txid: string, decodeProperties: boolean = true): Promise<unknown> {
@@ -239,6 +239,11 @@ export async function listPastelIDs(): Promise<string[]> {
   }
 }
 
+export async function makeNewAddress(mode: NetworkMode = NetworkMode.Mainnet): Promise<string> {
+  const rpc = BrowserRPCReplacement.getInstance();
+  return await rpc.makeNewAddress(mode);
+}
+
 export async function checkForPastelID(): Promise<string | null> {
   const rpc = BrowserRPCReplacement.getInstance();
   return await rpc.checkForRegisteredPastelID();
@@ -251,10 +256,11 @@ export async function isCreditPackConfirmed(txid: string): Promise<boolean> {
 
 export async function createAndRegisterPastelID(): Promise<{ pastelID: string; txid: string }> {
   const rpc = BrowserRPCReplacement.getInstance();
-  const passphrase = ""; // You might want to get this from the user
+  const pastelID = await rpc.makeNewPastelID(false);
+  const address = await rpc.getMyPslAddressWithLargestBalance();
   const fee = 0; // You might want to calculate this or get it from somewhere
-  const result = await rpc.createAndRegisterNewPastelID(passphrase, fee);
-  return { pastelID: result.PastelID, txid: result.PastelIDRegistrationTXID };
+  const txid = await rpc.createRegisterPastelIdTransaction(pastelID, address, fee);
+  return { pastelID, txid };
 }
 
 export async function isPastelIDRegistered(pastelID: string): Promise<boolean> {
@@ -295,9 +301,16 @@ export function safeString(value: unknown): string {
 export async function verifyPastelID(pastelID: string): Promise<boolean> {
   const testMessage = "Verification test message";
   const rpc = BrowserRPCReplacement.getInstance();
-  const { network } = await getNetworkInfo();
-  const signature = await rpc.signMessageWithPastelID(safeString(pastelID), testMessage, network);
-  return await rpc.verifyMessageWithPastelID(safeString(pastelID), testMessage, signature);
+  const signature = await rpc.signMessageWithPastelID(
+    safeString(pastelID),
+    testMessage,
+    PastelIDType.PastelID
+  );
+  return await rpc.verifyMessageWithPastelID(
+    safeString(pastelID),
+    testMessage,
+    signature
+  );
 }
 
 export async function verifyTrackingAddress(address: string): Promise<boolean> {
@@ -326,7 +339,7 @@ export async function checkTrackingAddressBalance(creditPackTicketId: string): P
 export async function importPastelID(fileContent: string, network: string): Promise<{ success: boolean; message: string }> {
   try {
     const rpc = BrowserRPCReplacement.getInstance();
-    return await rpc.importPastelID(fileContent, network);
+    return await rpc.importPastelIDFromFile(fileContent, network);
   } catch (error) {
     console.error("Error importing PastelID:", error);
     return { success: false, message: `Failed to import PastelID: ${(error as Error).message}` };
@@ -377,6 +390,8 @@ export async function selectAndReadWalletFile(): Promise<string> {
           const content = readerEvent.target?.result as string;
           resolve(content);
         };
+      } else {
+        resolve("");
       }
     };
     input.click();
@@ -426,11 +441,10 @@ export async function getBurnAddress(): Promise<string> {
 export async function signMessageWithPastelID(
   pastelid: string,
   messageToSign: string,
-  network: string,
-  type: PastelIDType = PastelIDType.PastelID
+  type: PastelIDType = PastelIDType.PastelID,
 ): Promise<string> {
   const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.signMessageWithPastelID(pastelid, messageToSign, network, type);
+  return await rpc.signMessageWithPastelID(pastelid, messageToSign, type);
 }
 
 export async function verifyMessageWithPastelID(
@@ -502,7 +516,6 @@ export async function getBlock(blockHash: string): Promise<unknown> {
   return await rpc.getBlock(blockHash);
 }
 
-
 const api = {
   changeNetwork,
   getNetworkInfo,
@@ -560,6 +573,7 @@ const api = {
   importAddress,
   getBlockHash,
   getBlock,
+  makeNewAddress
 };
 
 export default api;

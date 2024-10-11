@@ -26,6 +26,7 @@ import {
   UserMessage,
   CreditPackStorageRetryRequest,
   CreditPackStorageRetryRequestResponse,
+  PastelIDType
 } from "@/app/types";
 
 // Utilize singleton instances
@@ -131,7 +132,7 @@ export async function sendMessageAndCheckForNewIncomingMessages(
       message_signature: await rpc.signMessageWithPastelID(
         pastelID,
         messageBody,
-        passphrase
+        PastelIDType.PastelID
       ),
       timestamp: new Date().toISOString(),
       id: ""
@@ -217,7 +218,7 @@ export async function handleCreditPackTicketEndToEnd(
       await rpc.signMessageWithPastelID(
         pastelID,
         creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields,
-        passphrase
+        PastelIDType.PastelID
       );
 
     const closestSupernodes = await utils.getNClosestSupernodesToPastelIDURLs(
@@ -286,8 +287,7 @@ export async function handleCreditPackTicketEndToEnd(
             creditPackRequest,
             signedCreditPackTicket,
             burnTransactionTxid,
-            pastelID,
-            passphrase
+            pastelID
           );
 
         await db.addData(
@@ -320,8 +320,7 @@ export async function handleCreditPackTicketEndToEnd(
               creditPackRequest,
               signedCreditPackTicket,
               validMasternodeListFullDF,
-              pastelID,
-              passphrase
+              pastelID
             );
 
           return {
@@ -363,7 +362,6 @@ async function buildCreditPackPurchaseRequestConfirmation(
   signedCreditPackTicket: CreditPackPurchaseRequestResponse,
   burnTransactionTxid: string,
   pastelID: string,
-  passphrase: string
 ): Promise<CreditPackPurchaseRequestConfirmation> {
   const confirmation: CreditPackPurchaseRequestConfirmation = {
     sha3_256_hash_of_credit_pack_purchase_request_fields:
@@ -390,7 +388,7 @@ async function buildCreditPackPurchaseRequestConfirmation(
     await rpc.signMessageWithPastelID(
       pastelID,
       confirmation.sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields,
-      passphrase
+      PastelIDType.PastelID
     );
 
   const { success, error } =
@@ -457,7 +455,6 @@ async function initiateStorageRetry(
   signedCreditPackTicket: CreditPackPurchaseRequestResponse,
   validMasternodeListFullDF: SupernodeInfo[],
   pastelID: string,
-  passphrase: string
 ): Promise<CreditPackStorageRetryRequestResponse> {
   const closestAgreeingSupernodePastelID =
     await utils.getClosestSupernodePastelIDFromList(
@@ -476,8 +473,7 @@ async function initiateStorageRetry(
       creditPackRequest,
       signedCreditPackTicket,
       closestAgreeingSupernodePastelID,
-      pastelID,
-      passphrase
+      pastelID
     );
 
   await db.addData(
@@ -537,7 +533,6 @@ async function buildCreditPackStorageRetryRequest(
   signedCreditPackTicket: CreditPackPurchaseRequestResponse,
   closestAgreeingSupernodePastelID: string,
   pastelID: string,
-  passphrase: string
 ): Promise<CreditPackStorageRetryRequest> {
   const storageRetryRequest: CreditPackStorageRetryRequest = {
     sha3_256_hash_of_credit_pack_purchase_request_response_fields:
@@ -563,7 +558,7 @@ async function buildCreditPackStorageRetryRequest(
     await rpc.signMessageWithPastelID(
       pastelID,
       storageRetryRequest.sha3_256_hash_of_credit_pack_storage_retry_request_fields,
-      passphrase
+      PastelIDType.PastelID
     );
 
   const { success, error } =
@@ -843,7 +838,7 @@ export async function handleInferenceRequestEndToEnd(
           await rpc.signMessageWithPastelID(
             pastelID,
             inferenceRequestData.sha3_256_hash_of_inference_request_fields,
-            passphrase
+            PastelIDType.PastelID
           );
 
         const usageRequestResponse =

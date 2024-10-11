@@ -6,6 +6,7 @@ import CryptoJS from "crypto-js";
 import pako from "pako";
 import browserLogger from "@/app/lib/logger";
 import BrowserRPCReplacement from "@/app/lib/BrowserRPCReplacement";
+import api from "@/app/lib/api";
 import * as storage from "@/app/lib/storage";
 import { cacheInstance } from "@/app/lib/cache";
 import {
@@ -18,6 +19,7 @@ import {
   ValidationResult,
   CreditPackPurchaseRequestResponse,
   SupernodeWithDistance,
+  PastelIDType,
 } from "@/app/types";
 
 const rpc = BrowserRPCReplacement.getInstance();
@@ -1340,7 +1342,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
 
       // 1. Import PastelID
       const network = await storage.getNetworkFromLocalStorage();
-      const importResult = await rpc.importPastelID(pack.secureContainerBase64, network);
+      const importResult = await api.importPastelID(pack.secureContainerBase64, network);
       
       if (importResult.success) {
         browserLogger.info(`PastelID ${pack.pastel_id_pubkey} imported successfully`);
@@ -1368,7 +1370,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
         const signature = await rpc.signMessageWithPastelID(
           pack.pastel_id_pubkey,
           testMessage,
-          pack.pastel_id_passphrase
+          PastelIDType.PastelID
         );
         browserLogger.info(
           `Signature created successfully for PastelID: ${pack.pastel_id_pubkey}`

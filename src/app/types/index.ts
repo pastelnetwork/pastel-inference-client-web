@@ -1,116 +1,172 @@
 // src/app/types/index.ts
 
-//WASM library related types:
+// WASM library related types:
 
-// First, let's define an improved interface for the FS object
+/**
+ * Interface representing the Emscripten File System (FS) object.
+ */
 export interface EmscriptenFS {
-  mkdir: (path: string) => void;
-  writeFile: (path: string, data: Uint8Array) => void;
-  unlink: (path: string) => void;
-  syncfs: (populate: boolean, callback: (err: Error | null) => void) => void;
+  mkdir(path: string): void;
+  writeFile(path: string, data: Uint8Array): void;
+  unlink(path: string): void;
+  syncfs(populate: boolean, callback: (err: Error | null) => void): void;
 }
 
-// Update the Module interface to include the FS property
-export interface EmscriptenModule {
-  FS: EmscriptenFS;
-  calledRun: boolean;
-  onRuntimeInitialized: () => void;
-}
-
+/**
+ * Enumeration representing different network modes.
+ */
 export enum NetworkMode {
-  Mainnet,
-  Testnet,
-  Devnet,
+  Mainnet = 0,
+  Testnet = 1,
+  Devnet = 2,
 }
 
+/**
+ * Enumeration representing different types of PastelIDs.
+ */
 export enum PastelIDType {
-  PastelID = "PastelID",
-  LegRoast = "LegRoast"
+  PastelID = 0,
+  LegRoast = 1,
 }
 
+/**
+ * Interface representing the Pastel instance with all documented methods.
+ */
 export interface PastelInstance {
-  // Wallet management
-  CreateNewWallet: (password: string) => Promise<string>;
-  GetWalletEncryptedMnemonicAndBirthNumber: () => Promise<{ mnemonic: string; birthNumber: number }>;
-  GetWalletSeed: () => Promise<string>;
-  GetWalletMnemonic: () => Promise<string>;
-  CreateWalletFromMnemonic: (password: string, mnemonic: string) => Promise<string>;
+  // -------------------------
+  // Wallet Management Methods
+  // -------------------------
+  
+  CreateNewWallet(password: string): string;
+  CreateWalletFromMnemonic(password: string, mnemonic: string): string;
+  ExportWallet(): string;
+  ImportWallet(walletData: string): boolean;
+  UnlockWallet(password: string): boolean;
+  LockWallet(): boolean;
 
-  // Address management
-  MakeNewAddress: (networkMode: NetworkMode) => Promise<string>;
-  GetAddress: (index: number, networkMode: NetworkMode) => Promise<string>;
-  GetAddressesCount: () => Promise<number>;
+  // -------------------------
+  // Address Management Methods
+  // -------------------------
+  
+  MakeNewAddress(mode: NetworkMode): string;
+  GetAddress(index: number, mode: NetworkMode): string;
+  GetAddresses(mode?: NetworkMode): string[];
+  GetAddressesCount(): number;
 
-  // PastelID management
-  MakeNewPastelID: (address: string, passphrase: string, networkMode: NetworkMode, makeFullPair: boolean) => Promise<string>;
-  GetPastelIDByIndex: (index: number) => Promise<string>;
-  GetPastelIDsCount: () => Promise<number>;
-  ImportPastelIDKeys: (pastelID: string, passPhrase: string, dirPath: string) => Promise<boolean>;
-  GetPastelID: (pastelID: string, type: PastelIDType) => Promise<string>;
-  GetPastelIDTicketSignature: (pastelID: string, data: string, type: PastelIDType, networkMode: NetworkMode) => Promise<string>;
-  GetPastelECDSAKeyPair: (pastelID: string, networkMode: NetworkMode) => Promise<{ publicKey: string; privateKey: string }>;
+  // -------------------------
+  // PastelID Management Methods
+  // -------------------------
+  
+  MakeNewPastelID(flag: boolean): string;
+  GetPastelIDByIndex(index: number, type: PastelIDType): string;
+  GetPastelID(pastelID: string, type: PastelIDType): string;
+  ImportPastelIDKeys(pastelID: string, passPhrase: string, dirPath: string): string;
+  GetPastelIDs(): string[];
 
-  // Transaction management
-  CreateSendToTransaction: (
-    networkMode: NetworkMode,
-    sendToJson: string,
-    fromAddress: string,
-    utxosJson: string,
-    blockHeight: number,
-    fee: number
-  ) => Promise<string>;
+  // -------------------------
+  // Signing and Verification Methods
+  // -------------------------
+  
+  SignWithPastelID(pastelID: string, data: string, type: PastelIDType, flag: boolean): string;
+  VerifyWithPastelID(pastelID: string, data: string, signature: string, flag: boolean): boolean;
+  VerifyWithLegRoast(pubLegRoast: string, data: string, signature: string, flag: boolean): boolean;
 
-  CreateRegisterPastelIdTransaction: (
-    networkMode: NetworkMode,
-    pastelID: string,
-    pqKey: string,
-    address: string,
-    passphrase: string,
-    utxosJson: string,
-    fee: number,
-    blockHeight: number
-  ) => Promise<string>;
+  // -------------------------
+  // Key Management Methods
+  // -------------------------
+  
+  GetAddressSecret(address: string, mode: NetworkMode): string;
+  ImportLegacyPrivateKey(privKey: string, mode: NetworkMode): string;
 
-  // Signing and verification
-  SignWithWalletKey: (message: string) => Promise<string>;
-  VerifyWithPastelID: (
-    pastelid: string,
-    messageToVerify: string,
-    pastelIDSignatureOnMessage: string,
-    networkMode: NetworkMode
-  ) => Promise<boolean>;
-  SignWithPastelID: (
-    pastelid: string,
-    messageToSign: string,
-    type: PastelIDType,
-    networkMode: NetworkMode
-  ) => Promise<string>;
-
-  // Key management
-  GetAddressSecret: (address: string, networkMode: NetworkMode) => Promise<string>;
-  ImportLegacyPrivateKey: (privKey: string, networkMode: NetworkMode) => Promise<string>;
-
-  // Ticket management
-  GetTicketTypes: () => Promise<string[]>;
-  GetPastelIDTicketType: (pastelID: string) => Promise<string>;
-  GetPastelIDTicketJson: (pastelID: string) => Promise<string>;
-  CreatePastelIDTicket: (
+  // -------------------------
+  // Ticket Management Methods
+  // -------------------------
+  
+  GetTicketTypes(): string[];
+  GetPastelIDTicketType(pastelID: string): string;
+  GetPastelIDTicketJson(pastelID: string): string;
+  CreatePastelIDTicket(
     pastelID: string,
     type: string,
     ticketDataJson: string,
     networkMode: NetworkMode
-  ) => Promise<string>;
-  GetPastelIDTicketsCount: () => Promise<number>;
-  GetPastelIDTicketByIndex: (index: number) => Promise<string>;
+  ): string;
+  GetPastelIDTicketsCount(): number;
+  GetPastelIDTicketByIndex(index: number): string;
 
-  // Network and blockchain utilities
-  GetNetworkFee: () => Promise<number>;
-  GetBlockCount: () => Promise<number>;
-  GetTransaction: (txid: string) => Promise<string>;
-  GetBlockHash: (height: number) => Promise<string>;
-  GetRawMempool: () => Promise<string[]>;
-  GetBalance: (address: string) => Promise<number>;
-  GetAddressUTXOs: (address: string) => Promise<string>;
+  // -------------------------
+  // Additional Wallet Methods
+  // -------------------------
+  
+  SignWithWalletKey(message: string): string;
+  GetWalletPubKey(): string;
+  GetPubKeyAt(index: number): string;
+  SignWithKeyAt(index: number, message: string): string;
+
+  // -------------------------
+  // Transaction Management Methods
+  // -------------------------
+  
+  CreateSendToTransaction(
+    mode: NetworkMode,
+    sendTo: string,
+    optionalField: string,
+    utxos: string,
+    fee: number
+  ): string;
+  CreateSendToTransactionJson(
+    mode: NetworkMode,
+    sendToJson: string,
+    optionalField: string,
+    utxoJson: string,
+    fee: number
+  ): string;
+  CreateRegisterPastelIdTransaction(
+    mode: NetworkMode,
+    pastelID: string,
+    address: string,
+    utxos: string,
+    fee: number
+  ): string;
+  CreateRegisterPastelIdTransactionJson(
+    mode: NetworkMode,
+    pastelID: string,
+    address: string,
+    utxoJson: string,
+    fee: number
+  ): string;
+
+  // -------------------------
+  // PastelSigner Class Methods
+  // -------------------------
+  
+  SignWithPastelIDClass(message: string, pastelID: string, passPhrase: string): string;
+  VerifyWithPastelIDClass(message: string, signature: string, pastelID: string): boolean;
+  VerifyWithLegRoastClass(message: string, signature: string, pubLegRoast: string, flag: boolean): boolean;
+
+  // -------------------------
+  // Exported PastelID Keys Methods
+  // -------------------------
+  
+  ExportPastelIDKeys(pastelID: string, password: string, path: string): boolean;
+}
+
+/**
+ * Interface representing the Emscripten Module.
+ */
+export interface EmscriptenModule {
+  FS: EmscriptenFS;
+  calledRun: boolean;
+  onRuntimeInitialized: () => void;
+  NetworkMode: typeof NetworkMode;
+  PastelIDType: typeof PastelIDType;
+}
+
+/**
+ * Interface representing the entire PastelModule, extending EmscriptenModule.
+ */
+export interface PastelModule extends EmscriptenModule {
+  Pastel: new () => PastelInstance;
 }
 
 // Misc other types:

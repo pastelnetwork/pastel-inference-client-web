@@ -1,10 +1,6 @@
 // src/app/lib/wasmLoader.ts
 
-import { PastelInstance } from '@/app/types';
-
-type PastelModule = {
-  Pastel: new () => PastelInstance;
-};
+import { PastelModule } from '@/app/types';
 
 declare global {
   interface Window {
@@ -33,7 +29,7 @@ export async function initWasm(): Promise<PastelModule | null> {
 
     // Create and append the script
     const script = document.createElement('script');
-    script.src = '/libpastel_wasm.js';
+    script.src = '/libpastel_wasm.js'; // Ensure this path is correct
     script.async = true;
 
     // Wait for the script to load and the module to initialize

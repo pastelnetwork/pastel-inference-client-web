@@ -4,7 +4,18 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import api from "../lib/api";
 import * as initializeApp from "../lib/initializeApp";
-import { CreditPack, ModelMenu, InferenceRequestParams, InferenceResult, CreditPackCreationResult, CreditPackTicketInfo, UserMessage, PastelIDType, SupernodeInfo, EmscriptenModule } from "@/app/types";
+import {
+  CreditPack,
+  ModelMenu,
+  InferenceRequestParams,
+  InferenceResult,
+  CreditPackCreationResult,
+  CreditPackTicketInfo,
+  UserMessage,
+  PastelIDType,
+  SupernodeInfo,
+  EmscriptenModule,
+} from "@/app/types";
 import browserLogger from "@/app/lib/logger";
 import { initWasm } from "../lib/wasmLoader";
 declare const Module: EmscriptenModule;
@@ -46,15 +57,23 @@ interface WalletActions {
   getBestSupernodeUrl: (userPastelID: string) => Promise<string>;
   getInferenceModelMenu: () => Promise<ModelMenu>;
   estimateCreditPackCost: (desiredNumberOfCredits: number, creditPriceCushionPercentage: number) => Promise<number>;
-  sendMessage: (toPastelID: string, messageBody: string) => Promise<{ sent_messages: UserMessage[]; received_messages: UserMessage[] }>;
+  sendMessage: (
+    toPastelID: string,
+    messageBody: string
+  ) => Promise<{ sent_messages: UserMessage[]; received_messages: UserMessage[] }>;
   getReceivedMessages: () => Promise<UserMessage[]>;
-  createCreditPackTicket: (numCredits: number, creditUsageTrackingPSLAddress: string, maxTotalPrice: number, maxPerCreditPrice: number) => Promise<CreditPackCreationResult>;
+  createCreditPackTicket: (
+    numCredits: number,
+    creditUsageTrackingPSLAddress: string,
+    maxTotalPrice: number,
+    maxPerCreditPrice: number
+  ) => Promise<CreditPackCreationResult>;
   getCreditPackInfo: (txid: string) => Promise<CreditPackTicketInfo>;
   getMyValidCreditPacks: () => Promise<CreditPack[]>;
   getMyPslAddressWithLargestBalance: () => Promise<string>;
   createInferenceRequest: (params: InferenceRequestParams) => Promise<InferenceResult | null>;
   checkSupernodeList: () => Promise<{ validMasternodeListFullDF: SupernodeInfo[] }>;
-  registerPastelID: (pastelid: string, passphrase: string, address: string) => Promise<string>;
+  registerPastelID: (pastelid: string, address: string, fee?: number) => Promise<string>;
   listPastelIDs: () => Promise<string[]>;
   checkForPastelID: () => Promise<string | null>;
   isCreditPackConfirmed: (txid: string) => Promise<boolean>;
@@ -74,8 +93,12 @@ interface WalletActions {
   waitForPastelIDRegistration: (pastelID: string) => Promise<boolean>;
   waitForCreditPackConfirmation: (txid: string) => Promise<boolean>;
   getBurnAddress: () => Promise<string>;
-  signMessageWithPastelID: (pastelid: string, messageToSign: string, network: string, type?: PastelIDType) => Promise<string>;
-  verifyMessageWithPastelID: (pastelid: string, messageToVerify: string, pastelIDSignatureOnMessage: string) => Promise<boolean>;
+  signMessageWithPastelID: (pastelid: string, messageToSign: string, type?: PastelIDType) => Promise<string>;
+  verifyMessageWithPastelID: (
+    pastelid: string,
+    messageToVerify: string,
+    pastelIDSignatureOnMessage: string
+  ) => Promise<boolean>;
   getCurrentPastelBlockHeight: () => Promise<number>;
   getBestBlockHashAndMerkleRoot: () => Promise<[string, string, number]>;
   sendToAddress: (address: string, amount: number) => Promise<string>;
@@ -162,14 +185,13 @@ const useStore = create<WalletState & WalletActions>()(
           if (get().isLocked) {
             throw new Error("Wallet is locked");
           }
-          const newAddressResult = await api.createAndFundNewAddress(0);
-          if (newAddressResult.newCreditTrackingAddress) {
-            set((state) => ({
-              addresses: [...state.addresses, newAddressResult.newCreditTrackingAddress!],
-            }));
-          } else {
-            throw new Error("Failed to create new address: Address is undefined");
+          const newAddress = await api.makeNewAddress();
+          if (!newAddress) {
+            throw new Error("Failed to create new address");
           }
+          set((state) => ({
+            addresses: [...state.addresses, newAddress],
+          }));
         } catch (error) {
           browserLogger.error("Failed to create new address:", error);
           set({ error: `Failed to create new address: ${(error as Error).message}` });
@@ -231,7 +253,12 @@ const useStore = create<WalletState & WalletActions>()(
       getMyPslAddressWithLargestBalance: api.getMyPslAddressWithLargestBalance,
       createInferenceRequest: api.createInferenceRequest,
       checkSupernodeList: api.checkSupernodeList,
-      registerPastelID: api.registerPastelID,
+
+      // Corrected registerPastelID signature and mapping
+      registerPastelID: async (pastelid: string, address: string, fee?: number) => {
+        return await api.registerPastelID(pastelid, address, fee);
+      },
+
       listPastelIDs: api.listPastelIDs,
       checkForPastelID: api.checkForPastelID,
       isCreditPackConfirmed: api.isCreditPackConfirmed,
@@ -251,8 +278,18 @@ const useStore = create<WalletState & WalletActions>()(
       waitForPastelIDRegistration: api.waitForPastelIDRegistration,
       waitForCreditPackConfirmation: api.waitForCreditPackConfirmation,
       getBurnAddress: api.getBurnAddress,
-      signMessageWithPastelID: api.signMessageWithPastelID,
-      verifyMessageWithPastelID: api.verifyMessageWithPastelID,
+
+      // Corrected signMessageWithPastelID signature and mapping
+      signMessageWithPastelID: (pastelid: string, messageToSign: string, type?: PastelIDType) =>
+        api.signMessageWithPastelID(pastelid, messageToSign, type),
+
+      // Corrected verifyMessageWithPastelID signature and mapping
+      verifyMessageWithPastelID: (
+        pastelid: string,
+        messageToVerify: string,
+        pastelIDSignatureOnMessage: string
+      ) => api.verifyMessageWithPastelID(pastelid, messageToVerify, pastelIDSignatureOnMessage),
+
       getCurrentPastelBlockHeight: api.getCurrentPastelBlockHeight,
       getBestBlockHashAndMerkleRoot: api.getBestBlockHashAndMerkleRoot,
       sendToAddress: api.sendToAddress,

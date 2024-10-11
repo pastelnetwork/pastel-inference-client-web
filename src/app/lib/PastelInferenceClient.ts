@@ -8,6 +8,7 @@ import * as utils from "./utils";
 import * as validationSchemas from "./validationSchemas";
 import browserLogger from "@/app/lib/logger";
 import {
+  PastelIDType,
   PastelInferenceClientConfig,
   ChallengeResponse,
   UserMessage,
@@ -64,7 +65,7 @@ class PastelInferenceClient {
       const challenge_signature = await this.rpc.signMessageWithPastelID(
         this.pastelID,
         challenge,
-        this.passphrase
+        PastelIDType.PastelID
       );
       return {
         challenge,
@@ -686,7 +687,7 @@ class PastelInferenceClient {
         await this.rpc.signMessageWithPastelID(
           creditPackRequest.requesting_end_user_pastelid,
           priceQuoteResponse.sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_response_fields,
-          this.passphrase
+          PastelIDType.PastelID
         );
 
       const validatedPriceQuoteResponse =
@@ -839,7 +840,7 @@ class PastelInferenceClient {
           await this.rpc.signMessageWithPastelID(
             this.pastelID,
             creditPackPurchaseRequestHash,
-            this.passphrase
+            PastelIDType.PastelID
           ),
       };
       const validatedStatusCheck =
@@ -1370,7 +1371,7 @@ class PastelInferenceClient {
       const signature = await this.rpc.signMessageWithPastelID(
         this.pastelID,
         inferenceResponseID,
-        this.passphrase
+        PastelIDType.PastelID
       );
       const payload = {
         inference_response_id: inferenceResponseID,
@@ -1413,7 +1414,7 @@ class PastelInferenceClient {
       const signature = await this.rpc.signMessageWithPastelID(
         this.pastelID,
         inferenceResponseID,
-        this.passphrase
+        PastelIDType.PastelID
       );
       const payload = {
         inference_response_id: inferenceResponseID,

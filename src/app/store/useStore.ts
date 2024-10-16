@@ -182,6 +182,7 @@ const useStore = create<WalletState & WalletActions>()(
       setShowPasswordQR: (show) => set({ showPasswordQR: show }),
       setInitialPassword: (password) => set({ initialPassword: password }),
       setShowQRScanner: (show) => set({ showQRScanner: show }),
+
       initializeWallet: async () => {
         if (get().isLoading) return;
         set({ isLoading: true, error: null });
@@ -206,10 +207,19 @@ const useStore = create<WalletState & WalletActions>()(
               Module.onRuntimeInitialized = resolve;
             }
           });
-
+          // Initialize the app
           await initializeApp.initializeApp();
-          const networkInfo = await api.getNetworkInfo();
 
+          // Retrieve network info
+          let networkInfo;
+          try {
+            networkInfo = await api.getNetworkInfo();
+          } catch (error) {
+            console.error("Failed to get network info:", error);
+            throw new Error("Failed to retrieve network information");
+          }
+
+          // Handle wallet password
           let password = localStorage.getItem("walletPassword");
           if (!password) {
             password = generateSecurePassword();
@@ -230,10 +240,14 @@ const useStore = create<WalletState & WalletActions>()(
             console.log("Existing wallet password retrieved");
           }
 
+          // Attempt to create or unlock wallet
           try {
-            console.log("Attempting to unlock or create wallet");
+            console.log("Attempting to create or unlock wallet");
             await api.createNewWallet(password);
-            await get().unlockWallet(password);
+            const unlocked = await get().unlockWallet(password);
+            if (!unlocked) {
+              throw new Error("Failed to unlock wallet");
+            }
             console.log("Wallet unlocked successfully");
           } catch (error) {
             console.error("Error during wallet unlock/creation:", error);
@@ -258,7 +272,10 @@ const useStore = create<WalletState & WalletActions>()(
               });
               localStorage.setItem("walletPassword", password);
               await api.createNewWallet(password);
-              await get().unlockWallet(password);
+              const unlocked = await get().unlockWallet(password);
+              if (!unlocked) {
+                throw new Error("Failed to unlock newly created wallet");
+              }
             } else {
               throw error;
             }
@@ -269,19 +286,54 @@ const useStore = create<WalletState & WalletActions>()(
               | "Mainnet"
               | "Testnet"
               | "Devnet",
-            isInitialized: true,
             isLocked: false,
             walletPassword: password,
           });
 
+          console.log("Checking for existing PastelID");
+          let existingPastelID;
+          try {
+            existingPastelID = await api.checkForPastelID();
+          } catch (error) {
+            console.error("Error checking for PastelID:", error);
+            existingPastelID = null;
+          }
+
+          if (existingPastelID) {
+            console.log("Existing PastelID found:", existingPastelID);
+            set({ pastelId: existingPastelID });
+          } else {
+            console.log("No existing PastelID found");
+          }
+
           console.log("Wallet state set, waiting before refreshing data");
           await new Promise((resolve) => setTimeout(resolve, 2000));
 
-          await get().refreshWalletData();
+          try {
+            await get().refreshWalletData();
+          } catch (error) {
+            console.error("Failed to refresh wallet data:", error);
+            // Continue initialization even if refresh fails
+          }
+
+          // Set isInitialized to true if we have both a PastelID and the wallet is unlocked
+          if (get().pastelId && !get().isLocked) {
+            set({ isInitialized: true });
+            console.log("Wallet initialization complete");
+          } else {
+            console.log(
+              "Wallet initialization incomplete: missing PastelID or wallet is locked"
+            );
+            set({
+              error:
+                "Wallet initialization incomplete. Please ensure you have a PastelID and the wallet is unlocked.",
+            });
+          }
         } catch (error) {
           console.error("Failed to initialize wallet:", error);
           set({
             error: `Failed to initialize wallet: ${(error as Error).message}`,
+            isInitialized: false,
           });
         } finally {
           clearTimeout(initializationTimeout);
@@ -289,7 +341,7 @@ const useStore = create<WalletState & WalletActions>()(
         }
       },
 
-      unlockWallet: async (password: string) => {
+      unlockWallet: async (password: string): Promise<boolean> => {
         set({ isLoading: true, error: null });
         try {
           const unlocked = await api.unlockWallet(password);
@@ -298,11 +350,13 @@ const useStore = create<WalletState & WalletActions>()(
           }
           set({ isLocked: false, walletPassword: password });
           await get().refreshWalletData();
+          return true; // Return true if the wallet was successfully unlocked
         } catch (error) {
           console.error("Failed to unlock wallet:", error);
           set({
             error: `Failed to unlock wallet: ${(error as Error).message}`,
           });
+          return false; // Return false if there was an error unlocking the wallet
         } finally {
           set({ isLoading: false });
         }

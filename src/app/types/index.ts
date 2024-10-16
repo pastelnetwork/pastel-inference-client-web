@@ -1029,3 +1029,14 @@ export interface ValidationResult extends Record<string, unknown> {
   inference_result_file_type_strings: unknown;
   responding_supernode_signature_on_inference_result_id: string;
 }
+
+export interface AddressBalanceItem {
+  balance: number;
+  address: string;
+}
+
+export interface AddressBalance {
+  balance: number;
+  received: number;
+  addresses: AddressBalanceItem[]
+}

@@ -42,9 +42,7 @@ class BrowserRPCReplacement {
   private isInitialized: boolean = false;
   private wasmModule: PastelModule | null = null;
 
-  private constructor(
-    apiBaseUrl: string = "https://opennode-fastapi.pastel.network"
-  ) {
+  private constructor(apiBaseUrl: string = "https://opennode-fastapi.pastel.network") {
     this.apiBaseUrl = apiBaseUrl;
     this.pastelInstance = null;
     this.isInitialized = false;
@@ -128,32 +126,14 @@ class BrowserRPCReplacement {
   // -------------------------
 
   /**
-   * Creates a new wallet with the provided password, or unlocks an existing one.
-   * @param password - The password to secure or unlock the wallet.
-   * @returns The generated mnemonic phrase if a new wallet is created.
+   * Creates a new wallet with the provided password.
+   * @param password - The password to secure the new wallet.
+   * @returns The generated mnemonic phrase.
    */
   public async createNewWallet(password: string): Promise<string> {
     this.ensureInitialized();
-    console.log("Attempting to create new wallet");
-    try {
-      // First, try to unlock the wallet
-      const unlocked = await this.unlockWallet(password);
-      if (unlocked) {
-        console.log("Wallet already exists and was unlocked");
-        // In case of unlocking an existing wallet, return a predefined string or handle as needed
-        return "Wallet unlocked successfully";
-      }
-
-      // If unlock failed, create a new wallet
-      const result = this.executeWasmMethod(() =>
-        this.pastelInstance!.CreateNewWallet(password)
-      );
-      console.log("New wallet created:", result);
-      return result;
-    } catch (error) {
-      console.error("Error creating new wallet:", error);
-      throw error;
-    }
+    console.log("RPC: Creating new wallet");
+    return this.executeWasmMethod(() => this.pastelInstance!.CreateNewWallet(password));
   }
 
   /**
@@ -162,10 +142,7 @@ class BrowserRPCReplacement {
    * @param mnemonic - The mnemonic phrase used to restore the wallet.
    * @returns The restored mnemonic phrase (should match the input mnemonic).
    */
-  public async createWalletFromMnemonic(
-    password: string,
-    mnemonic: string
-  ): Promise<string> {
+  public async createWalletFromMnemonic(password: string, mnemonic: string): Promise<string> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.CreateWalletFromMnemonic(password, mnemonic)
@@ -178,7 +155,9 @@ class BrowserRPCReplacement {
    */
   public async exportWallet(): Promise<string> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() => this.pastelInstance!.ExportWallet());
+    return this.executeWasmMethod(() =>
+      this.pastelInstance!.ExportWallet()
+    );
   }
 
   /**
@@ -200,24 +179,8 @@ class BrowserRPCReplacement {
    */
   public async unlockWallet(password: string): Promise<boolean> {
     this.ensureInitialized();
-    console.log("Attempting to unlock wallet");
-    try {
-      const result = this.executeWasmMethod(() =>
-        this.pastelInstance!.UnlockWallet(password)
-      );
-      console.log("Unlock wallet result:", result);
-      return result;
-    } catch (error) {
-      console.error("Error unlocking wallet:", error);
-      if (
-        error instanceof Error &&
-        (error.message.includes("Master key doesn't exist") ||
-          error.message.includes("Failed to set master key"))
-      ) {
-        return false; // Indicate that the wallet needs to be created or reset
-      }
-      throw error;
-    }
+    console.log("RPC: Unlocking wallet");
+    return this.executeWasmMethod(() => this.pastelInstance!.UnlockWallet(password));
   }
 
   /**
@@ -226,7 +189,9 @@ class BrowserRPCReplacement {
    */
   public async lockWallet(): Promise<boolean> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() => this.pastelInstance!.LockWallet());
+    return this.executeWasmMethod(() =>
+      this.pastelInstance!.LockWallet()
+    );
   }
 
   // -------------------------
@@ -240,10 +205,7 @@ class BrowserRPCReplacement {
    */
   public async makeNewAddress(mode?: NetworkMode): Promise<string> {
     this.ensureInitialized();
-    const networkMode =
-      mode !== undefined
-        ? mode
-        : this.getNetworkModeEnum(await this.getNetworkMode());
+    const networkMode = mode !== undefined ? mode : this.getNetworkModeEnum(await this.getNetworkMode());
     return this.executeWasmMethod(() =>
       this.pastelInstance!.MakeNewAddress(networkMode)
     );
@@ -267,22 +229,22 @@ class BrowserRPCReplacement {
    * @param mode - (Optional) The network mode. If omitted, retrieves addresses for all modes.
    * @returns An array of wallet addresses.
    */
-  public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
-    this.ensureInitialized();
-    try {
-      return this.executeWasmMethod(() => {
-        const addresses = this.pastelInstance!.GetAddresses(mode);
-        if (!addresses) {
-          console.warn("GetAddresses returned undefined or null");
-          return [];
-        }
-        return addresses;
-      });
-    } catch (error) {
-      console.error("Error in getAllAddresses:", error);
-      return [];
-    }
+public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
+  this.ensureInitialized();
+  try {
+    return this.executeWasmMethod(() => {
+      const addresses = this.pastelInstance!.GetAddresses(mode);
+      if (!addresses) {
+        console.warn("GetAddresses returned undefined or null");
+        return [];
+      }
+      return addresses;
+    });
+  } catch (error) {
+    console.error("Error in getAllAddresses:", error);
+    return [];
   }
+}
 
   /**
    * Retrieves the total count of addresses in the wallet.
@@ -290,9 +252,7 @@ class BrowserRPCReplacement {
    */
   public async getAddressesCount(): Promise<number> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() =>
-      this.pastelInstance!.GetAddressesCount()
-    );
+    return this.executeWasmMethod(() => this.pastelInstance!.GetAddressesCount());
   }
 
   // -------------------------
@@ -317,10 +277,7 @@ class BrowserRPCReplacement {
    * @param type - The type of PastelID (PastelID, LegRoast).
    * @returns The PastelID corresponding to the given index and type.
    */
-  public async getPastelIDByIndex(
-    index: number,
-    type: PastelIDType = PastelIDType.PastelID
-  ): Promise<string> {
+  public async getPastelIDByIndex(index: number, type: PastelIDType = PastelIDType.PastelID): Promise<string> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.GetPastelIDByIndex(index, type)
@@ -333,10 +290,7 @@ class BrowserRPCReplacement {
    * @param type - The type of PastelID (PastelID, LegRoast).
    * @returns The PastelID data based on the provided type.
    */
-  public async getPastelID(
-    pastelID: string,
-    type: PastelIDType
-  ): Promise<string> {
+  public async getPastelID(pastelID: string, type: PastelIDType): Promise<string> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.GetPastelID(pastelID, type)
@@ -350,11 +304,7 @@ class BrowserRPCReplacement {
    * @param dirPath - The directory path where the keys are stored.
    * @returns The result of the import operation.
    */
-  public async importPastelID(
-    pastelID: string,
-    passPhrase: string,
-    dirPath: string = "/wallet_data"
-  ): Promise<string> {
+  public async importPastelID (pastelID: string, passPhrase: string, dirPath: string = "/wallet_data"): Promise<string> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.ImportPastelIDKeys(pastelID, passPhrase, dirPath)
@@ -430,12 +380,7 @@ class BrowserRPCReplacement {
   ): Promise<boolean> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
-      this.pastelInstance!.VerifyWithLegRoast(
-        pubLegRoast,
-        data,
-        signature,
-        flag
-      )
+      this.pastelInstance!.VerifyWithLegRoast(pubLegRoast, data, signature, flag)
     );
   }
 
@@ -449,10 +394,7 @@ class BrowserRPCReplacement {
    * @param mode - The network mode (Mainnet, Testnet, Devnet).
    * @returns The private key associated with the address.
    */
-  public async getAddressSecret(
-    address: string,
-    mode: NetworkMode
-  ): Promise<string> {
+  public async getAddressSecret(address: string, mode: NetworkMode): Promise<string> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.GetAddressSecret(address, mode)
@@ -465,10 +407,7 @@ class BrowserRPCReplacement {
    * @param mode - The network mode (Mainnet, Testnet, Devnet).
    * @returns The address associated with the imported private key.
    */
-  public async importLegacyPrivateKey(
-    privKey: string,
-    mode: NetworkMode
-  ): Promise<string> {
+  public async importLegacyPrivateKey(privKey: string, mode: NetworkMode): Promise<string> {
     this.ensureInitialized();
     console.warn(
       "importLegacyPrivateKey called in browser context. This operation may expose sensitive information."
@@ -488,7 +427,9 @@ class BrowserRPCReplacement {
    */
   public async getTicketTypes(): Promise<string[]> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() => this.pastelInstance!.GetTicketTypes());
+    return this.executeWasmMethod(() =>
+      this.pastelInstance!.GetTicketTypes()
+    );
   }
 
   /**
@@ -531,12 +472,7 @@ class BrowserRPCReplacement {
   ): Promise<string> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
-      this.pastelInstance!.CreatePastelIDTicket(
-        pastelID,
-        type,
-        ticketDataJson,
-        networkMode
-      )
+      this.pastelInstance!.CreatePastelIDTicket(pastelID, type, ticketDataJson, networkMode)
     );
   }
 
@@ -585,7 +521,9 @@ class BrowserRPCReplacement {
    */
   public async getWalletPubKey(): Promise<string> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() => this.pastelInstance!.GetWalletPubKey());
+    return this.executeWasmMethod(() =>
+      this.pastelInstance!.GetWalletPubKey()
+    );
   }
 
   /**
@@ -773,9 +711,7 @@ class BrowserRPCReplacement {
    * Retrieves the best block hash and Merkle root.
    * @returns A tuple containing block hash, Merkle root, and block height.
    */
-  public async getBestBlockHashAndMerkleRoot(): Promise<
-    [string, string, number]
-  > {
+  public async getBestBlockHashAndMerkleRoot(): Promise<[string, string, number]> {
     const blockHeight = await this.getCurrentPastelBlockHeight();
     const blockHash = await this.getBlockHash(blockHeight);
     const block = await this.getBlock(blockHash);
@@ -903,10 +839,7 @@ class BrowserRPCReplacement {
    * @param height - The block height.
    * @returns The network hash rate.
    */
-  public async getNetworkSolPs(
-    blocks: number,
-    height: number
-  ): Promise<NetworkSolPs> {
+  public async getNetworkSolPs(blocks: number, height: number): Promise<NetworkSolPs> {
     return this.fetchJson<NetworkSolPs>(`/getnetworksolps/${blocks}/${height}`);
   }
 
@@ -919,9 +852,7 @@ class BrowserRPCReplacement {
    * @param newNetwork - The new network mode to switch to.
    * @returns An object indicating success and a message.
    */
-  public async changeNetwork(
-    newNetwork: string
-  ): Promise<{ success: boolean; message: string }> {
+  public async changeNetwork(newNetwork: string): Promise<{ success: boolean; message: string }> {
     if (["Mainnet", "Testnet", "Devnet"].includes(newNetwork)) {
       await setNetworkInLocalStorage(newNetwork);
       await this.configureRPCAndSetBurnAddress();
@@ -936,10 +867,7 @@ class BrowserRPCReplacement {
    * Configures RPC and sets the burn address based on the current network.
    * @returns An object containing the network and burn address.
    */
-  private async configureRPCAndSetBurnAddress(): Promise<{
-    network: string;
-    burnAddress: string;
-  }> {
+  private async configureRPCAndSetBurnAddress(): Promise<{ network: string; burnAddress: string }> {
     let network = await getNetworkFromLocalStorage();
     if (!network) {
       network = "Mainnet";
@@ -1028,17 +956,13 @@ class BrowserRPCReplacement {
    * @param network - The network mode (Mainnet, Testnet, Devnet).
    * @returns An object indicating success and a message.
    */
-  public async importPastelIDFromFile(
-    fileContent: string,
-    network: string,
-    passphrase: string
-  ): Promise<{ success: boolean; message: string }> {
+  public async importPastelIDFromFile(fileContent: string, network: string, passphrase: string): Promise<{ success: boolean; message: string }> {
     this.ensureInitialized();
     let tempFilePath: string | null = null;
     let contentLength = 0;
     try {
       const FS = this.wasmModule!.FS;
-
+  
       // Decode the base64 encoded secure container
       const binaryString = atob(fileContent);
       contentLength = binaryString.length;
@@ -1046,7 +970,7 @@ class BrowserRPCReplacement {
       for (let i = 0; i < contentLength; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-
+  
       // Ensure the directory exists in the Emscripten FS
       const dirPath = "/wallet_data";
       try {
@@ -1057,14 +981,14 @@ class BrowserRPCReplacement {
           throw e;
         }
       }
-
+  
       // Generate a unique filename for the PastelID
       const pastelID = `pastelid_${Date.now()}.key`;
       tempFilePath = `${dirPath}/${pastelID}`;
-
+  
       // Write the decoded binary data to the Emscripten FS
       FS.writeFile(tempFilePath, bytes);
-
+  
       // Sync the file system
       await new Promise<void>((resolve, reject) => {
         FS.syncfs(false, (err: Error | null) => {
@@ -1077,11 +1001,11 @@ class BrowserRPCReplacement {
           }
         });
       });
-
+  
       // Read and log the contents of the /wallet_data directory
       const walletDataContents = readWalletDataDirectory();
-      console.log("Contents of /wallet_data:", walletDataContents);
-
+      console.log('Contents of /wallet_data:', walletDataContents);
+  
       // Import the PastelID keys
       let result: string;
       try {
@@ -1090,13 +1014,9 @@ class BrowserRPCReplacement {
         );
       } catch (error) {
         console.error("Error in ImportPastelIDKeys:", error);
-        throw new Error(
-          `ImportPastelIDKeys failed: ${
-            (error as Error).message || "Unknown error"
-          }`
-        );
+        throw new Error(`ImportPastelIDKeys failed: ${(error as Error).message || "Unknown error"}`);
       }
-
+  
       if (result) {
         // Verify the import by retrieving the PastelID
         let importedPastelID: string;
@@ -1106,15 +1026,11 @@ class BrowserRPCReplacement {
           );
         } catch (error) {
           console.error("Error in GetPastelID:", error);
-          throw new Error(
-            `GetPastelID failed: ${(error as Error).message || "Unknown error"}`
-          );
+          throw new Error(`GetPastelID failed: ${(error as Error).message || "Unknown error"}`);
         }
-
+  
         if (importedPastelID) {
-          console.log(
-            `PastelID ${importedPastelID} imported successfully on network ${network}`
-          );
+          console.log(`PastelID ${importedPastelID} imported successfully on network ${network}`);
           return { success: true, message: "PastelID imported successfully!" };
         } else {
           throw new Error("PastelID import could not be verified");
@@ -1135,7 +1051,7 @@ class BrowserRPCReplacement {
           const FS = this.wasmModule.FS;
           const zeroBuffer = new Uint8Array(contentLength);
           FS.writeFile(tempFilePath, zeroBuffer);
-
+  
           // Sync the file system after cleanup
           await new Promise<void>((resolve) => {
             FS.syncfs(false, (err: Error | null) => {
@@ -1147,7 +1063,7 @@ class BrowserRPCReplacement {
               resolve();
             });
           });
-
+  
           // Delete the temporary file
           FS.unlink(tempFilePath);
         } catch (error) {
@@ -1163,10 +1079,7 @@ class BrowserRPCReplacement {
    * @param type - The type of PastelID (PastelID, LegRoast).
    * @returns The exported PastelID data.
    */
-  public async getPastelIDFromWallet(
-    pastelID: string,
-    type: PastelIDType = PastelIDType.PastelID
-  ): Promise<string> {
+  public async getPastelIDFromWallet(pastelID: string, type: PastelIDType = PastelIDType.PastelID): Promise<string> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.GetPastelID(pastelID, type)
@@ -1183,15 +1096,8 @@ class BrowserRPCReplacement {
    * @param message - The message to sign.
    * @returns The signature.
    */
-  public async signWithPastelIDExported(
-    pastelID: string,
-    message: string
-  ): Promise<string> {
-    return this.signMessageWithPastelID(
-      pastelID,
-      message,
-      PastelIDType.PastelID
-    );
+  public async signWithPastelIDExported(pastelID: string, message: string): Promise<string> {
+    return this.signMessageWithPastelID(pastelID, message, PastelIDType.PastelID);
   }
 
   /**
@@ -1201,11 +1107,7 @@ class BrowserRPCReplacement {
    * @param signature - The signature to verify.
    * @returns `true` if the signature is valid, otherwise `false`.
    */
-  public async verifyWithPastelIDExported(
-    pastelID: string,
-    message: string,
-    signature: string
-  ): Promise<boolean> {
+  public async verifyWithPastelIDExported(pastelID: string, message: string, signature: string): Promise<boolean> {
     return this.verifyMessageWithPastelID(pastelID, message, signature);
   }
 
@@ -1218,9 +1120,7 @@ class BrowserRPCReplacement {
    * @param addressToCheck - The address to check.
    * @returns `true` if already imported, otherwise `false`.
    */
-  public async checkIfAddressIsAlreadyImportedInLocalWallet(
-    addressToCheck: string
-  ): Promise<boolean> {
+  public async checkIfAddressIsAlreadyImportedInLocalWallet(addressToCheck: string): Promise<boolean> {
     this.ensureInitialized();
     const addresses = await this.getAllAddresses();
     return addresses.includes(addressToCheck);
@@ -1232,15 +1132,10 @@ class BrowserRPCReplacement {
    */
   public async importAddress(address: string): Promise<void> {
     this.ensureInitialized();
-    const importedAddresses = JSON.parse(
-      localStorage.getItem("importedAddresses") || "[]"
-    ) as string[];
+    const importedAddresses = JSON.parse(localStorage.getItem("importedAddresses") || "[]") as string[];
     if (!importedAddresses.includes(address)) {
       importedAddresses.push(address);
-      localStorage.setItem(
-        "importedAddresses",
-        JSON.stringify(importedAddresses)
-      );
+      localStorage.setItem("importedAddresses", JSON.stringify(importedAddresses));
     }
     console.log(`Address ${address} has been tracked for monitoring.`);
   }
@@ -1254,9 +1149,7 @@ class BrowserRPCReplacement {
    * @param filename - The name of the file to download.
    * @returns `true` if the download was successful, otherwise `false`.
    */
-  public async downloadWalletToDatFile(
-    filename: string = "pastel_wallet.dat"
-  ): Promise<boolean> {
+  public async downloadWalletToDatFile(filename: string = "pastel_wallet.dat"): Promise<boolean> {
     this.ensureInitialized();
     try {
       const addressCount = await this.pastelInstance!.GetAddressesCount();
@@ -1291,12 +1184,8 @@ class BrowserRPCReplacement {
    * @returns The wallet data as an ArrayBuffer.
    */
   private createWalletData(privateKeys: string[]): ArrayBuffer {
-    const magicBytes = new Uint8Array([
-      0x30, 0x81, 0xd3, 0x02, 0x01, 0x01, 0x04, 0x20,
-    ]);
-    const walletData = new Uint8Array(
-      privateKeys.length * (magicBytes.length + 32)
-    );
+    const magicBytes = new Uint8Array([0x30, 0x81, 0xd3, 0x02, 0x01, 0x01, 0x04, 0x20]);
+    const walletData = new Uint8Array(privateKeys.length * (magicBytes.length + 32));
 
     privateKeys.forEach((key, index) => {
       const offset = index * (magicBytes.length + 32);
@@ -1317,9 +1206,7 @@ class BrowserRPCReplacement {
     const privateKeys: string[] = [];
     const magicBytes = [0x30, 0x81, 0xd3, 0x02, 0x01, 0x01, 0x04, 0x20];
     for (let i = 0; i < dataView.byteLength - magicBytes.length - 32; i++) {
-      if (
-        magicBytes.every((byte, index) => dataView.getUint8(i + index) === byte)
-      ) {
+      if (magicBytes.every((byte, index) => dataView.getUint8(i + index) === byte)) {
         const keyBuffer = new Uint8Array(walletData, i + magicBytes.length, 32);
         privateKeys.push(Buffer.from(keyBuffer).toString("hex"));
       }
@@ -1333,9 +1220,7 @@ class BrowserRPCReplacement {
    * @param walletData - The wallet data as an ArrayBuffer.
    * @returns `true` if the wallet was successfully loaded, otherwise `false`.
    */
-  public async loadWalletFromDatFile(
-    walletData: ArrayBuffer
-  ): Promise<boolean> {
+  public async loadWalletFromDatFile(walletData: ArrayBuffer): Promise<boolean> {
     this.ensureInitialized();
     try {
       const privateKeys = this.extractPrivateKeys(walletData);
@@ -1380,14 +1265,9 @@ class BrowserRPCReplacement {
    * @param decodeProperties - Whether to decode the properties of the ticket.
    * @returns The ticket data.
    */
-  public async getPastelTicket(
-    txid: string,
-    decodeProperties: boolean = true
-  ): Promise<unknown> {
+  public async getPastelTicket(txid: string, decodeProperties: boolean = true): Promise<unknown> {
     this.ensureInitialized();
-    return this.fetchJson<unknown>(
-      `/tickets/get/${txid}?decode_properties=${decodeProperties}`
-    );
+    return this.fetchJson<unknown>(`/tickets/get/${txid}?decode_properties=${decodeProperties}`);
   }
 
   /**
@@ -1396,14 +1276,9 @@ class BrowserRPCReplacement {
    * @param startingBlockHeight - The block height to start listing from.
    * @returns An array of contract tickets.
    */
-  public async listContractTickets(
-    ticketTypeIdentifier: string,
-    startingBlockHeight: number = 0
-  ): Promise<unknown[]> {
+  public async listContractTickets(ticketTypeIdentifier: string, startingBlockHeight: number = 0): Promise<unknown[]> {
     this.ensureInitialized();
-    return this.fetchJson<unknown[]>(
-      `/tickets/contract/list/${ticketTypeIdentifier}/${startingBlockHeight}`
-    );
+    return this.fetchJson<unknown[]>(`/tickets/contract/list/${ticketTypeIdentifier}/${startingBlockHeight}`);
   }
 
   /**
@@ -1422,14 +1297,9 @@ class BrowserRPCReplacement {
    * @param decodeProperties - Whether to decode the properties of the ticket.
    * @returns The contract ticket data.
    */
-  public async getContractTicket(
-    txid: string,
-    decodeProperties: boolean = true
-  ): Promise<unknown> {
+  public async getContractTicket(txid: string, decodeProperties: boolean = true): Promise<unknown> {
     this.ensureInitialized();
-    return this.fetchJson<unknown>(
-      `/tickets/contract/get/${txid}?decode_properties=${decodeProperties}`
-    );
+    return this.fetchJson<unknown>(`/tickets/contract/get/${txid}?decode_properties=${decodeProperties}`);
   }
 
   /**
@@ -1437,9 +1307,7 @@ class BrowserRPCReplacement {
    * @param includeEmpty - Whether to include addresses with zero balance.
    * @returns An object mapping addresses to their respective balances.
    */
-  public async listAddressAmounts(
-    includeEmpty: boolean = false
-  ): Promise<{ [address: string]: number }> {
+  public async listAddressAmounts(includeEmpty: boolean = false): Promise<{ [address: string]: number }> {
     this.ensureInitialized();
     const addresses = await this.getAllAddresses();
     const result: { [address: string]: number } = {};
@@ -1463,11 +1331,7 @@ class BrowserRPCReplacement {
    * @param passPhrase - The passphrase associated with the PastelID.
    * @returns The generated signature.
    */
-  public async SignWithPastelIDClass(
-    message: string,
-    pastelID: string,
-    passPhrase: string
-  ): Promise<string> {
+  public async SignWithPastelIDClass(message: string, pastelID: string, passPhrase: string): Promise<string> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.SignWithPastelIDClass(message, pastelID, passPhrase)
@@ -1481,11 +1345,7 @@ class BrowserRPCReplacement {
    * @param pastelID - The PastelID used for verification.
    * @returns `true` if the signature is valid, otherwise `false`.
    */
-  public async VerifyWithPastelIDClass(
-    message: string,
-    signature: string,
-    pastelID: string
-  ): Promise<boolean> {
+  public async VerifyWithPastelIDClass(message: string, signature: string, pastelID: string): Promise<boolean> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.VerifyWithPastelIDClass(message, signature, pastelID)
@@ -1500,20 +1360,10 @@ class BrowserRPCReplacement {
    * @param flag - A boolean flag, purpose inferred from context.
    * @returns `true` if the signature is valid, otherwise `false`.
    */
-  public async VerifyWithLegRoastClass(
-    message: string,
-    signature: string,
-    pubLegRoast: string,
-    flag: boolean = true
-  ): Promise<boolean> {
+  public async VerifyWithLegRoastClass(message: string, signature: string, pubLegRoast: string, flag: boolean = true): Promise<boolean> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
-      this.pastelInstance!.VerifyWithLegRoastClass(
-        message,
-        signature,
-        pubLegRoast,
-        flag
-      )
+      this.pastelInstance!.VerifyWithLegRoastClass(message, signature, pubLegRoast, flag)
     );
   }
 
@@ -1528,11 +1378,7 @@ class BrowserRPCReplacement {
    * @param path - The directory path to export the keys to.
    * @returns `true` if the export was successful, otherwise `false`.
    */
-  public async ExportPastelIDKeys(
-    pastelID: string,
-    password: string,
-    path: string
-  ): Promise<boolean> {
+  public async ExportPastelIDKeys(pastelID: string, password: string, path: string): Promise<boolean> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.ExportPastelIDKeys(pastelID, password, path)
@@ -1547,9 +1393,7 @@ class BrowserRPCReplacement {
    * Ensures that tracking addresses have a minimal PSL balance.
    * @param addressesList - Optional list of addresses to check.
    */
-  public async ensureTrackingAddressesHaveMinimalPSLBalance(
-    addressesList: string[] | null = null
-  ): Promise<void> {
+  public async ensureTrackingAddressesHaveMinimalPSLBalance(addressesList: string[] | null = null): Promise<void> {
     this.ensureInitialized();
     const addresses = addressesList || (await this.getAllAddresses());
 
@@ -1582,9 +1426,7 @@ class BrowserRPCReplacement {
    * @param amounts - An array of objects containing address and amount.
    * @returns The transaction ID.
    */
-  public async sendMany(
-    amounts: { address: string; amount: number }[]
-  ): Promise<string> {
+  public async sendMany(amounts: { address: string; amount: number }[]): Promise<string> {
     this.ensureInitialized();
     const fromAddress = await this.getMyPslAddressWithLargestBalance();
     return this.createSendToTransaction(amounts, fromAddress, 0); // Assuming fee is 0
@@ -1609,22 +1451,13 @@ class BrowserRPCReplacement {
    */
   public async getBalance(): Promise<number> {
     this.ensureInitialized();
-    try {
-      const addresses = await this.getAllAddresses();
-      let totalBalance = 0;
-      for (const address of addresses) {
-        try {
-          const balance = await this.checkPSLAddressBalance(address);
-          totalBalance += balance;
-        } catch (error) {
-          console.error(`Error getting balance for address ${address}:`, error);
-        }
-      }
-      return totalBalance;
-    } catch (error) {
-      console.error("Error in getBalance:", error);
-      return 0;
+    const addresses = await this.getAllAddresses();
+    let totalBalance = 0;
+    for (const address of addresses) {
+      const balance = await this.checkPSLAddressBalance(address);
+      totalBalance += balance;
     }
+    return totalBalance;
   }
 
   /**
@@ -1652,9 +1485,7 @@ class BrowserRPCReplacement {
    * @returns The number of transactions.
    */
   public async getWalletTransactionCount(): Promise<number> {
-    const transactions = JSON.parse(
-      localStorage.getItem("transactions") || "[]"
-    ) as unknown[];
+    const transactions = JSON.parse(localStorage.getItem("transactions") || "[]") as unknown[];
     return transactions.length;
   }
 
@@ -1668,9 +1499,7 @@ class BrowserRPCReplacement {
    * @returns The balance of the address.
    */
   public async checkPSLAddressBalance(addressToCheck: string): Promise<number> {
-    const addressBalance = await this.fetchJson<AddressBalance>(
-      `/get_address_balance?addresses=${addressToCheck}`
-    );
+    const addressBalance = await this.fetchJson<AddressBalance>(`/get_address_balance?addresses=${addressToCheck}`)
     return addressBalance.balance;
   }
 
@@ -1701,17 +1530,11 @@ class BrowserRPCReplacement {
     creditUsageTrackingAmountInPSL: number,
     burnAddress: string
   ): Promise<string> {
-    const sendTo = [
-      { address: burnAddress, amount: creditUsageTrackingAmountInPSL },
-    ];
-    return this.createSendToTransaction(
-      sendTo,
-      creditUsageTrackingPSLAddress,
-      0
-    ); // Assuming fee is 0
+    const sendTo = [{ address: burnAddress, amount: creditUsageTrackingAmountInPSL }];
+    return this.createSendToTransaction(sendTo, creditUsageTrackingPSLAddress, 0); // Assuming fee is 0
   }
 
-  // -------------------------
+  // ------------------------- 
   // Misc Other Methods
   // -------------------------
 
@@ -1727,6 +1550,7 @@ class BrowserRPCReplacement {
   async validateAddress(address: string): Promise<ValidatedAddress> {
     return this.fetchJson<ValidatedAddress>(`/validateaddress/${address}`);
   }
+
 
   async getBlockHeader(blockhash: string): Promise<BlockHeader> {
     return this.fetchJson<BlockHeader>(`/getblockheader/${blockhash}`);
@@ -1783,7 +1607,7 @@ class BrowserRPCReplacement {
       `/z_validateaddress/${shieldedAddress}`
     );
   }
-
+  
   async listPastelIDTicketsOld(
     filter: string = "mine",
     minheight: number | null = null
@@ -1888,7 +1712,7 @@ class BrowserRPCReplacement {
     try {
       const rpc = BrowserRPCReplacement.getInstance();
       await rpc.initialize(); // Ensure RPC is initialized
-
+  
       const pastelIDs = await rpc.getPastelIDs(); // Fetch all PastelIDs
       return pastelIDs.length; // Return the count
     } catch (error) {
@@ -1896,6 +1720,7 @@ class BrowserRPCReplacement {
       throw error;
     }
   }
+
 }
 
 export default BrowserRPCReplacement;

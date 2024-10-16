@@ -207,10 +207,20 @@ export async function listAddressAmounts(includeEmpty: boolean = false): Promise
 export async function getBalance(): Promise<number> {
   try {
     const rpc = BrowserRPCReplacement.getInstance();
-    return await rpc.getBalance();
+    const addresses = await rpc.getAllAddresses();
+    let totalBalance = 0;
+    for (const address of addresses) {
+      try {
+        const balance = await rpc.checkPSLAddressBalance(address);
+        totalBalance += balance;
+      } catch (error) {
+        console.error(`Error getting balance for address ${address}:`, error);
+      }
+    }
+    return totalBalance;
   } catch (error) {
     console.error("Error in getBalance:", error);
-    throw error;
+    return 0;
   }
 }
 

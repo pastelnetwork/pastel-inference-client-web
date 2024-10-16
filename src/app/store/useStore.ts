@@ -140,11 +140,6 @@ interface WalletActions {
   sendMany: (amounts: { address: string; amount: number }[]) => Promise<string>;
 }
 
-const clearWalletData = () => {
-  localStorage.removeItem('walletPassword');
-  // Add any other wallet-related data that needs to be cleared
-};
-
 const useStore = create<WalletState & WalletActions>()(
   persist(
     (set, get) => ({
@@ -175,7 +170,7 @@ const useStore = create<WalletState & WalletActions>()(
         set({ promoGeneratorMessage }),
       setGeneratingPromotionalPacks: (isGeneratingPromotionalPacks) =>
         set({ isGeneratingPromotionalPacks }),
-      
+
       initializeWallet: async () => {
         if (get().isLoading) return;
         set({ isLoading: true, error: null });
@@ -186,7 +181,8 @@ const useStore = create<WalletState & WalletActions>()(
             throw new Error("Failed to initialize WASM module");
           }
           console.log("WASM module initialized");
-      
+
+          // Wait for the Module to be fully initialized
           await new Promise<void>((resolve) => {
             if (Module.calledRun) {
               resolve();
@@ -195,73 +191,69 @@ const useStore = create<WalletState & WalletActions>()(
             }
           });
           console.log("Module runtime initialized");
-      
+
           await initializeApp.initializeApp();
           console.log("App initialized");
-      
+
           const networkInfo = await api.getNetworkInfo();
           console.log("Network info retrieved:", networkInfo);
-      
-          let password = localStorage.getItem('walletPassword');
+
+          let password = localStorage.getItem("walletPassword");
           if (!password) {
             password = generateSecurePassword();
-            localStorage.setItem('walletPassword', password);
+            localStorage.setItem("walletPassword", password);
             console.log("New wallet password generated");
           } else {
             console.log("Existing wallet password retrieved");
           }
-      
+
+          // First, try to create a new wallet
+          try {
+            console.log("Attempting to create new wallet");
+            await api.createNewWallet(password);
+            console.log("New wallet created successfully");
+          } catch (createError) {
+            console.log(
+              "Wallet creation failed, likely because it already exists:",
+              createError
+            );
+          }
+
+          // Now try to unlock the wallet
+          let unlocked = false;
           try {
             console.log("Attempting to unlock wallet");
-            let unlocked = await api.unlockWallet(password);
-            if (!unlocked) {
-              console.log("Wallet unlock failed, clearing wallet data and creating new wallet");
-              clearWalletData();
-              password = generateSecurePassword();
-              localStorage.setItem('walletPassword', password);
-              await api.createNewWallet(password);
-              console.log("New wallet created, attempting to unlock");
-              unlocked = await api.unlockWallet(password);
-            }
-            if (!unlocked) {
+            unlocked = await api.unlockWallet(password);
+            if (unlocked) {
+              console.log("Wallet unlocked successfully");
+            } else {
               throw new Error("Failed to unlock wallet");
             }
-            console.log("Wallet unlocked successfully");
-          } catch (error) {
-            console.error("Error during wallet unlock/creation:", error);
-            if (error instanceof Error && error.message.includes("Master key doesn't exist")) {
-              console.log("Master key doesn't exist, creating new wallet");
-              await api.createNewWallet(password);
-              console.log("New wallet created, attempting to unlock");
-              const unlocked = await api.unlockWallet(password);
-              if (!unlocked) {
-                throw new Error("Failed to unlock newly created wallet");
-              }
-            } else {
-              throw error;
-            }
+          } catch (unlockError) {
+            console.error("Error unlocking wallet:", unlockError);
+            throw unlockError;
           }
-      
+
+          if (!unlocked) {
+            throw new Error("Failed to create or unlock wallet");
+          }
+
           set({
-            networkMode: networkInfo.network as "Mainnet" | "Testnet" | "Devnet",
+            networkMode: networkInfo.network as
+              | "Mainnet"
+              | "Testnet"
+              | "Devnet",
             isInitialized: true,
             isLocked: false,
             walletPassword: password,
           });
-          
-          console.log("Wallet state set, waiting before refreshing data");
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          try {
-            console.log("Refreshing wallet data");
-            await get().refreshWalletData();
-            console.log("Wallet data refreshed successfully");
-          } catch (refreshError) {
-            console.warn("Failed to refresh wallet data, but wallet is initialized:", refreshError);
-          }
+
+          await get().refreshWalletData();
         } catch (error) {
           console.error("Failed to initialize wallet:", error);
-          set({ error: `Failed to initialize wallet: ${(error as Error).message}` });
+          set({
+            error: `Failed to initialize wallet: ${(error as Error).message}`,
+          });
         } finally {
           set({ isLoading: false });
         }
@@ -355,7 +347,7 @@ const useStore = create<WalletState & WalletActions>()(
             creditPacks,
           });
         } catch (error) {
-          browserLogger.error("Failed to refresh wallet data:", error);
+          console.error("Failed to refresh wallet data:", error);
           set({
             error: `Failed to refresh wallet data: ${(error as Error).message}`,
           });

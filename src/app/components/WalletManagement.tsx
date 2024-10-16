@@ -13,14 +13,27 @@ export default function WalletManagement() {
     null
   );
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [walletManagementLoading, setWalletManagementLoading] = useState<{
+    isWalletInfoLoading: boolean;
+    isListAddressAmountsLoading: boolean;
+    isImportWalletLoading: boolean;
+    isPrivateKeyLoading: boolean;
+  }>({
+    isWalletInfoLoading: false,
+    isListAddressAmountsLoading: false,
+    isImportWalletLoading: false,
+    isPrivateKeyLoading: false,
+  });
 
   const importPrivKey = async () => {
     if (!privKey) {
       alert("Please enter private key!");
       return;
     }
-    setIsLoading(true);
+    setWalletManagementLoading({
+      ...walletManagementLoading,
+      isPrivateKeyLoading: true,
+    });
     try {
       await api.importPrivKey(privKey);
       alert("Private key imported successfully!");
@@ -29,7 +42,10 @@ export default function WalletManagement() {
       console.error("Error importing private key:", error);
       alert("Failed to import private key. Please try again.");
     } finally {
-      setIsLoading(false);
+      setWalletManagementLoading({
+        ...walletManagementLoading,
+        isPrivateKeyLoading: false,
+      });
     }
   };
 
@@ -38,7 +54,10 @@ export default function WalletManagement() {
       alert("Please select a Wallet file to import.");
       return;
     }
-    setIsLoading(true);
+    setWalletManagementLoading({
+      ...walletManagementLoading,
+      isImportWalletLoading: true,
+    });
     try {
       const arrayBuffer = await walletFile.arrayBuffer();
       const success = await api.loadWalletFromDatFile(arrayBuffer);
@@ -52,12 +71,18 @@ export default function WalletManagement() {
       console.error("Error importing wallet:", error);
       alert("Failed to import wallet. Please try again.");
     } finally {
-      setIsLoading(false);
+      setWalletManagementLoading({
+        ...walletManagementLoading,
+        isImportWalletLoading: false,
+      });
     }
   };
   
   const listAddressAmounts = async () => {
-    setIsLoading(true);
+    setWalletManagementLoading({
+      ...walletManagementLoading,
+      isListAddressAmountsLoading: true,
+    });
     try {
       const data = await api.listAddressAmounts();
       setAddressAmounts(data);
@@ -65,12 +90,18 @@ export default function WalletManagement() {
       console.error("Error retrieving address amounts:", error);
       alert("Failed to retrieve address amounts. Please try again.");
     } finally {
-      setIsLoading(false);
+      setWalletManagementLoading({
+        ...walletManagementLoading,
+        isListAddressAmountsLoading: false,
+      });
     }
   };
 
   const getWalletInfo = async () => {
-    setIsLoading(true);
+    setWalletManagementLoading({
+      ...walletManagementLoading,
+      isWalletInfoLoading: true,
+    });
     try {
       const data = await api.getWalletInfo();
       setWalletInfo(data);
@@ -78,7 +109,10 @@ export default function WalletManagement() {
       console.error("Error retrieving wallet info:", error);
       alert("Failed to retrieve wallet info. Please try again.");
     } finally {
-      setIsLoading(false);
+      setWalletManagementLoading({
+        ...walletManagementLoading,
+        isWalletInfoLoading: false,
+      });
     }
   };
 
@@ -134,11 +168,11 @@ export default function WalletManagement() {
             id="importPrivKeyButton"
             className="btn success outline"
             onClick={importPrivKey}
-            disabled={isLoading}
+            disabled={walletManagementLoading.isPrivateKeyLoading}
           >
             Import Private Key
           </button>
-          {isLoading && <div className="btn is-loading">Importing...</div>}
+          {walletManagementLoading.isPrivateKeyLoading && <div className="btn is-loading">Importing...</div>}
         </div>
       </div>
       <div className="mb-4">
@@ -168,11 +202,11 @@ export default function WalletManagement() {
             id="importWalletButton"
             className="btn success outline mt-2"
             onClick={importWallet}
-            disabled={isLoading}
+            disabled={walletManagementLoading.isImportWalletLoading}
           >
             Import Wallet
           </button>
-          {isLoading && <div className="btn is-loading">Importing...</div>}
+          {walletManagementLoading.isImportWalletLoading && <div className="btn is-loading">Importing...</div>}
         </div>
       </div>
       <label
@@ -187,7 +221,7 @@ export default function WalletManagement() {
             id="listAddressAmountsButton"
             className="btn success outline"
             onClick={listAddressAmounts}
-            disabled={isLoading}
+            disabled={walletManagementLoading.isListAddressAmountsLoading}
           >
             List Address Amounts
             <span
@@ -197,7 +231,7 @@ export default function WalletManagement() {
               &#9432;
             </span>
           </button>
-          {isLoading && <div className="btn is-loading">Loading...</div>}
+          {walletManagementLoading.isListAddressAmountsLoading && <div className="btn is-loading">Loading...</div>}
         </div>
         {addressAmounts && (
           <div
@@ -241,7 +275,7 @@ export default function WalletManagement() {
             id="getWalletInfoButton"
             className="btn success outline"
             onClick={getWalletInfo}
-            disabled={isLoading}
+            disabled={walletManagementLoading.isWalletInfoLoading}
           >
             Get Wallet Info
             <span
@@ -251,7 +285,7 @@ export default function WalletManagement() {
               &#9432;
             </span>
           </button>
-          {isLoading && <div className="btn is-loading">Loading...</div>}
+          {walletManagementLoading.isWalletInfoLoading && <div className="btn is-loading">Loading...</div>}
         </div>
         {walletInfo && (
           <div

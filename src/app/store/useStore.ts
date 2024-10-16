@@ -248,6 +248,10 @@ const useStore = create<WalletState & WalletActions>()(
             walletPassword: password,
           });
 
+          // Add a delay before refreshing wallet data
+          console.log("Waiting before refreshing wallet data");
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+
           await get().refreshWalletData();
         } catch (error) {
           console.error("Failed to initialize wallet:", error);

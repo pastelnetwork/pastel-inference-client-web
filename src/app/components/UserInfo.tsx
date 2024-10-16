@@ -1,32 +1,38 @@
 // src/app/components/UserInfo.tsx
 
-'use client';
+"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import browserLogger from "@/app/lib/logger";
-import * as api from '@/app/lib/api';
-import * as utils from '@/app/lib/utils';
-import useStore from '../store/useStore';
+import * as api from "@/app/lib/api";
+import * as utils from "@/app/lib/utils";
+import useStore from "../store/useStore";
 
 export default function UserInfo() {
   const { setPastelId } = useStore();
+  const { walletPassword } = useStore();
+  const [showPassword, setShowPassword] = useState(false);
   const [walletBalance, setWalletBalance] = useState<string>("Loading...");
   const [pastelIDs, setPastelIDs] = useState<string[]>([]);
   const [selectedPastelID, setSelectedPastelID] = useState<string>("");
   const [passphrase, setPassphrase] = useState<string>("");
   const [rememberPassphrase, setRememberPassphrase] = useState<boolean>(false);
-  const [showPassphraseInput, setShowPassphraseInput] = useState<boolean>(false);
+  const [showPassphraseInput, setShowPassphraseInput] =
+    useState<boolean>(false);
   const [message, setMessage] = useState<string>("");
   const [isCreatingPastelID, setIsCreatingPastelID] = useState<boolean>(false);
-  const [newPastelIDPassphrase, setNewPastelIDPassphrase] = useState<string>("");
+  const [newPastelIDPassphrase, setNewPastelIDPassphrase] =
+    useState<string>("");
   const [myPslAddress, setMyPslAddress] = useState<string>("");
-  const [promotionalPackFile, setPromotionalPackFile] = useState<File | null>(null);
+  const [promotionalPackFile, setPromotionalPackFile] = useState<File | null>(
+    null
+  );
   const [modalContent, setModalContent] = useState<{
     title: string;
-    message: string
+    message: string;
   }>({
-    title: '',
-    message: '',
+    title: "",
+    message: "",
   });
   const [shoModalMessage, setShowModalMessage] = useState<boolean>(false);
 
@@ -73,7 +79,9 @@ export default function UserInfo() {
     fetchMyPslAddress();
   }, [fetchWalletInfo, fetchPastelIDs, fetchMyPslAddress]);
 
-  const handlePastelIDChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+  const handlePastelIDChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
     const newPastelID = event.target.value;
     setSelectedPastelID(newPastelID);
     setPastelId(newPastelID);
@@ -135,11 +143,14 @@ export default function UserInfo() {
         } else {
           attempts++;
           if (attempts < maxAttempts) {
-            let statusMessage = "PastelID registration and wallet funding in progress...";
+            let statusMessage =
+              "PastelID registration and wallet funding in progress...";
             if (isRegistered) {
-              statusMessage = "PastelID registered. Waiting for wallet to be funded...";
+              statusMessage =
+                "PastelID registered. Waiting for wallet to be funded...";
             } else if (walletBalance > 0) {
-              statusMessage = "Wallet funded. Waiting for PastelID registration...";
+              statusMessage =
+                "Wallet funded. Waiting for PastelID registration...";
             }
             setMessage(`${statusMessage} (Attempt ${attempts}/${maxAttempts})`);
             setTimeout(checkStatus, pollInterval);
@@ -150,7 +161,10 @@ export default function UserInfo() {
           }
         }
       } catch (error) {
-        browserLogger.error("Error checking PastelID and wallet status:", error);
+        browserLogger.error(
+          "Error checking PastelID and wallet status:",
+          error
+        );
         setMessage(
           "An error occurred while checking your PastelID and wallet status. Please refresh the page in a few minutes."
         );
@@ -160,7 +174,9 @@ export default function UserInfo() {
     checkStatus();
   };
 
-  const handleImportPastelID = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportPastelID = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
     if (!file) {
       setMessage("Please select a PastelID file to import.");
@@ -169,7 +185,11 @@ export default function UserInfo() {
     try {
       const networkInfo = await api.getNetworkInfo();
       const fileContent = await file.text();
-      const result = await api.importPastelID(fileContent, networkInfo.network, passphrase);
+      const result = await api.importPastelID(
+        fileContent,
+        networkInfo.network,
+        passphrase
+      );
       if (result.success) {
         setMessage("PastelID imported successfully!");
         window.location.reload();
@@ -182,7 +202,9 @@ export default function UserInfo() {
     }
   };
 
-  const handlePromotionalPackFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePromotionalPackFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
     setPromotionalPackFile(file || null);
   };
@@ -195,43 +217,49 @@ export default function UserInfo() {
 
     setShowModalMessage(true);
     setModalContent({
-      title: 'Importing Promotional Pack',
-      message: 'Processing your promotional pack...'
-    })
+      title: "Importing Promotional Pack",
+      message: "Processing your promotional pack...",
+    });
     try {
       const fileContent = await promotionalPackFile.text();
       const result = await utils.importPromotionalPack(fileContent);
       if (result.success) {
         browserLogger.info("Import details:", result.processedPacks);
         setModalContent({
-          title: 'Import Successful',
-          message: result.message
-        })
+          title: "Import Successful",
+          message: result.message,
+        });
         if (result.processedPacks && result.processedPacks.length > 0) {
-          result.processedPacks.forEach((pack: { pub_key: string; passphrase: string }) => {
-            localStorage.setItem(pack.pub_key, btoa(pack.passphrase));
-          });
+          result.processedPacks.forEach(
+            (pack: { pub_key: string; passphrase: string }) => {
+              localStorage.setItem(pack.pub_key, btoa(pack.passphrase));
+            }
+          );
 
           const newPastelID = result.processedPacks[0].pub_key;
           await setSelectedPastelIDAndPassphrase(newPastelID, "", true);
         }
 
         setModalContent({
-          title: 'Import Successful',
-          message: 'Import completed. Refreshing data...'
-        })
+          title: "Import Successful",
+          message: "Import completed. Refreshing data...",
+        });
 
         // Refresh the page to update all components
         window.location.reload();
       } else {
-        throw new Error(result.message || "Unknown error occurred during import");
+        throw new Error(
+          result.message || "Unknown error occurred during import"
+        );
       }
     } catch (error) {
       browserLogger.error("Error importing promotional pack:", error);
       setModalContent({
-        title: 'Import Failed',
-        message: `An error occurred while importing the promotional pack: ${(error as Error).message}`
-      })
+        title: "Import Failed",
+        message: `An error occurred while importing the promotional pack: ${
+          (error as Error).message
+        }`,
+      });
     }
   };
 
@@ -241,60 +269,76 @@ export default function UserInfo() {
     isNewlyImportedPromoPack: boolean = false
   ) => {
     const storedPassphrase = localStorage.getItem(selectedPastelID);
-  
+
     try {
       const isValid = await api.checkPastelIDValidity(selectedPastelID);
-  
+
       if (!isValid) {
-        browserLogger.info(`PastelID ${selectedPastelID} is not valid. Removing from localStorage.`);
+        browserLogger.info(
+          `PastelID ${selectedPastelID} is not valid. Removing from localStorage.`
+        );
         localStorage.removeItem(selectedPastelID);
         fetchPastelIDs();
         return;
       }
-  
+
       if (extraMessage) {
         browserLogger.info(`Additional information: ${extraMessage}`);
         setModalContent({
-          title: 'Import Successful',
-          message: extraMessage
-        })
+          title: "Import Successful",
+          message: extraMessage,
+        });
       }
-  
+
       if (!storedPassphrase && !isNewlyImportedPromoPack) {
         setModalContent({
-          title: 'Import Successful',
-          message: "Passphrase required. Please implement a user input for the passphrase."
-        })
+          title: "Import Successful",
+          message:
+            "Passphrase required. Please implement a user input for the passphrase.",
+        });
       } else {
         if (isNewlyImportedPromoPack) {
-          browserLogger.info("Using stored passphrase for newly imported promo pack.");
+          browserLogger.info(
+            "Using stored passphrase for newly imported promo pack."
+          );
           if (!storedPassphrase) {
-            browserLogger.error("Expected passphrase not found for newly imported promo pack.");
+            browserLogger.error(
+              "Expected passphrase not found for newly imported promo pack."
+            );
             return;
           }
         }
         await postPassphrase(selectedPastelID, storedPassphrase!);
       }
-  
+
       setSelectedPastelID(selectedPastelID);
       setPastelId(selectedPastelID);
-  
+
       await fetchModelMenu();
       await fetchReceivedMessages();
     } catch (error) {
       browserLogger.error("Error in setSelectedPastelIDAndPassphrase:", error);
-      if ((error as { response?: { status: number } }).response?.status === 401) {
-        await setSelectedPastelIDAndPassphrase(selectedPastelID, "Invalid Passphrase. Please try again.");
+      if (
+        (error as { response?: { status: number } }).response?.status === 401
+      ) {
+        await setSelectedPastelIDAndPassphrase(
+          selectedPastelID,
+          "Invalid Passphrase. Please try again."
+        );
       } else {
         setModalContent({
-          title: 'Import Failed',
-          message: "An error occurred while setting PastelID and passphrase. Please try again."
-        })
+          title: "Import Failed",
+          message:
+            "An error occurred while setting PastelID and passphrase. Please try again.",
+        });
       }
     }
   };
 
-  const postPassphrase = async (pastelID: string, encodedPassphrase: string) => {
+  const postPassphrase = async (
+    pastelID: string,
+    encodedPassphrase: string
+  ) => {
     try {
       await api.setPastelIdAndPassphrase(pastelID, atob(encodedPassphrase));
       await fetchModelMenu();
@@ -339,6 +383,38 @@ export default function UserInfo() {
   return (
     <div className="grid grid-cols-5 gap-4 p-4 has-border rounded-xl bg-white shadow-md">
       <h2 className="text-2xl col-span-full text-bw-800">User Information</h2>
+
+      <div className="mt-4">
+        <div className="flex items-center">
+          <button
+            onClick={() => setShowPassword(!showPassword)}
+            className="px-4 py-2 border-2 border-green-600 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-colors"
+          >
+            {showPassword ? "Hide" : "Show"} Wallet Password
+          </button>
+        </div>
+
+        {showPassword && walletPassword && (
+          <div className="mt-2 p-4 bg-gray-50 border border-gray-300 rounded-lg w-full">
+            <p className="text-sm text-gray-700 mb-2">Wallet Password:</p>
+            <div className="flex items-center justify-between bg-white border border-gray-200 p-2 rounded">
+              <span className="font-medium text-gray-900 break-all">
+                {walletPassword}
+              </span>
+              <button
+                onClick={() => navigator.clipboard.writeText(walletPassword)}
+                className="ml-4 text-green-600 hover:text-green-800 transition-colors"
+              >
+                📋 Copy
+              </button>
+            </div>
+            <p className="text-xs text-gray-600 mt-2">
+              Please store this password securely. You&apos;ll need it if you
+              want to access your wallet on a different device.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Promotional Pack Import Section */}
       <div className="col-span-full mt-2">
@@ -551,21 +627,40 @@ export default function UserInfo() {
         </div>
       )}
 
-      {shoModalMessage ?
+      {shoModalMessage ? (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
-          <div className="fixed inset-0 bg-transparent z-20 w-full h-full" onClick={() => setShowModalMessage(false)}></div>
+          <div
+            className="fixed inset-0 bg-transparent z-20 w-full h-full"
+            onClick={() => setShowModalMessage(false)}
+          ></div>
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white z-50">
             <div className="mt-3 text-center">
               <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                <svg className="h-6 w-6 text-green-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path className="opacity-75" fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-                  </path>
+                <svg
+                  className="h-6 w-6 text-green-600 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
               </div>
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mt-5" id="modalTitle">
-              {modalContent.title}
+              <h3
+                className="text-lg leading-6 font-medium text-gray-900 mt-5"
+                id="modalTitle"
+              >
+                {modalContent.title}
               </h3>
               <div className="mt-2 px-7 py-3">
                 <p className="text-sm text-gray-500" id="modalMessage">
@@ -574,8 +669,8 @@ export default function UserInfo() {
               </div>
             </div>
           </div>
-        </div> : null
-      }
+        </div>
+      ) : null}
     </div>
   );
 }

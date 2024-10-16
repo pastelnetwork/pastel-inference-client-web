@@ -195,13 +195,23 @@ export async function importPrivKey(zcashPrivKey: string): Promise<string> {
 }
 
 export async function listAddressAmounts(includeEmpty: boolean = false): Promise<{ [address: string]: number }> {
-  const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.listAddressAmounts(includeEmpty);
+  try {
+    const rpc = BrowserRPCReplacement.getInstance();
+    return await rpc.listAddressAmounts(includeEmpty);
+  } catch (error) {
+    console.error("Error in listAddressAmounts:", error);
+    throw error;
+  }
 }
 
 export async function getBalance(): Promise<number> {
-  const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.getBalance();
+  try {
+    const rpc = BrowserRPCReplacement.getInstance();
+    return await rpc.getBalance();
+  } catch (error) {
+    console.error("Error in getBalance:", error);
+    throw error;
+  }
 }
 
 export async function getWalletInfo(): Promise<WalletInfo> {
@@ -222,20 +232,12 @@ export async function createAndFundNewAddress(amount: number): Promise<SendToAdd
 export async function listPastelIDs(): Promise<string[]> {
   try {
     const rpc = BrowserRPCReplacement.getInstance();
-    await rpc.initialize(); // Ensure RPC is initialized
-
-    const count = await rpc.getPastelIDsCount();
-    const ids: string[] = [];
-
-    for (let i = 0; i < count; i++) {
-      const pastelID = await rpc.getPastelIDByIndex(i);
-      ids.push(pastelID);
-    }
-
-    return ids;
+    const pastelIDs = await rpc.getPastelIDs();
+    console.log("Retrieved PastelIDs:", pastelIDs);
+    return pastelIDs;
   } catch (error) {
     console.error("Error listing PastelIDs:", error);
-    throw error;
+    return [];
   }
 }
 
@@ -255,12 +257,19 @@ export async function isCreditPackConfirmed(txid: string): Promise<boolean> {
 }
 
 export async function createAndRegisterPastelID(): Promise<{ pastelID: string; txid: string }> {
-  const rpc = BrowserRPCReplacement.getInstance();
-  const pastelID = await rpc.makeNewPastelID(false);
-  const address = await rpc.getMyPslAddressWithLargestBalance();
-  const fee = 0; // You might want to calculate this or get it from somewhere
-  const txid = await rpc.createRegisterPastelIdTransaction(pastelID, address, fee);
-  return { pastelID, txid };
+  try {
+    const rpc = BrowserRPCReplacement.getInstance();
+    const pastelID = await rpc.makeNewPastelID(false);
+    console.log("New PastelID created:", pastelID);
+    const address = await rpc.getMyPslAddressWithLargestBalance();
+    const fee = 0;
+    const txid = await rpc.createRegisterPastelIdTransaction(pastelID, address, fee);
+    console.log("PastelID registered with txid:", txid);
+    return { pastelID, txid };
+  } catch (error) {
+    console.error("Error creating and registering PastelID:", error);
+    throw error;
+  }
 }
 
 export async function isPastelIDRegistered(pastelID: string): Promise<boolean> {
@@ -334,6 +343,16 @@ export async function checkTrackingAddressBalance(creditPackTicketId: string): P
     throw new Error("Failed to retrieve balance for the tracking address");
   }
   return { address: trackingAddress, balance: balance };
+}
+
+export async function unlockWallet(password: string): Promise<boolean> {
+  const rpc = BrowserRPCReplacement.getInstance();
+  return await rpc.unlockWallet(password);
+}
+
+export async function createNewWallet(password: string): Promise<string> {
+  const rpc = BrowserRPCReplacement.getInstance();
+  return await rpc.createNewWallet(password);
 }
 
 export async function importPastelID(fileContent: string, network: string, passphrase: string): Promise<{ success: boolean; message: string }> {
@@ -518,6 +537,8 @@ export async function getBlock(blockHash: string): Promise<unknown> {
 
 const api = {
   changeNetwork,
+  unlockWallet,
+  createNewWallet,  
   getNetworkInfo,
   getBestSupernodeUrl,
   getInferenceModelMenu,

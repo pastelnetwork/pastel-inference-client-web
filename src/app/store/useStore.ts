@@ -17,6 +17,7 @@ import {
   EmscriptenModule,
 } from "@/app/types";
 import browserLogger from "@/app/lib/logger";
+import { generateSecurePassword } from "../lib/passwordUtils";
 import { initWasm } from "../lib/wasmLoader";
 declare const Module: EmscriptenModule;
 
@@ -33,10 +34,12 @@ interface WalletState {
   isInitialized: boolean;
   promoGeneratorMessage: string | null;
   isGeneratingPromotionalPacks: boolean;
+  walletPassword: string | null;
 }
 
 interface WalletActions {
   setLocked: (isLocked: boolean) => void;
+  unlockWallet: () => Promise<boolean>;
   setNetworkMode: (mode: "Mainnet" | "Testnet" | "Devnet") => void;
   setPastelId: (id: string) => void;
   setBalance: (balance: number) => void;
@@ -52,15 +55,23 @@ interface WalletActions {
   createNewAddress: () => Promise<void>;
   refreshWalletData: () => Promise<void>;
   fetchModelMenu: () => Promise<void>;
-  changeNetwork: (newNetwork: string) => Promise<{ success: boolean; message: string }>;
+  changeNetwork: (
+    newNetwork: string
+  ) => Promise<{ success: boolean; message: string }>;
   getNetworkInfo: () => Promise<{ network: string }>;
   getBestSupernodeUrl: (userPastelID: string) => Promise<string>;
   getInferenceModelMenu: () => Promise<ModelMenu>;
-  estimateCreditPackCost: (desiredNumberOfCredits: number, creditPriceCushionPercentage: number) => Promise<number>;
+  estimateCreditPackCost: (
+    desiredNumberOfCredits: number,
+    creditPriceCushionPercentage: number
+  ) => Promise<number>;
   sendMessage: (
     toPastelID: string,
     messageBody: string
-  ) => Promise<{ sent_messages: UserMessage[]; received_messages: UserMessage[] }>;
+  ) => Promise<{
+    sent_messages: UserMessage[];
+    received_messages: UserMessage[];
+  }>;
   getReceivedMessages: () => Promise<UserMessage[]>;
   createCreditPackTicket: (
     numCredits: number,
@@ -71,29 +82,53 @@ interface WalletActions {
   getCreditPackInfo: (txid: string) => Promise<CreditPackTicketInfo>;
   getMyValidCreditPacks: () => Promise<CreditPack[]>;
   getMyPslAddressWithLargestBalance: () => Promise<string>;
-  createInferenceRequest: (params: InferenceRequestParams) => Promise<InferenceResult | null>;
-  checkSupernodeList: () => Promise<{ validMasternodeListFullDF: SupernodeInfo[] }>;
-  registerPastelID: (pastelid: string, address: string, fee?: number) => Promise<string>;
+  createInferenceRequest: (
+    params: InferenceRequestParams
+  ) => Promise<InferenceResult | null>;
+  checkSupernodeList: () => Promise<{
+    validMasternodeListFullDF: SupernodeInfo[];
+  }>;
+  registerPastelID: (
+    pastelid: string,
+    address: string,
+    fee?: number
+  ) => Promise<string>;
   listPastelIDs: () => Promise<string[]>;
   checkForPastelID: () => Promise<string | null>;
   isCreditPackConfirmed: (txid: string) => Promise<boolean>;
   createAndRegisterPastelID: () => Promise<{ pastelID: string; txid: string }>;
   isPastelIDRegistered: (pastelID: string) => Promise<boolean>;
-  setPastelIdAndPassphrase: (pastelID: string, passphrase: string) => Promise<void>;
+  setPastelIdAndPassphrase: (
+    pastelID: string,
+    passphrase: string
+  ) => Promise<void>;
   ensureMinimalPSLBalance: (addresses: string[] | null) => Promise<void>;
   checkPastelIDValidity: (pastelID: string) => Promise<boolean>;
   verifyPastelID: (pastelID: string) => Promise<boolean>;
   verifyTrackingAddress: (address: string) => Promise<boolean>;
-  checkTrackingAddressBalance: (creditPackTicketId: string) => Promise<{ address: string; balance: number }>;
-  importPastelID: (fileContent: string, network: string, passphrase: string) => Promise<{ success: boolean; message: string }>;
-  createWalletFromMnemonic: (password: string, mnemonic: string) => Promise<string>;
+  checkTrackingAddressBalance: (
+    creditPackTicketId: string
+  ) => Promise<{ address: string; balance: number }>;
+  importPastelID: (
+    fileContent: string,
+    network: string,
+    passphrase: string
+  ) => Promise<{ success: boolean; message: string }>;
+  createWalletFromMnemonic: (
+    password: string,
+    mnemonic: string
+  ) => Promise<string>;
   loadWalletFromDatFile: (walletData: ArrayBuffer) => Promise<boolean>;
   downloadWalletToDatFile: (filename?: string) => Promise<boolean>;
   selectAndReadWalletFile: () => Promise<string>;
   waitForPastelIDRegistration: (pastelID: string) => Promise<boolean>;
   waitForCreditPackConfirmation: (txid: string) => Promise<boolean>;
   getBurnAddress: () => Promise<string>;
-  signMessageWithPastelID: (pastelid: string, messageToSign: string, type?: PastelIDType) => Promise<string>;
+  signMessageWithPastelID: (
+    pastelid: string,
+    messageToSign: string,
+    type?: PastelIDType
+  ) => Promise<string>;
   verifyMessageWithPastelID: (
     pastelid: string,
     messageToVerify: string,
@@ -104,6 +139,11 @@ interface WalletActions {
   sendToAddress: (address: string, amount: number) => Promise<string>;
   sendMany: (amounts: { address: string; amount: number }[]) => Promise<string>;
 }
+
+const clearWalletData = () => {
+  localStorage.removeItem('walletPassword');
+  // Add any other wallet-related data that needs to be cleared
+};
 
 const useStore = create<WalletState & WalletActions>()(
   persist(
@@ -118,8 +158,9 @@ const useStore = create<WalletState & WalletActions>()(
       isLoading: false,
       error: null,
       isInitialized: false,
-      promoGeneratorMessage: '',
+      promoGeneratorMessage: "",
       isGeneratingPromotionalPacks: false,
+      walletPassword: null,
 
       setLocked: (isLocked) => set({ isLocked }),
       setNetworkMode: (mode) => set({ networkMode: mode }),
@@ -130,19 +171,22 @@ const useStore = create<WalletState & WalletActions>()(
       setModelMenu: (menu) => set({ modelMenu: menu }),
       setLoading: (isLoading) => set({ isLoading }),
       setError: (error) => set({ error }),
-      setPromoGeneratorMessage: (promoGeneratorMessage) => set({ promoGeneratorMessage }),
-      setGeneratingPromotionalPacks: (isGeneratingPromotionalPacks) => set({ isGeneratingPromotionalPacks }),
-
+      setPromoGeneratorMessage: (promoGeneratorMessage) =>
+        set({ promoGeneratorMessage }),
+      setGeneratingPromotionalPacks: (isGeneratingPromotionalPacks) =>
+        set({ isGeneratingPromotionalPacks }),
+      
       initializeWallet: async () => {
         if (get().isLoading) return;
         set({ isLoading: true, error: null });
         try {
+          console.log("Starting wallet initialization");
           const wasmModule = await initWasm();
           if (!wasmModule) {
             throw new Error("Failed to initialize WASM module");
           }
-          
-          // Wait for the runtime to be fully initialized
+          console.log("WASM module initialized");
+      
           await new Promise<void>((resolve) => {
             if (Module.calledRun) {
               resolve();
@@ -150,19 +194,92 @@ const useStore = create<WalletState & WalletActions>()(
               Module.onRuntimeInitialized = resolve;
             }
           });
+          console.log("Module runtime initialized");
       
           await initializeApp.initializeApp();
+          console.log("App initialized");
+      
           const networkInfo = await api.getNetworkInfo();
+          console.log("Network info retrieved:", networkInfo);
+      
+          let password = localStorage.getItem('walletPassword');
+          if (!password) {
+            password = generateSecurePassword();
+            localStorage.setItem('walletPassword', password);
+            console.log("New wallet password generated");
+          } else {
+            console.log("Existing wallet password retrieved");
+          }
+      
+          try {
+            console.log("Attempting to unlock wallet");
+            let unlocked = await api.unlockWallet(password);
+            if (!unlocked) {
+              console.log("Wallet unlock failed, clearing wallet data and creating new wallet");
+              clearWalletData();
+              password = generateSecurePassword();
+              localStorage.setItem('walletPassword', password);
+              await api.createNewWallet(password);
+              console.log("New wallet created, attempting to unlock");
+              unlocked = await api.unlockWallet(password);
+            }
+            if (!unlocked) {
+              throw new Error("Failed to unlock wallet");
+            }
+            console.log("Wallet unlocked successfully");
+          } catch (error) {
+            console.error("Error during wallet unlock/creation:", error);
+            if (error instanceof Error && error.message.includes("Master key doesn't exist")) {
+              console.log("Master key doesn't exist, creating new wallet");
+              await api.createNewWallet(password);
+              console.log("New wallet created, attempting to unlock");
+              const unlocked = await api.unlockWallet(password);
+              if (!unlocked) {
+                throw new Error("Failed to unlock newly created wallet");
+              }
+            } else {
+              throw error;
+            }
+          }
+      
           set({
             networkMode: networkInfo.network as "Mainnet" | "Testnet" | "Devnet",
             isInitialized: true,
+            isLocked: false,
+            walletPassword: password,
           });
-          await get().refreshWalletData();
+          
+          console.log("Wallet state set, waiting before refreshing data");
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          try {
+            console.log("Refreshing wallet data");
+            await get().refreshWalletData();
+            console.log("Wallet data refreshed successfully");
+          } catch (refreshError) {
+            console.warn("Failed to refresh wallet data, but wallet is initialized:", refreshError);
+          }
         } catch (error) {
           console.error("Failed to initialize wallet:", error);
           set({ error: `Failed to initialize wallet: ${(error as Error).message}` });
         } finally {
           set({ isLoading: false });
+        }
+      },
+
+      unlockWallet: async () => {
+        const password = get().walletPassword;
+        if (!password) {
+          console.error("No wallet password found");
+          return false;
+        }
+        try {
+          const unlocked = await api.unlockWallet(password);
+          set({ isLocked: !unlocked });
+          return unlocked;
+        } catch (error) {
+          console.error("Failed to unlock wallet:", error);
+          return false;
         }
       },
 
@@ -194,7 +311,9 @@ const useStore = create<WalletState & WalletActions>()(
           }));
         } catch (error) {
           browserLogger.error("Failed to create new address:", error);
-          set({ error: `Failed to create new address: ${(error as Error).message}` });
+          set({
+            error: `Failed to create new address: ${(error as Error).message}`,
+          });
         } finally {
           set({ isLoading: false });
         }
@@ -208,10 +327,26 @@ const useStore = create<WalletState & WalletActions>()(
         }
         try {
           const balance = await api.getBalance();
-          const addressAmounts = await api.listAddressAmounts();
-          const addresses = Object.keys(addressAmounts);
-          const pastelIDs = await api.listPastelIDs();
-          const creditPacks = await api.getMyValidCreditPacks();
+          let addresses: string[] = [];
+          let addressAmounts: { [address: string]: number } = {};
+          try {
+            addressAmounts = await api.listAddressAmounts();
+            addresses = Object.keys(addressAmounts);
+          } catch (error) {
+            console.error("Error getting address amounts:", error);
+          }
+          let pastelIDs: string[] = [];
+          try {
+            pastelIDs = await api.listPastelIDs();
+          } catch (error) {
+            console.error("Error listing PastelIDs:", error);
+          }
+          let creditPacks: CreditPack[] = [];
+          try {
+            creditPacks = await api.getMyValidCreditPacks();
+          } catch (error) {
+            console.error("Error getting valid credit packs:", error);
+          }
 
           set({
             balance,
@@ -221,7 +356,9 @@ const useStore = create<WalletState & WalletActions>()(
           });
         } catch (error) {
           browserLogger.error("Failed to refresh wallet data:", error);
-          set({ error: `Failed to refresh wallet data: ${(error as Error).message}` });
+          set({
+            error: `Failed to refresh wallet data: ${(error as Error).message}`,
+          });
         } finally {
           set({ isLoading: false });
         }
@@ -234,7 +371,9 @@ const useStore = create<WalletState & WalletActions>()(
           set({ modelMenu: menu });
         } catch (error) {
           browserLogger.error("Failed to fetch model menu:", error);
-          set({ error: `Failed to fetch model menu: ${(error as Error).message}` });
+          set({
+            error: `Failed to fetch model menu: ${(error as Error).message}`,
+          });
         } finally {
           set({ isLoading: false });
         }
@@ -255,7 +394,11 @@ const useStore = create<WalletState & WalletActions>()(
       checkSupernodeList: api.checkSupernodeList,
 
       // Corrected registerPastelID signature and mapping
-      registerPastelID: async (pastelid: string, address: string, fee?: number) => {
+      registerPastelID: async (
+        pastelid: string,
+        address: string,
+        fee?: number
+      ) => {
         return await api.registerPastelID(pastelid, address, fee);
       },
 
@@ -280,15 +423,23 @@ const useStore = create<WalletState & WalletActions>()(
       getBurnAddress: api.getBurnAddress,
 
       // Corrected signMessageWithPastelID signature and mapping
-      signMessageWithPastelID: (pastelid: string, messageToSign: string, type?: PastelIDType) =>
-        api.signMessageWithPastelID(pastelid, messageToSign, type),
+      signMessageWithPastelID: (
+        pastelid: string,
+        messageToSign: string,
+        type?: PastelIDType
+      ) => api.signMessageWithPastelID(pastelid, messageToSign, type),
 
       // Corrected verifyMessageWithPastelID signature and mapping
       verifyMessageWithPastelID: (
         pastelid: string,
         messageToVerify: string,
         pastelIDSignatureOnMessage: string
-      ) => api.verifyMessageWithPastelID(pastelid, messageToVerify, pastelIDSignatureOnMessage),
+      ) =>
+        api.verifyMessageWithPastelID(
+          pastelid,
+          messageToVerify,
+          pastelIDSignatureOnMessage
+        ),
 
       getCurrentPastelBlockHeight: api.getCurrentPastelBlockHeight,
       getBestBlockHashAndMerkleRoot: api.getBestBlockHashAndMerkleRoot,
@@ -301,6 +452,7 @@ const useStore = create<WalletState & WalletActions>()(
         networkMode: state.networkMode,
         pastelId: state.pastelId,
         addresses: state.addresses,
+        walletPassword: state.walletPassword,
       }),
     }
   )

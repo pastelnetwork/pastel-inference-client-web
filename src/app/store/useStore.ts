@@ -182,7 +182,6 @@ const useStore = create<WalletState & WalletActions>()(
           }
           console.log("WASM module initialized");
 
-          // Wait for the Module to be fully initialized
           await new Promise<void>((resolve) => {
             if (Module.calledRun) {
               resolve();
@@ -207,31 +206,29 @@ const useStore = create<WalletState & WalletActions>()(
             console.log("Existing wallet password retrieved");
           }
 
-          // First, try to create a new wallet
+          // Try to create a new wallet or unlock existing one
+          let unlocked = false;
           try {
             console.log("Attempting to create new wallet");
             await api.createNewWallet(password);
             console.log("New wallet created successfully");
+            unlocked = true;
           } catch (createError) {
             console.log(
-              "Wallet creation failed, likely because it already exists:",
+              "Wallet creation failed, attempting to unlock existing wallet:",
               createError
             );
-          }
-
-          // Now try to unlock the wallet
-          let unlocked = false;
-          try {
-            console.log("Attempting to unlock wallet");
-            unlocked = await api.unlockWallet(password);
-            if (unlocked) {
-              console.log("Wallet unlocked successfully");
-            } else {
-              throw new Error("Failed to unlock wallet");
+            try {
+              unlocked = await api.unlockWallet(password);
+              if (unlocked) {
+                console.log("Existing wallet unlocked successfully");
+              } else {
+                throw new Error("Failed to unlock existing wallet");
+              }
+            } catch (unlockError) {
+              console.error("Error unlocking wallet:", unlockError);
+              throw unlockError;
             }
-          } catch (unlockError) {
-            console.error("Error unlocking wallet:", unlockError);
-            throw unlockError;
           }
 
           if (!unlocked) {
@@ -248,11 +245,31 @@ const useStore = create<WalletState & WalletActions>()(
             walletPassword: password,
           });
 
-          // Add a delay before refreshing wallet data
-          console.log("Waiting before refreshing wallet data");
+          console.log("Wallet state set, waiting before refreshing data");
           await new Promise((resolve) => setTimeout(resolve, 2000));
 
-          await get().refreshWalletData();
+          try {
+            console.log("Refreshing wallet data");
+            await get().refreshWalletData();
+            console.log("Wallet data refreshed successfully");
+          } catch (refreshError) {
+            console.warn(
+              "Failed to refresh wallet data, but wallet is initialized:",
+              refreshError
+            );
+          }
+
+          // Check for existing PastelID, but don't create one automatically
+          const existingPastelId = await api.checkForPastelID();
+          if (existingPastelId) {
+            console.log("Existing PastelID found:", existingPastelId);
+            await api.setPastelIdAndPassphrase(existingPastelId, password);
+            set({ pastelId: existingPastelId });
+          } else {
+            console.log(
+              "No PastelID found. User may need to create a new one or import a promo pack."
+            );
+          }
         } catch (error) {
           console.error("Failed to initialize wallet:", error);
           set({
@@ -366,10 +383,9 @@ const useStore = create<WalletState & WalletActions>()(
           const menu = await api.getInferenceModelMenu();
           set({ modelMenu: menu });
         } catch (error) {
-          browserLogger.error("Failed to fetch model menu:", error);
-          set({
-            error: `Failed to fetch model menu: ${(error as Error).message}`,
-          });
+          console.error("Failed to fetch model menu:", error);
+          // Set an empty model menu instead of an error
+          set({ modelMenu: { models: [] } });
         } finally {
           set({ isLoading: false });
         }

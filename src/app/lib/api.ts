@@ -90,9 +90,12 @@ export async function getBestSupernodeUrl(userPastelID: string): Promise<string>
 export async function getInferenceModelMenu(): Promise<ModelMenu> {
   const pastelID = pastelGlobals.getPastelId();
   const passphrase = pastelGlobals.getPassphrase();
+  
   if (!pastelID || !passphrase) {
-    throw new Error("Pastel ID and passphrase not set.");
+    console.warn("PastelID or passphrase not set. Returning empty model menu.");
+    return { models: [] }; // Return an empty menu
   }
+  
   const pastelInferenceClient = new PastelInferenceClient({
     pastelID,
     passphrase,
@@ -117,6 +120,14 @@ export async function sendMessage(
   sent_messages: UserMessage[];
   received_messages: UserMessage[];
 }> {
+  const pastelID = pastelGlobals.getPastelId();
+  const passphrase = pastelGlobals.getPassphrase();
+  
+  if (!pastelID || !passphrase) {
+    console.warn("PastelID or passphrase not set. Cannot send message.");
+    return { sent_messages: [], received_messages: [] };
+  }
+  
   return await endToEndFunctions.sendMessageAndCheckForNewIncomingMessages(
     toPastelID,
     messageBody
@@ -124,8 +135,17 @@ export async function sendMessage(
 }
 
 export async function getReceivedMessages(): Promise<UserMessage[]> {
+  const pastelID = pastelGlobals.getPastelId();
+  const passphrase = pastelGlobals.getPassphrase();
+  
+  if (!pastelID || !passphrase) {
+    console.warn("PastelID or passphrase not set. Cannot retrieve messages.");
+    return [];
+  }
+  
   return await endToEndFunctions.checkForNewIncomingMessages();
 }
+
 
 export async function createCreditPackTicket(
   numCredits: number,

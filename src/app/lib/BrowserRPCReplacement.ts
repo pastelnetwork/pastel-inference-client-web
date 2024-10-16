@@ -27,6 +27,7 @@ import {
   PastelIDInfo,
   PastelIDType,
   PastelModule,
+  AddressBalance,
 } from "@/app/types";
 import {
   getNetworkFromLocalStorage,
@@ -1488,7 +1489,8 @@ class BrowserRPCReplacement {
    * @returns The balance of the address.
    */
   public async checkPSLAddressBalance(addressToCheck: string): Promise<number> {
-    return this.fetchJson<number>(`/get_address_balance?addresses=${addressToCheck}`);
+    const addressBalance = await this.fetchJson<AddressBalance>(`/get_address_balance?addresses=${addressToCheck}`)
+    return addressBalance.balance;
   }
 
   /**

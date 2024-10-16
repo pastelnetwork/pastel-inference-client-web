@@ -516,30 +516,32 @@ export default function UserInfo() {
 
       {/* Wallet Balance Section */}
       <div className="mt-4">
-        <label className="block text-bw-700 font-bold mb-2">
+        <span className="block text-bw-700 font-bold mb-2">
           Wallet Balance (PSL):
-        </label>
+        </span>
         <span id="walletBalance" className="text-bw-700">
           {walletBalance}
         </span>
       </div>
 
       {/* PSL Address Section */}
-      <div className="mt-4 flex items-center">
-        <label className="block text-bw-700 font-bold mb-2">
+      <div className="mt-4">
+        <span className="block text-bw-700 font-bold mb-2 whitespace-nowrap">
           My PSL Address:
-        </label>
-        <span id="myPslAddress" className="text-bw-700 ml-2">
-          {myPslAddress}
         </span>
-        <button
-          id="copyAddressButton"
-          className="ml-2 tooltip"
-          data-tooltip="Copy address to clipboard"
-          onClick={() => copyToClipboard(myPslAddress)}
-        >
-          📋
-        </button>
+        <div className="flex">
+          <span id="myPslAddress" className="text-bw-700">
+            {myPslAddress}
+          </span>
+          <button
+            id="copyAddressButton"
+            className="ml-2 tooltip"
+            data-tooltip="Copy address to clipboard"
+            onClick={() => copyToClipboard(myPslAddress)}
+          >
+            📋
+          </button>
+        </div>
       </div>
 
       {/* Message Display */}

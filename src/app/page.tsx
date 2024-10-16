@@ -1,9 +1,9 @@
 // src/app/page.tsx
 
-'use client';
+"use client";
 
 import React, { useEffect } from "react";
-import dynamic from 'next/dynamic';
+import dynamic from "next/dynamic";
 import Header from "./components/Header";
 import UserInfo from "./components/UserInfo";
 import CreateCreditPackTicket from "./components/CreateCreditPackTicket";
@@ -12,11 +12,15 @@ import CreateInferenceRequest from "./components/CreateInferenceRequest";
 import PreviousRequests from "./components/PreviousRequests";
 import MessageSystem from "./components/MessageSystem";
 import WalletManagement from "./components/WalletManagement";
-import ErrorBoundary from './components/ErrorBoundary';
-import useStore from './store/useStore';
+import ErrorBoundary from "./components/ErrorBoundary";
+import useStore from "./store/useStore";
 import browserLogger from "./lib/logger";
+import PasswordQRCode from "./components/PasswordQRCode";
+import QRCodeScanner from "./components/QRCodeScanner";
 
-const DynamicTerminal = dynamic(() => import('./components/Terminal'), { ssr: false });
+const DynamicTerminal = dynamic(() => import("./components/Terminal"), {
+  ssr: false,
+});
 
 export default function Home() {
   const {
@@ -27,7 +31,9 @@ export default function Home() {
     modelMenu,
     fetchModelMenu,
     isInitialized,
-    setError
+    isLocked,
+    setShowQRScanner,
+    setError,
   } = useStore();
 
   useEffect(() => {
@@ -38,7 +44,9 @@ export default function Home() {
         browserLogger.info("Wallet initialized successfully");
       } catch (err) {
         browserLogger.error("Initialization error:", err);
-        setError("Failed to initialize the application. Please refresh and try again.");
+        setError(
+          "Failed to initialize the application. Please refresh and try again."
+        );
       }
     };
     init();
@@ -61,11 +69,19 @@ export default function Home() {
   }, [isInitialized, pastelId, fetchModelMenu, setError]);
 
   if (isLoading || !isInitialized) {
-    return <div className="flex justify-center items-center h-screen">Initializing application...</div>;
+    return (
+      <div className="flex justify-center items-center h-screen">
+        Initializing application...
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="flex justify-center items-center h-screen text-red-500">{error}</div>;
+    return (
+      <div className="flex justify-center items-center h-screen text-red-500">
+        {error}
+      </div>
+    );
   }
 
   return (
@@ -73,14 +89,30 @@ export default function Home() {
       <main className="flex flex-col gap-6 transition-all duration-300 bg-bw-50">
         <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
           <Header />
-          <UserInfo />
-          <CreateCreditPackTicket />
-          <SelectCreditPackTicket />
-          <CreateInferenceRequest modelMenu={modelMenu} />
-          <PreviousRequests />
-          <MessageSystem />
-          <WalletManagement />
-          <DynamicTerminal />
+          <PasswordQRCode />
+          <QRCodeScanner />
+          {isLocked ? (
+            <div className="text-center py-10">
+              <h2 className="text-2xl font-bold mb-4">Wallet is locked</h2>
+              <button
+                className="bg-blue-500 text-white px-4 py-2 rounded"
+                onClick={() => setShowQRScanner(true)}
+              >
+                Scan QR Code to Unlock
+              </button>
+            </div>
+          ) : (
+            <>
+              <UserInfo />
+              <CreateCreditPackTicket />
+              <SelectCreditPackTicket />
+              <CreateInferenceRequest modelMenu={modelMenu} />
+              <PreviousRequests />
+              <MessageSystem />
+              <WalletManagement />
+              <DynamicTerminal />
+            </>
+          )}
         </div>
       </main>
     </ErrorBoundary>

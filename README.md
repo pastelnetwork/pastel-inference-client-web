@@ -17,6 +17,15 @@
 
 ---
 
+## Requirement
+- [Node.js](https://nodejs.org)
+- [Next.js](https://nextjs.org/docs)
+- [React](https://react.dev/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Zustand](https://github.com/pmndrs/zustand)
+- [Ant Design](https://ant.design/)
+
 ## Useful docs
 
 - [Pastel docs](https://docs.pastel.network/)

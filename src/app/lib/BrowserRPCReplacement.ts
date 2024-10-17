@@ -238,6 +238,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
         console.warn("GetAddresses returned undefined or null");
         return [];
       }
+      return addresses
     });
   } catch (error) {
     console.error("Error in getAllAddresses:", error);

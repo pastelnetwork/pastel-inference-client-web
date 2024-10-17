@@ -5,7 +5,7 @@
 import { ChangeEvent, useState } from 'react';
 import { Input, Typography, Button } from "antd";
 
-import useStore from '../store/useStore';
+import useStore from '@/app/store/useStore';
 
 export default function GeneratePromotionalPacks() {
   const { setPromoGeneratorMessage, setGeneratingPromotionalPacks } = useStore()

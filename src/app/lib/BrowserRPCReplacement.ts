@@ -238,7 +238,6 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
         console.warn("GetAddresses returned undefined or null");
         return [];
       }
-      return addresses;
     });
   } catch (error) {
     console.error("Error in getAllAddresses:", error);
@@ -317,7 +316,11 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
    */
   public async getPastelIDs(): Promise<string[]> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() => this.pastelInstance!.GetPastelIDs());
+    let data = await this.executeWasmMethod(() => this.pastelInstance!.GetPastelIDs())
+    if (typeof data === 'string') {
+      data = JSON.parse(data)?.data
+    }
+    return data;
   }
 
   // -------------------------

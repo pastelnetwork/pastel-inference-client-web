@@ -1429,6 +1429,18 @@ export async function importPromotionalPack(jsonData: string): Promise<{
   }
 }
 
+function formatNumberWithCommas(number: number, fractionDigits: number = 1) {
+  return number.toLocaleString(undefined, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
+export function parseAndFormatNumber(value: string, fractionDigits: number = 1) {
+  const number = parseFloat(value.replace(/,/g, ""));
+  return isNaN(number) ? value : formatNumberWithCommas(number, fractionDigits);
+}
+
 // Export all functions
 const utils  = {
   safeStringify,
@@ -1475,6 +1487,7 @@ const utils  = {
   waitForPastelIDRegistration,
   waitForCreditPackConfirmation,
   importPromotionalPack,
+  parseAndFormatNumber,
 };
 
 export default utils;

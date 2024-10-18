@@ -9,7 +9,9 @@ import { parseAndFormatNumber } from '@/app/lib/utils';
 
 export default function WalletManagement() {
   const [privKey, setPrivKey] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
   const [walletFile, setWalletFile] = useState<File | null>(null);
+  const [pastelWalletFile, setPastelWalletFile] = useState<File | null>(null);
   const [addressAmounts, setAddressAmounts] = useState<AddressAmount | null>(
     null
   );
@@ -25,6 +27,11 @@ export default function WalletManagement() {
     isImportWalletLoading: false,
     isPrivateKeyLoading: false,
   });
+
+  const [listAddress, setListAddress] = useState<{
+    address: string;
+    balance: number
+  }[]>([])
 
   const importPrivKey = async () => {
     if (!privKey) {
@@ -78,7 +85,69 @@ export default function WalletManagement() {
       });
     }
   };
-  
+
+  const readWalletFile = async (file: File): Promise<string | ArrayBuffer | null> => {
+    return new Promise((resolve) => {
+      let reader = new FileReader();
+
+      reader.onload = () => {
+          resolve(reader.result);
+      };
+      reader.onerror = () => {
+          resolve(null);
+      };
+      reader.readAsText(file, 'UTF-8');
+    });
+}
+
+  const importPastelWallet = async () => {
+    if (!pastelWalletFile) {
+      alert("Please select a Wallet file to import.");
+      return;
+    }
+    if (!password) {
+      alert("Please enter password.");
+      return;
+    }
+    setWalletManagementLoading({
+      ...walletManagementLoading,
+      isImportWalletLoading: true,
+    });
+    try {
+      const serializedWallet = await readWalletFile(pastelWalletFile);
+      if (serializedWallet) {
+        const success = await api.importWallet(serializedWallet);
+        if (success) {
+          await api.unlockWallet(password);
+          const listAddress = await api.listAddressAmounts(true);
+          if (listAddress) {
+            const result = [];
+            for (const [key, value] of Object.entries(listAddress)) {
+              result.push({
+                address: key,
+                balance: value,
+              })
+            }
+            setListAddress(result);
+          }
+
+          alert("Wallet imported successfully!");
+          setPastelWalletFile(null);
+        } else {
+          throw new Error("Failed to import wallet");
+        }
+      }
+    } catch (error) {
+      console.error("Error importing wallet:", error);
+      alert("Failed to import wallet. Please try again.");
+    } finally {
+      setWalletManagementLoading({
+        ...walletManagementLoading,
+        isImportWalletLoading: false,
+      });
+    }
+  };
+
   const listAddressAmounts = async () => {
     setWalletManagementLoading({
       ...walletManagementLoading,
@@ -176,6 +245,7 @@ export default function WalletManagement() {
           {walletManagementLoading.isPrivateKeyLoading && <div className="btn is-loading">Importing...</div>}
         </div>
       </div>
+
       <div className="mb-4">
         <label
           className="block text-bw-700 font-bold mb-2"
@@ -208,6 +278,73 @@ export default function WalletManagement() {
             Import Wallet
           </button>
           {walletManagementLoading.isImportWalletLoading && <div className="btn is-loading">Importing...</div>}
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <div className="">
+          <label
+            className="block text-bw-700 font-bold mb-2"
+            id="importWalletFile"
+          >
+            Import Wallet
+            <span
+              className="tooltip"
+              data-tooltip="Import a wallet file into your wallet."
+            >
+              &#9432;
+            </span>
+          </label>
+          <input
+            id="importWalletFile"
+            className="input w-full"
+            type="file"
+            accept=".wallet"
+            onChange={(e) =>
+              setPastelWalletFile(e.target.files ? e.target.files[0] : null)
+            }
+          />
+        </div>
+        <div className="mt-2">
+          <label
+            className="block text-bw-700 font-bold mb-2"
+            htmlFor="password"
+          >
+            Password
+            <span
+              className="tooltip"
+              data-tooltip="Password"
+            >
+              &#9432;
+            </span>
+          </label>
+          <input
+            id="password"
+            className="input w-full"
+            type="password"
+            placeholder="Enter password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            className="btn success outline mt-2"
+            onClick={importPastelWallet}
+            disabled={walletManagementLoading.isImportWalletLoading}
+          >
+            Import Wallet
+          </button>
+          {walletManagementLoading.isImportWalletLoading && <div className="btn is-loading">Importing...</div>}
+        </div>
+        <div className="mt-4">
+          <div className="font-bold">List:</div>
+          {listAddress?.map((item) => (
+            <div className="flex gap-2" key={item.address}>
+              <div className="font-bold">{item.address}: </div>
+              <div>{item.balance} PSL</div>
+            </div>
+          ))}
         </div>
       </div>
       <label

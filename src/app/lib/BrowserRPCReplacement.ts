@@ -165,7 +165,7 @@ class BrowserRPCReplacement {
    * @param walletData - The wallet data to import.
    * @returns `true` if the import was successful, otherwise `false`.
    */
-  public async importWallet(walletData: string): Promise<boolean> {
+  public async importWallet(walletData: string | ArrayBuffer): Promise<boolean> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.ImportWallet(walletData)
@@ -219,9 +219,13 @@ class BrowserRPCReplacement {
    */
   public async getAddress(index: number, mode: NetworkMode): Promise<string> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() =>
+    const data = await this.executeWasmMethod(() =>
       this.pastelInstance!.GetAddress(index, mode)
     );
+    if (data) {
+      return JSON.parse(data)?.data || ''
+    }
+    return ''
   }
 
   /**
@@ -232,14 +236,18 @@ class BrowserRPCReplacement {
 public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
   this.ensureInitialized();
   try {
-    return this.executeWasmMethod(() => {
-      const addresses = this.pastelInstance!.GetAddresses(mode);
-      if (!addresses) {
-        console.warn("GetAddresses returned undefined or null");
-        return [];
-      }
-      return addresses
-    });
+    const addressCount = await this.getAddressesCount();
+    if (!addressCount) {
+      console.warn("GetAddresses returned undefined or null");
+      return [];
+    }
+    const addresses = [];
+    const networkMode = mode || this.getNetworkModeEnum(await this.getNetworkMode());
+    for (let i = 0; i < addressCount; i++) {
+      const address = await this.getAddress(i, networkMode as NetworkMode);
+      addresses.push(address)
+    }
+    return addresses;
   } catch (error) {
     console.error("Error in getAllAddresses:", error);
     return [];
@@ -252,7 +260,12 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
    */
   public async getAddressesCount(): Promise<number> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() => this.pastelInstance!.GetAddressesCount());
+    const resAdresss = await this.executeWasmMethod(() => this.pastelInstance!.GetAddressesCount());
+    if (resAdresss) {
+      const parseAddress = JSON.parse(resAdresss);
+      return parseAddress?.data || 0
+    }
+    return 0;
   }
 
   // -------------------------
@@ -1156,7 +1169,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
   public async downloadWalletToDatFile(filename: string = "pastel_wallet.dat"): Promise<boolean> {
     this.ensureInitialized();
     try {
-      const addressCount = await this.pastelInstance!.GetAddressesCount();
+      const addressCount = await this.getAddressesCount();
       const addresses: string[] = [];
       const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
       for (let i = 0; i < addressCount; i++) {
@@ -1232,7 +1245,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
       for (const privKey of privateKeys) {
         await this.pastelInstance!.ImportLegacyPrivateKey(privKey, networkMode);
       }
-      const addressCount = await this.pastelInstance!.GetAddressesCount();
+      const addressCount = await this.getAddressesCount();
       return addressCount > 0;
     } catch (error) {
       console.error("Error loading wallet:", error);
@@ -1504,7 +1517,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
    */
   public async checkPSLAddressBalance(addressToCheck: string): Promise<number> {
     const addressBalance = await this.fetchJson<AddressBalance>(`/get_address_balance?addresses=${addressToCheck}`)
-    return addressBalance.balance;
+    return addressBalance.balance ? addressBalance.balance / 100000 : 0;
   }
 
   /**

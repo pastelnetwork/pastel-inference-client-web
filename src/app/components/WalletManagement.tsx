@@ -5,6 +5,7 @@
 import React, { useState } from "react";
 import { AddressAmount, WalletInfo } from "@/app/types";
 import * as api from '@/app/lib/api';
+import { parseAndFormatNumber } from '@/app/lib/utils';
 
 export default function WalletManagement() {
   const [privKey, setPrivKey] = useState<string>("");
@@ -260,7 +261,7 @@ export default function WalletManagement() {
                   {Object.entries(addressAmounts).map(([address, amount]) => (
                     <tr key={address}>
                       <td>{address}</td>
-                      <td>{amount}</td>
+                      <td>{parseAndFormatNumber(`${amount}`)}</td>
                     </tr>
                   ))}
                 </tbody>

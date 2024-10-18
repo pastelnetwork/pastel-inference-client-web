@@ -40,10 +40,7 @@ export default function UserInfo() {
     try {
       const walletInfo = await api.getWalletInfo();
       setWalletBalance(
-        walletInfo.balance.toLocaleString(undefined, {
-          minimumFractionDigits: 1,
-          maximumFractionDigits: 1,
-        })
+        utils.parseAndFormatNumber(walletInfo.balance.toString())
       );
     } catch (error) {
       browserLogger.error("Error retrieving wallet info:", error);
@@ -278,7 +275,7 @@ export default function UserInfo() {
           `PastelID ${selectedPastelID} is not valid. Removing from localStorage.`
         );
         localStorage.removeItem(selectedPastelID);
-        fetchPastelIDs();
+        await fetchPastelIDs();
         return;
       }
 

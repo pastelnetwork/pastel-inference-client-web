@@ -2,57 +2,38 @@
 
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 
+import useLogger from '@/app/store/useLogger';
+
 interface LogMessage {
   timestamp: string;
   level: string;
-  message: string;
+  msg: string;
 }
 
 const DynamicTerminal = dynamic(
   async () => {
     return function TerminalComponent() {
+      const { logMsg } = useLogger();
       const [isVisible, setIsVisible] = useState<boolean>(false);
       const terminalRef = useRef<HTMLDivElement>(null);
       const xtermRef = useRef<XTerm | null>(null);
       const fitAddonRef = useRef<FitAddon | null>(null);
 
-      const initWebSocket = useCallback(async () => {
-        try {
-          const response = await fetch('/ws-url');
-          const data = await response.json();
-          const socket = new WebSocket(data.wsUrl);
-
-          socket.onopen = () => {
-            console.log('WebSocket connection established');
-          };
-
-          socket.onmessage = (event) => {
-            if (event.data && xtermRef.current) {
-              const logMessage: LogMessage = JSON.parse(event.data);
-              const formattedMessage = formatLogMessage(logMessage);
-              xtermRef.current.writeln(formattedMessage);
-            }
-          };
-
-          socket.onclose = () => {
-            console.log('WebSocket connection closed');
-          };
-
-          socket.onerror = (error) => {
-            console.error('WebSocket error:', error);
-          };
-        } catch (error) {
-          console.error('Error fetching WebSocket URL:', error);
+      useEffect(() => {
+        if (logMsg && xtermRef.current) {
+          const logMessage: LogMessage = JSON.parse(logMsg);
+          const formattedMessage = formatLogMessage(logMessage);
+          xtermRef.current.writeln(formattedMessage);
         }
-      }, []);
+      }, [logMsg, xtermRef])
 
       useEffect(() => {
-        if (isVisible && !xtermRef.current && terminalRef.current) {
+        if (!xtermRef.current && terminalRef.current) {
           xtermRef.current = new XTerm({
             cols: 175,
             rows: 24,
@@ -69,15 +50,13 @@ const DynamicTerminal = dynamic(
 
           xtermRef.current.open(terminalRef.current);
           fitAddonRef.current.fit();
-
-          initWebSocket();
         }
 
         window.addEventListener('resize', handleResize);
         return () => {
           window.removeEventListener('resize', handleResize);
         };
-      }, [isVisible, initWebSocket]);
+      }, []);
 
       const handleResize = () => {
         if (fitAddonRef.current) {
@@ -112,7 +91,7 @@ const DynamicTerminal = dynamic(
 
       const formatLogMessage = (logMessage: LogMessage): string => {
         const timestamp = new Date(logMessage.timestamp).toISOString();
-        return `[${timestamp}] [${logMessage.level.toUpperCase()}] ${logMessage.message}`;
+        return `[${timestamp}] [${logMessage.level.toUpperCase()}] ${logMessage.msg}`;
       };
 
       return (
@@ -120,17 +99,15 @@ const DynamicTerminal = dynamic(
           <button onClick={toggleTerminal} className="btn success outline mt-4">
             Toggle Terminal
           </button>
-          {isVisible && (
-            <div>
-              <h2 className="text-2xl mt-5">Terminal</h2>
-              <div id="terminal" ref={terminalRef} className="bg-gray-900 text-white p-4 rounded-xl"></div>
-              <div className="flex justify-between items-center mb-4">
-                <button id="exportTerminalButton" className="btn success outline" onClick={exportTerminalSession}>
-                  Export Terminal Session Text
-                </button>
-              </div>
+          <div className={isVisible ? 'block' : 'hidden'}>
+            <h2 className="text-2xl mt-5">Terminal</h2>
+            <div id="terminal" ref={terminalRef} className="bg-gray-900 text-white p-4 rounded-xl"></div>
+            <div className="flex justify-between items-center mb-4">
+              <button id="exportTerminalButton" className="btn success outline" onClick={exportTerminalSession}>
+                Export Terminal Session Text
+              </button>
             </div>
-          )}
+          </div>
         </div>
       );
     }

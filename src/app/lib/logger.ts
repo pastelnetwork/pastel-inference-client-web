@@ -3,6 +3,7 @@
 'use client'
 
 import { BrowserLogger, LogEntry, LoggerListener } from '@/app/types';
+import useLogger from '@/app/store/useLogger';
 
 class BrowserLoggerImpl implements BrowserLogger {
   logBuffer: string[] = [];
@@ -62,11 +63,7 @@ class BrowserLoggerImpl implements BrowserLogger {
   }
 
   emit(eventName: string, data: string): void {
-    if (this.listeners.has(eventName)) {
-      this.listeners.get(eventName)!.forEach((listener) => {
-        listener(data);
-      });
-    }
+    useLogger.getState().setLogMessage(data);
   }
 
   safeStringify(obj: unknown): string {

@@ -6,8 +6,10 @@ import React, { useState } from "react";
 import { AddressAmount, WalletInfo } from "@/app/types";
 import * as api from '@/app/lib/api';
 import { parseAndFormatNumber } from '@/app/lib/utils';
+import useStore from "@/app/store/useStore";
 
 export default function WalletManagement() {
+  const { fetchWalletInfo, fetchPastelIDs, fetchMyPslAddress } = useStore();
   const [privKey, setPrivKey] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [walletFile, setWalletFile] = useState<File | null>(null);
@@ -27,11 +29,6 @@ export default function WalletManagement() {
     isImportWalletLoading: false,
     isPrivateKeyLoading: false,
   });
-
-  const [listAddress, setListAddress] = useState<{
-    address: string;
-    balance: number
-  }[]>([])
 
   const importPrivKey = async () => {
     if (!privKey) {
@@ -119,17 +116,9 @@ export default function WalletManagement() {
         const success = await api.importWallet(serializedWallet);
         if (success) {
           await api.unlockWallet(password);
-          const listAddress = await api.listAddressAmounts(true);
-          if (listAddress) {
-            const result = [];
-            for (const [key, value] of Object.entries(listAddress)) {
-              result.push({
-                address: key,
-                balance: value,
-              })
-            }
-            setListAddress(result);
-          }
+          await fetchWalletInfo();
+          await fetchPastelIDs();
+          await fetchMyPslAddress();
 
           alert("Wallet imported successfully!");
           setPastelWalletFile(null);
@@ -281,7 +270,7 @@ export default function WalletManagement() {
         </div>
       </div>
 
-      {/* <div className="mb-4">
+      <div className="mb-4">
         <div className="">
           <label
             className="block text-bw-700 font-bold mb-2"
@@ -337,16 +326,7 @@ export default function WalletManagement() {
           </button>
           {walletManagementLoading.isImportWalletLoading && <div className="btn is-loading">Importing...</div>}
         </div>
-        <div className="mt-4">
-          <div className="font-bold">List:</div>
-          {listAddress?.map((item) => (
-            <div className="flex gap-2" key={item.address}>
-              <div className="font-bold">{item.address}: </div>
-              <div>{item.balance} PSL</div>
-            </div>
-          ))}
-        </div>
-      </div> */}
+      </div>
       <label
         className="block text-bw-700 font-bold mb-2"
         htmlFor="listAddressAmountsButton"

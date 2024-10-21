@@ -2,19 +2,26 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import browserLogger from "@/app/lib/logger";
 import * as api from "@/app/lib/api";
 import * as utils from "@/app/lib/utils";
-import useStore from "../store/useStore";
+import useStore from "@/app/store/useStore";
 
 export default function UserInfo() {
-  const { setPastelId } = useStore();
-  const { walletPassword } = useStore();
+  const {
+    setPastelId,
+    walletPassword,
+    walletBalance,
+    pastelIDs,
+    selectedPastelID,
+    myPslAddress,
+    fetchWalletInfo,
+    fetchPastelIDs,
+    fetchMyPslAddress,
+    setSelectedPastelID,
+  } = useStore();
   const [showPassword, setShowPassword] = useState(false);
-  const [walletBalance, setWalletBalance] = useState<string>("Loading...");
-  const [pastelIDs, setPastelIDs] = useState<string[]>([]);
-  const [selectedPastelID, setSelectedPastelID] = useState<string>("");
   const [passphrase, setPassphrase] = useState<string>("");
   const [rememberPassphrase, setRememberPassphrase] = useState<boolean>(false);
   const [showPassphraseInput, setShowPassphraseInput] =
@@ -23,7 +30,6 @@ export default function UserInfo() {
   const [isCreatingPastelID, setIsCreatingPastelID] = useState<boolean>(false);
   const [newPastelIDPassphrase, setNewPastelIDPassphrase] =
     useState<string>("");
-  const [myPslAddress, setMyPslAddress] = useState<string>("");
   const [promotionalPackFile, setPromotionalPackFile] = useState<File | null>(
     null
   );
@@ -36,45 +42,11 @@ export default function UserInfo() {
   });
   const [shoModalMessage, setShowModalMessage] = useState<boolean>(false);
 
-  const fetchWalletInfo = useCallback(async () => {
-    try {
-      const walletInfo = await api.getWalletInfo();
-      setWalletBalance(
-        utils.parseAndFormatNumber(walletInfo.balance.toString())
-      );
-    } catch (error) {
-      browserLogger.error("Error retrieving wallet info:", error);
-      setWalletBalance("Failed to load balance");
-    }
-  }, []);
-
-  const fetchPastelIDs = useCallback(async () => {
-    try {
-      const ids = await api.listPastelIDs();
-      setPastelIDs(ids);
-      if (ids.length > 0) {
-        setSelectedPastelID(ids[0]);
-        setPastelId(ids[0]);
-      }
-    } catch (error) {
-      browserLogger.error("Error fetching PastelIDs:", error);
-    }
-  }, [setPastelId]);
-
-  const fetchMyPslAddress = useCallback(async () => {
-    try {
-      const address = await api.getMyPslAddressWithLargestBalance();
-      setMyPslAddress(address);
-    } catch (error) {
-      browserLogger.error("Error fetching PSL address:", error);
-    }
-  }, []);
-
   useEffect(() => {
     fetchWalletInfo();
     fetchPastelIDs();
     fetchMyPslAddress();
-  }, [fetchWalletInfo, fetchPastelIDs, fetchMyPslAddress]);
+  }, []);
 
   const handlePastelIDChange = (
     event: React.ChangeEvent<HTMLSelectElement>

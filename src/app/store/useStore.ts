@@ -19,6 +19,7 @@ import {
 import browserLogger from "@/app/lib/logger";
 import { generateSecurePassword } from "../lib/passwordUtils";
 import { initWasm } from "../lib/wasmLoader";
+import * as utils from "@/app/lib/utils";
 declare const Module: EmscriptenModule;
 
 interface WalletState {
@@ -38,6 +39,10 @@ interface WalletState {
   initialPassword: string | null;
   walletPassword: string | null;
   showQRScanner: boolean;
+  pastelIDs: string[];
+  selectedPastelID: string;
+  walletBalance: string;
+  myPslAddress: string;
 }
 
 interface WalletActions {
@@ -144,6 +149,13 @@ interface WalletActions {
   getBestBlockHashAndMerkleRoot: () => Promise<[string, string, number]>;
   sendToAddress: (address: string, amount: number) => Promise<string>;
   sendMany: (amounts: { address: string; amount: number }[]) => Promise<string>;
+  setMyPslAddress: (address: string) => void;
+  setSelectedPastelID: (address: string) => void;
+  setPastelIDs: (pastelIDs: string[]) => void;
+  setWalletBalance: (walletBalance: string) => void;
+  fetchWalletInfo: () => Promise<void>;
+  fetchPastelIDs: () => Promise<void>;
+  fetchMyPslAddress: () => Promise<void>;
 }
 
 const useStore = create<WalletState & WalletActions>()(
@@ -165,6 +177,10 @@ const useStore = create<WalletState & WalletActions>()(
       showPasswordQR: false,
       initialPassword: null,
       showQRScanner: false,
+      pastelIDs: [],
+      selectedPastelID: "",
+      walletBalance: "Loading...",
+      myPslAddress: "",
 
       setLocked: (isLocked) => set({ isLocked }),
       setNetworkMode: (mode) => set({ networkMode: mode }),
@@ -182,6 +198,10 @@ const useStore = create<WalletState & WalletActions>()(
       setShowPasswordQR: (show) => set({ showPasswordQR: show }),
       setInitialPassword: (password) => set({ initialPassword: password }),
       setShowQRScanner: (show) => set({ showQRScanner: show }),
+      setMyPslAddress: (address) => set({ myPslAddress: address }),
+      setSelectedPastelID: (address) => set({ selectedPastelID: address }),
+      setPastelIDs: (pastelIDs) => set({ pastelIDs }),
+      setWalletBalance: (walletBalance: string) => set({ walletBalance }),
 
       initializeWallet: async () => {
         if (get().isLoading) return;
@@ -507,6 +527,37 @@ const useStore = create<WalletState & WalletActions>()(
       getBestBlockHashAndMerkleRoot: api.getBestBlockHashAndMerkleRoot,
       sendToAddress: api.sendToAddress,
       sendMany: api.sendMany,
+      fetchWalletInfo: async () => {
+        try {
+          const balance = await api.getBalance();
+          get().setWalletBalance(
+            utils.parseAndFormatNumber(balance.toString())
+          );
+        } catch (error) {
+          browserLogger.error("Error retrieving wallet info:", error);
+          get().setWalletBalance("Failed to load balance");
+        }
+      },
+      fetchPastelIDs: async () => {
+        try {
+          const ids = await api.listPastelIDs();
+          get().setPastelIDs(ids);
+          if (ids.length > 0) {
+            get().setSelectedPastelID(ids[0]);
+            get().setPastelId(ids[0]);
+          }
+        } catch (error) {
+          browserLogger.error("Error fetching PastelIDs:", error);
+        }
+      },
+      fetchMyPslAddress: async () => {
+        try {
+          const address = await api.getMyPslAddressWithLargestBalance();
+          get().setMyPslAddress(address);
+        } catch (error) {
+          browserLogger.error("Error fetching PSL address:", error);
+        }
+      },
     }),
     {
       name: "pastel-wallet-storage",

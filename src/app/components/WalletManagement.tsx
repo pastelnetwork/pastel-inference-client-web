@@ -281,7 +281,7 @@ export default function WalletManagement() {
         </div>
       </div>
 
-      <div className="mb-4">
+      {/* <div className="mb-4">
         <div className="">
           <label
             className="block text-bw-700 font-bold mb-2"
@@ -346,7 +346,7 @@ export default function WalletManagement() {
             </div>
           ))}
         </div>
-      </div>
+      </div> */}
       <label
         className="block text-bw-700 font-bold mb-2"
         htmlFor="listAddressAmountsButton"

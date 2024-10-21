@@ -711,9 +711,44 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
   async checkSupernodeList(): Promise<{
     validMasternodeListFullDF: SupernodeInfo[];
   }> {
-    return this.fetchJson<{ validMasternodeListFullDF: SupernodeInfo[] }>(
+    const data = await this.fetchJson<string>(
       "/supernode_data"
     );
+    if (data) {
+      const parseData = JSON.parse(data);
+      const validMasternodeListFullDF: SupernodeInfo[] = [];
+      for (const [key] of Object.entries(parseData)) {
+        const item = parseData[key];
+        validMasternodeListFullDF.push({
+          txid_vout: key,
+          supernode_status: item.supernode_status,
+          protocol_version: Number(item.protocol_version),
+          supernode_psl_address: item.supernode_psl_address,
+          lastseentime: item.lastseentime,
+          activeseconds: item.activeseconds,
+          lastpaidtime: item.lastpaidtime,
+          lastpaidblock: item.lastpaidblock,
+          ipaddress_port: item['ipaddress:port'],
+          rank: item.rank,
+          pubkey: item.pubkey,
+          extAddress: item.extAddress,
+          extP2P: item.extP2P,
+          extKey: item.extKey,
+          activedays: item.activedays,
+        })
+      }
+      return {
+        validMasternodeListFullDF: validMasternodeListFullDF.filter(
+          (data) =>
+            ["ENABLED", "PRE_ENABLED"].includes(data.supernode_status) &&
+            data["ipaddress_port"] !== "154.38.164.75:29933" &&
+            data.extP2P
+        )
+      }
+    }
+    return {
+      validMasternodeListFullDF: []
+    };
   }
 
   /**

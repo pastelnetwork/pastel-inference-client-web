@@ -46,8 +46,8 @@ export default function UserInfo() {
     fetchWalletInfo();
     fetchPastelIDs();
     fetchMyPslAddress();
-  }, []);
-
+  }, [fetchWalletInfo, fetchPastelIDs, fetchMyPslAddress]);
+  
   const handlePastelIDChange = (
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {

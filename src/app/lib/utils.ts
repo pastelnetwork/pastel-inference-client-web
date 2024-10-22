@@ -6,8 +6,6 @@ import CryptoJS from "crypto-js";
 import pako from "pako";
 import browserLogger from "@/app/lib/logger";
 import BrowserRPCReplacement from "@/app/lib/BrowserRPCReplacement";
-import api from "@/app/lib/api";
-import * as storage from "@/app/lib/storage";
 import { cacheInstance } from "@/app/lib/cache";
 import {
   SupernodeInfo,

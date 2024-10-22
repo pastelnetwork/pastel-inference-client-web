@@ -9,19 +9,19 @@ const PasswordQRCode: React.FC = () => {
   if (!showPasswordQR || !initialPassword) return null;
 
   const handleDownload = () => {
-    const canvas: any = document.querySelector("#qrPassword > canvas");
+    const canvas = document.querySelector("#qrPassword > canvas") as HTMLCanvasElement;
     if (canvas) {
-        const pngUrl = canvas
-            .toDataURL("image/png")
-            .replace("image/png", "image/octet-stream");
-        let downloadLink = document.createElement("a");
-        downloadLink.href = pngUrl
-        downloadLink.download = `pastel-network-password.png`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
+      const pngUrl = canvas
+        .toDataURL("image/png")
+        .replace("image/png", "image/octet-stream");
+      const downloadLink = document.createElement("a");
+      downloadLink.href = pngUrl;
+      downloadLink.download = `pastel-network-password.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
     }
-  }
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

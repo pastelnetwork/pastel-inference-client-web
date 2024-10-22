@@ -11,9 +11,8 @@ interface LoggerActions {
 }
 
 const useStore = create<LoggerState & LoggerActions>()(
-  (set, get) => ({
+  (set) => ({
     logMsg: '',
-
     setLogMessage: (logMsg) => set({ logMsg }),
   })
 );

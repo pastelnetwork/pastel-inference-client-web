@@ -78,7 +78,7 @@ export default function WalletManagement() {
       });
     }
   };
-  
+
   const listAddressAmounts = async () => {
     setWalletManagementLoading({
       ...walletManagementLoading,
@@ -176,6 +176,7 @@ export default function WalletManagement() {
           {walletManagementLoading.isPrivateKeyLoading && <div className="btn is-loading">Importing...</div>}
         </div>
       </div>
+
       <div className="mb-4">
         <label
           className="block text-bw-700 font-bold mb-2"
@@ -210,6 +211,7 @@ export default function WalletManagement() {
           {walletManagementLoading.isImportWalletLoading && <div className="btn is-loading">Importing...</div>}
         </div>
       </div>
+
       <label
         className="block text-bw-700 font-bold mb-2"
         htmlFor="listAddressAmountsButton"

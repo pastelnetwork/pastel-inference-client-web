@@ -165,7 +165,7 @@ class BrowserRPCReplacement {
    * @param walletData - The wallet data to import.
    * @returns `true` if the import was successful, otherwise `false`.
    */
-  public async importWallet(walletData: string): Promise<boolean> {
+  public async importWallet(walletData: string | ArrayBuffer): Promise<boolean> {
     this.ensureInitialized();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.ImportWallet(walletData)
@@ -219,9 +219,13 @@ class BrowserRPCReplacement {
    */
   public async getAddress(index: number, mode: NetworkMode): Promise<string> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() =>
+    const data = await this.executeWasmMethod(() =>
       this.pastelInstance!.GetAddress(index, mode)
     );
+    if (data) {
+      return JSON.parse(data)?.data || ''
+    }
+    return ''
   }
 
   /**
@@ -232,14 +236,18 @@ class BrowserRPCReplacement {
 public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
   this.ensureInitialized();
   try {
-    return this.executeWasmMethod(() => {
-      const addresses = this.pastelInstance!.GetAddresses(mode);
-      if (!addresses) {
-        console.warn("GetAddresses returned undefined or null");
-        return [];
-      }
-      return addresses
-    });
+    const addressCount = await this.getAddressesCount();
+    if (!addressCount) {
+      console.warn("GetAddresses returned undefined or null");
+      return [];
+    }
+    const addresses = [];
+    const networkMode = mode || this.getNetworkModeEnum(await this.getNetworkMode());
+    for (let i = 0; i < addressCount; i++) {
+      const address = await this.getAddress(i, networkMode as NetworkMode);
+      addresses.push(address)
+    }
+    return addresses;
   } catch (error) {
     console.error("Error in getAllAddresses:", error);
     return [];
@@ -252,7 +260,12 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
    */
   public async getAddressesCount(): Promise<number> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() => this.pastelInstance!.GetAddressesCount());
+    const resAdresss = await this.executeWasmMethod(() => this.pastelInstance!.GetAddressesCount());
+    if (resAdresss) {
+      const parseAddress = JSON.parse(resAdresss);
+      return parseAddress?.data || 0
+    }
+    return 0;
   }
 
   // -------------------------
@@ -343,9 +356,13 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     flag: boolean = true
   ): Promise<string> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() =>
+    const result = await this.executeWasmMethod(() =>
       this.pastelInstance!.SignWithPastelID(pastelID, data, type, flag)
     );
+    if (result) {
+      return JSON.parse(result).data
+    }
+    return ''
   }
 
   /**
@@ -698,9 +715,44 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
   async checkSupernodeList(): Promise<{
     validMasternodeListFullDF: SupernodeInfo[];
   }> {
-    return this.fetchJson<{ validMasternodeListFullDF: SupernodeInfo[] }>(
+    const data = await this.fetchJson<string>(
       "/supernode_data"
     );
+    if (data) {
+      const parseData = JSON.parse(data);
+      const validMasternodeListFullDF: SupernodeInfo[] = [];
+      for (const [key] of Object.entries(parseData)) {
+        const item = parseData[key];
+        validMasternodeListFullDF.push({
+          txid_vout: key,
+          supernode_status: item.supernode_status,
+          protocol_version: Number(item.protocol_version),
+          supernode_psl_address: item.supernode_psl_address,
+          lastseentime: item.lastseentime,
+          activeseconds: item.activeseconds,
+          lastpaidtime: item.lastpaidtime,
+          lastpaidblock: item.lastpaidblock,
+          ipaddress_port: item['ipaddress:port'],
+          rank: item.rank,
+          pubkey: item.pubkey,
+          extAddress: item.extAddress,
+          extP2P: item.extP2P,
+          extKey: item.extKey,
+          activedays: item.activedays,
+        })
+      }
+      return {
+        validMasternodeListFullDF: validMasternodeListFullDF.filter(
+          (data) =>
+            ["ENABLED", "PRE_ENABLED"].includes(data.supernode_status) &&
+            data["ipaddress_port"] !== "154.38.164.75:29933" &&
+            data.extP2P
+        )
+      }
+    }
+    return {
+      validMasternodeListFullDF: []
+    };
   }
 
   /**
@@ -1016,6 +1068,9 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
         result = await this.executeWasmMethod(() =>
           this.pastelInstance!.ImportPastelIDKeys(pastelID, passphrase, dirPath)
         );
+        if (result && typeof result === 'string') {
+          result = JSON.parse(result);
+        }
       } catch (error) {
         console.error("Error in ImportPastelIDKeys:", error);
         throw new Error(`ImportPastelIDKeys failed: ${(error as Error).message || "Unknown error"}`);
@@ -1156,7 +1211,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
   public async downloadWalletToDatFile(filename: string = "pastel_wallet.dat"): Promise<boolean> {
     this.ensureInitialized();
     try {
-      const addressCount = await this.pastelInstance!.GetAddressesCount();
+      const addressCount = await this.getAddressesCount();
       const addresses: string[] = [];
       const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
       for (let i = 0; i < addressCount; i++) {
@@ -1232,7 +1287,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
       for (const privKey of privateKeys) {
         await this.pastelInstance!.ImportLegacyPrivateKey(privKey, networkMode);
       }
-      const addressCount = await this.pastelInstance!.GetAddressesCount();
+      const addressCount = await this.getAddressesCount();
       return addressCount > 0;
     } catch (error) {
       console.error("Error loading wallet:", error);
@@ -1504,7 +1559,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
    */
   public async checkPSLAddressBalance(addressToCheck: string): Promise<number> {
     const addressBalance = await this.fetchJson<AddressBalance>(`/get_address_balance?addresses=${addressToCheck}`)
-    return addressBalance.balance;
+    return addressBalance.balance ? addressBalance.balance / 100000 : 0;
   }
 
   /**
@@ -1722,6 +1777,88 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     } catch (error) {
       console.error("Error getting PastelIDs count:", error);
       throw error;
+    }
+  }
+
+  public async importPastelIDFileIntoWallet(fileContent: string, pastelID: string, passPhrase: string): Promise<{ success: boolean; message: string }> {
+    this.ensureInitialized();
+    let tempFilePath: string | null = null;
+    let contentLength = 0;
+    try {
+      const FS = this.wasmModule!.FS;
+  
+      // Decode the base64 encoded secure container
+      const binaryString = atob(fileContent);
+      contentLength = binaryString.length;
+      const bytes = new Uint8Array(contentLength);
+      for (let i = 0; i < contentLength; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+  
+      // Ensure the directory exists in the Emscripten FS
+      const dirPath = "/wallet_data";
+      try {
+        FS.mkdir(dirPath);
+      } catch (e) {
+        if ((e as { code?: string }).code !== "EEXIST") {
+          console.error("Error creating directory:", e);
+          throw e;
+        }
+      }
+  
+      // Generate a unique filename for the PastelID
+      tempFilePath = `${dirPath}/${pastelID}`;
+  
+      // Write the decoded binary data to the Emscripten FS
+      FS.writeFile(tempFilePath, bytes);
+  
+      // Sync the file system
+      await new Promise<void>((resolve, reject) => {
+        FS.syncfs(false, (err: Error | null) => {
+          if (err) {
+            console.error("Error syncing file system:", err);
+            reject(err);
+          } else {
+            console.log("File system synced successfully.");
+            resolve();
+          }
+        });
+      });
+      await this.pastelInstance!.ImportPastelIDKeys(pastelID, passPhrase, dirPath)
+
+      return { success: true, message: "PastelID imported successfully!" };
+    } catch (error) {
+      console.error("Error importing PastelID:", error);
+      return {
+        success: false,
+        message: `Failed to import PastelID: ${(error as Error).message}`,
+      };
+    } finally {
+      // Clean up: overwrite the temporary file with zeros if it exists
+      if (tempFilePath && this.wasmModule) {
+        try {
+          const FS = this.wasmModule.FS;
+          const zeroBuffer = new Uint8Array(contentLength);
+          FS.writeFile(tempFilePath, zeroBuffer);
+  
+          // Sync the file system after cleanup
+          await new Promise<void>((resolve) => {
+            FS.syncfs(false, (err: Error | null) => {
+              if (err) {
+                console.error("Error syncing file system during cleanup:", err);
+              } else {
+                console.log("File system synced successfully during cleanup.");
+              }
+              resolve();
+            });
+          });
+  
+          // Delete the temporary file
+          FS.unlink(tempFilePath);
+        } catch (error) {
+          console.error("Error cleaning up temporary file:", error);
+        }
+      }
     }
   }
 

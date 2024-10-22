@@ -1324,10 +1324,10 @@ export async function importPromotionalPack(jsonData: string): Promise<{
     browserLogger.info("WASM initialized successfully");
 
     // Parse the JSON data
-    let packData: { 
-      pastel_id_pubkey: string; 
+    let packData: {
+      pastel_id_pubkey: string;
       pastel_id_passphrase: string;
-      secureContainerBase64: string; 
+      secureContainerBase64: string;
       requested_initial_credits_in_credit_pack: number;
       psl_credit_usage_tracking_address: string;
       psl_credit_usage_tracking_address_private_key: string;
@@ -1341,9 +1341,8 @@ export async function importPromotionalPack(jsonData: string): Promise<{
       browserLogger.info(`Processing pack ${i + 1} of ${packData.length}`);
 
       // 1. Import PastelID
-      const network = await storage.getNetworkFromLocalStorage();
-      const importResult = await api.importPastelID(pack.secureContainerBase64, network, pack.pastel_id_passphrase);
-      
+      const importResult = await rpc.importPastelIDFileIntoWallet(pack.secureContainerBase64, pack.pastel_id_pubkey, pack.pastel_id_passphrase);
+
       if (importResult.success) {
         browserLogger.info(`PastelID ${pack.pastel_id_pubkey} imported successfully`);
       } else {

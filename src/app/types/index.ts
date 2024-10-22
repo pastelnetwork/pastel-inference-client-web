@@ -41,7 +41,7 @@ export interface PastelInstance {
   CreateNewWallet(password: string): string;
   CreateWalletFromMnemonic(password: string, mnemonic: string): string;
   ExportWallet(): string;
-  ImportWallet(walletData: string): boolean;
+  ImportWallet(walletData: string | ArrayBuffer): boolean;
   UnlockWallet(password: string): boolean;
   LockWallet(): boolean;
 
@@ -52,7 +52,7 @@ export interface PastelInstance {
   MakeNewAddress(mode: NetworkMode): string;
   GetAddress(index: number, mode: NetworkMode): string;
   GetAddresses(mode?: NetworkMode): string[];
-  GetAddressesCount(): number;
+  GetAddressesCount(): string;
 
   // -------------------------
   // PastelID Management Methods

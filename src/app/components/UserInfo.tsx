@@ -213,9 +213,6 @@ export default function UserInfo() {
           title: "Import Successful",
           message: "Import completed. Refreshing data...",
         });
-
-        // Refresh the page to update all components
-        window.location.reload();
       } else {
         throw new Error(
           result.message || "Unknown error occurred during import"
@@ -616,7 +613,7 @@ export default function UserInfo() {
                     cy="12"
                     r="10"
                     stroke="currentColor"
-                    stroke-width="4"
+                    strokeWidth="4"
                   ></circle>
                   <path
                     className="opacity-75"

@@ -286,7 +286,7 @@ body {
   padding: 10px;
   border-radius: 4px;
   font-size: 12px;
-  max-width: 400px;
+  max-width: 800px;
   width: auto;
   word-wrap: break-word;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
@@ -300,8 +300,9 @@ body {
 
 #credit-pack-tooltip .tooltip-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   margin-bottom: 5px;
+  align-items: flex-start;
 }
 
 #credit-pack-tooltip .tooltip-label {
@@ -311,7 +312,7 @@ body {
 }
 
 #credit-pack-tooltip .tooltip-value {
-  text-align: right;
+  text-align: left;
   word-break: break-all;
 }
 

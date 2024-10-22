@@ -356,9 +356,13 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     flag: boolean = true
   ): Promise<string> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() =>
+    const result = await this.executeWasmMethod(() =>
       this.pastelInstance!.SignWithPastelID(pastelID, data, type, flag)
     );
+    if (result) {
+      return JSON.parse(result).data
+    }
+    return ''
   }
 
   /**
@@ -1064,6 +1068,9 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
         result = await this.executeWasmMethod(() =>
           this.pastelInstance!.ImportPastelIDKeys(pastelID, passphrase, dirPath)
         );
+        if (result && typeof result === 'string') {
+          result = JSON.parse(result);
+        }
       } catch (error) {
         console.error("Error in ImportPastelIDKeys:", error);
         throw new Error(`ImportPastelIDKeys failed: ${(error as Error).message || "Unknown error"}`);
@@ -1770,6 +1777,88 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     } catch (error) {
       console.error("Error getting PastelIDs count:", error);
       throw error;
+    }
+  }
+
+  public async importPastelIDFileIntoWallet(fileContent: string, pastelID: string, passPhrase: string): Promise<{ success: boolean; message: string }> {
+    this.ensureInitialized();
+    let tempFilePath: string | null = null;
+    let contentLength = 0;
+    try {
+      const FS = this.wasmModule!.FS;
+  
+      // Decode the base64 encoded secure container
+      const binaryString = atob(fileContent);
+      contentLength = binaryString.length;
+      const bytes = new Uint8Array(contentLength);
+      for (let i = 0; i < contentLength; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+  
+      // Ensure the directory exists in the Emscripten FS
+      const dirPath = "/wallet_data";
+      try {
+        FS.mkdir(dirPath);
+      } catch (e) {
+        if ((e as { code?: string }).code !== "EEXIST") {
+          console.error("Error creating directory:", e);
+          throw e;
+        }
+      }
+  
+      // Generate a unique filename for the PastelID
+      tempFilePath = `${dirPath}/${pastelID}`;
+  
+      // Write the decoded binary data to the Emscripten FS
+      FS.writeFile(tempFilePath, bytes);
+  
+      // Sync the file system
+      await new Promise<void>((resolve, reject) => {
+        FS.syncfs(false, (err: Error | null) => {
+          if (err) {
+            console.error("Error syncing file system:", err);
+            reject(err);
+          } else {
+            console.log("File system synced successfully.");
+            resolve();
+          }
+        });
+      });
+      await this.pastelInstance!.ImportPastelIDKeys(pastelID, passPhrase, dirPath)
+
+      return { success: true, message: "PastelID imported successfully!" };
+    } catch (error) {
+      console.error("Error importing PastelID:", error);
+      return {
+        success: false,
+        message: `Failed to import PastelID: ${(error as Error).message}`,
+      };
+    } finally {
+      // Clean up: overwrite the temporary file with zeros if it exists
+      if (tempFilePath && this.wasmModule) {
+        try {
+          const FS = this.wasmModule.FS;
+          const zeroBuffer = new Uint8Array(contentLength);
+          FS.writeFile(tempFilePath, zeroBuffer);
+  
+          // Sync the file system after cleanup
+          await new Promise<void>((resolve) => {
+            FS.syncfs(false, (err: Error | null) => {
+              if (err) {
+                console.error("Error syncing file system during cleanup:", err);
+              } else {
+                console.log("File system synced successfully during cleanup.");
+              }
+              resolve();
+            });
+          });
+  
+          // Delete the temporary file
+          FS.unlink(tempFilePath);
+        } catch (error) {
+          console.error("Error cleaning up temporary file:", error);
+        }
+      }
     }
   }
 

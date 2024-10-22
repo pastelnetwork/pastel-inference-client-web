@@ -565,20 +565,10 @@ export async function getBlock(blockHash: string): Promise<unknown> {
   return await rpc.getBlock(blockHash);
 }
 
-export async function importWallet(walletData: string | ArrayBuffer): Promise<boolean> {
-  const rpc = BrowserRPCReplacement.getInstance();
-  return rpc.importWallet(walletData);
-}
-
-export async function getAllAddresses(): Promise<string[]> {
-  const rpc = BrowserRPCReplacement.getInstance();
-  return rpc.getAllAddresses();
-}
-
 const api = {
   changeNetwork,
   unlockWallet,
-  createNewWallet,
+  createNewWallet,  
   getNetworkInfo,
   getBestSupernodeUrl,
   getInferenceModelMenu,
@@ -634,8 +624,7 @@ const api = {
   importAddress,
   getBlockHash,
   getBlock,
-  makeNewAddress,
-  importWallet
+  makeNewAddress
 };
 
 export default api;

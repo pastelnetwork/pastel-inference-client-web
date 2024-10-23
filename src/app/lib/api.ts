@@ -575,6 +575,11 @@ export async function makeNewPastelID(flag: boolean): Promise<string> {
   return rpc.makeNewPastelID(flag);
 }
 
+export async function exportWallet(): Promise<string> {
+  const rpc = BrowserRPCReplacement.getInstance();
+  return rpc.exportWallet();
+}
+
 const api = {
   changeNetwork,
   unlockWallet,
@@ -637,6 +642,7 @@ const api = {
   makeNewAddress,
   makeNewPastelID,
   getAddressesCount,
+  exportWallet,
 };
 
 export default api;

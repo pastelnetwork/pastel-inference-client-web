@@ -485,6 +485,12 @@ body {
   color: #e0e0e0;
 }
 
+.qr-code-wrapper canvas {
+  max-width: 265px;
+  max-height: 265px;
+  margin: auto;
+}
+
 /* Media Queries */
 @media (max-width: 1200px) {
   .credit-pack-table {

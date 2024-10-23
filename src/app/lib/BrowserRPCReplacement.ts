@@ -155,9 +155,13 @@ class BrowserRPCReplacement {
    */
   public async exportWallet(): Promise<string> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() =>
+    const data = await this.executeWasmMethod(() =>
       this.pastelInstance!.ExportWallet()
     );
+    if (data) {
+      return JSON.parse(data).data;
+    }
+    return '';
   }
 
   /**

@@ -565,6 +565,21 @@ export async function getBlock(blockHash: string): Promise<unknown> {
   return await rpc.getBlock(blockHash);
 }
 
+export async function getAddressesCount(): Promise<number> {
+  const rpc = BrowserRPCReplacement.getInstance();
+  return rpc.getAddressesCount();
+}
+
+export async function makeNewPastelID(flag: boolean): Promise<string> {
+  const rpc = BrowserRPCReplacement.getInstance();
+  return rpc.makeNewPastelID(flag);
+}
+
+export async function exportWallet(): Promise<string> {
+  const rpc = BrowserRPCReplacement.getInstance();
+  return rpc.exportWallet();
+}
+
 const api = {
   changeNetwork,
   unlockWallet,
@@ -624,7 +639,10 @@ const api = {
   importAddress,
   getBlockHash,
   getBlock,
-  makeNewAddress
+  makeNewAddress,
+  makeNewPastelID,
+  getAddressesCount,
+  exportWallet,
 };
 
 export default api;

@@ -43,6 +43,7 @@ interface WalletState {
   selectedPastelID: string;
   walletBalance: string;
   myPslAddress: string;
+  qrCodeContent: string;
 }
 
 interface WalletActions {
@@ -156,6 +157,7 @@ interface WalletActions {
   fetchWalletInfo: () => Promise<void>;
   fetchPastelIDs: () => Promise<void>;
   fetchMyPslAddress: () => Promise<void>;
+  setQRCodeContent: (qrCode: string) => void;
 }
 
 const useStore = create<WalletState & WalletActions>()(
@@ -181,6 +183,7 @@ const useStore = create<WalletState & WalletActions>()(
       selectedPastelID: "",
       walletBalance: "Loading...",
       myPslAddress: "",
+      qrCodeContent: "",
 
       setLocked: (isLocked) => set({ isLocked }),
       setNetworkMode: (mode) => set({ networkMode: mode }),
@@ -202,6 +205,7 @@ const useStore = create<WalletState & WalletActions>()(
       setSelectedPastelID: (address) => set({ selectedPastelID: address }),
       setPastelIDs: (pastelIDs) => set({ pastelIDs }),
       setWalletBalance: (walletBalance: string) => set({ walletBalance }),
+      setQRCodeContent: (qrCode: string) => set({ qrCodeContent: qrCode }),
 
       initializeWallet: async () => {
         if (get().isLoading) return;
@@ -241,20 +245,11 @@ const useStore = create<WalletState & WalletActions>()(
 
           // Handle wallet password
           let password = localStorage.getItem("walletPassword");
+          let isNewWalletPassword = false;
           if (!password) {
             password = generateSecurePassword();
             console.log("New wallet password generated");
-            set({ initialPassword: password, showPasswordQR: true });
-            await new Promise<void>((resolve) => {
-              const checkAcknowledgement = () => {
-                if (!get().showPasswordQR) {
-                  resolve();
-                } else {
-                  setTimeout(checkAcknowledgement, 1000);
-                }
-              };
-              checkAcknowledgement();
-            });
+            isNewWalletPassword = true;
             localStorage.setItem("walletPassword", password);
           } else {
             console.log("Existing wallet password retrieved");
@@ -314,6 +309,14 @@ const useStore = create<WalletState & WalletActions>()(
           let existingPastelID;
           try {
             existingPastelID = await api.checkForPastelID();
+            if (!existingPastelID) {
+              await api.makeNewPastelID(false);
+              existingPastelID = await api.checkForPastelID();
+            }
+            const addressCount = await api.getAddressesCount();
+            if (!addressCount) {
+              await api.makeNewAddress();
+            }
           } catch (error) {
             console.error("Error checking for PastelID:", error);
             existingPastelID = null;
@@ -339,6 +342,23 @@ const useStore = create<WalletState & WalletActions>()(
           // Set isInitialized to true if we have both a PastelID and the wallet is unlocked
           if (get().pastelId && !get().isLocked) {
             set({ isInitialized: true });
+            if (isNewWalletPassword) {
+              const walletContent = await api.exportWallet();
+              set({ initialPassword: password, showPasswordQR: true, qrCodeContent: btoa(JSON.stringify({
+                walletContent,
+                initialPassword: password,
+              })) });
+              await new Promise<void>((resolve) => {
+                const checkAcknowledgement = () => {
+                  if (!get().showPasswordQR) {
+                    resolve();
+                  } else {
+                    setTimeout(checkAcknowledgement, 1000);
+                  }
+                };
+                checkAcknowledgement();
+              });
+            }
             console.log("Wallet initialization complete");
           } else {
             console.log(

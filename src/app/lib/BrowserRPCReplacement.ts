@@ -155,9 +155,13 @@ class BrowserRPCReplacement {
    */
   public async exportWallet(): Promise<string> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() =>
+    const data = await this.executeWasmMethod(() =>
       this.pastelInstance!.ExportWallet()
     );
+    if (data) {
+      return JSON.parse(data).data;
+    }
+    return '';
   }
 
   /**
@@ -206,9 +210,13 @@ class BrowserRPCReplacement {
   public async makeNewAddress(mode?: NetworkMode): Promise<string> {
     this.ensureInitialized();
     const networkMode = mode !== undefined ? mode : this.getNetworkModeEnum(await this.getNetworkMode());
-    return this.executeWasmMethod(() =>
+    const data = await this.executeWasmMethod(() =>
       this.pastelInstance!.MakeNewAddress(networkMode)
     );
+    if (data) {
+      return JSON.parse(data).data;
+    }
+    return '';
   }
 
   /**
@@ -279,9 +287,13 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
    */
   public async makeNewPastelID(flag: boolean): Promise<string> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() =>
+    const data = await this.executeWasmMethod(() =>
       this.pastelInstance!.MakeNewPastelID(flag)
     );
+    if (data) {
+      return JSON.parse(data).data
+    }
+    return ''
   }
 
   /**

@@ -4,19 +4,19 @@ import { QRCodeCanvas } from 'qrcode.react';
 import useStore from '../store/useStore';
 
 const PasswordQRCode: React.FC = () => {
-  const { initialPassword, showPasswordQR, setShowPasswordQR } = useStore();
+  const { initialPassword, showPasswordQR, qrCodeContent, setShowPasswordQR } = useStore();
 
   if (!showPasswordQR || !initialPassword) return null;
 
   const handleDownload = () => {
-    const canvas = document.querySelector("#qrPassword > canvas") as HTMLCanvasElement;
+    const canvas = document.querySelector("#fancy-qr-code") as HTMLCanvasElement;
     if (canvas) {
       const pngUrl = canvas
         .toDataURL("image/png")
-        .replace("image/png", "image/octet-stream");
+        .replace("image/png", "image/octet-stream")
       const downloadLink = document.createElement("a");
       downloadLink.href = pngUrl;
-      downloadLink.download = `pastel-network-password.png`;
+      downloadLink.download = 'pastel-network-password.png';
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
@@ -28,11 +28,11 @@ const PasswordQRCode: React.FC = () => {
       <div className="bg-white p-8 rounded-lg text-center">
         <h2 className="text-2xl font-bold mb-4">Your Wallet Password</h2>
         <p className="mb-4">Take a picture of this QR code with your smartphone to save your wallet password securely.</p>
-        <div className="flex justify-center flex-col items-center" id="qrPassword">
-          <QRCodeCanvas value={initialPassword} size={256} />
-          <a href="javascript:void(0)" onClick={handleDownload} className='text-green-600 hover:text-green-800 text-sm mt-1'>Download</a>
+        <div className="flex justify-center flex-col items-center qr-code-wrapper">
+          <QRCodeCanvas id="fancy-qr-code" value={qrCodeContent} size={640} level="H" />
+          <a href="#" onClick={handleDownload} className='text-green-600 hover:text-green-800 text-sm mt-1'>Download</a>
         </div>
-        <p className="mt-4 mb-8">Password: <b>{initialPassword}</b> <button
+        <p className="mt-4 mb-8 hidden">Password: <b>{initialPassword}</b> <button
                 onClick={() => navigator.clipboard.writeText(initialPassword)}
                 className="ml-2 w-2 text-green-600 hover:text-green-800 transition-colors"
                 title="Copy"
@@ -40,7 +40,7 @@ const PasswordQRCode: React.FC = () => {
                 📋
               </button></p>
         <button
-          className="bg-blue-500 text-white px-4 py-2 rounded"
+          className="bg-blue-500 text-white px-4 py-2 rounded mt-4"
           onClick={() => setShowPasswordQR(false)}
         >
           I&apos;ve Saved My Password

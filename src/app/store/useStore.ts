@@ -314,6 +314,14 @@ const useStore = create<WalletState & WalletActions>()(
           let existingPastelID;
           try {
             existingPastelID = await api.checkForPastelID();
+            if (!existingPastelID) {
+              await api.makeNewPastelID(false);
+              existingPastelID = await api.checkForPastelID();
+            }
+            const addressCount = await api.getAddressesCount();
+            if (!addressCount) {
+              await api.makeNewAddress();
+            }
           } catch (error) {
             console.error("Error checking for PastelID:", error);
             existingPastelID = null;

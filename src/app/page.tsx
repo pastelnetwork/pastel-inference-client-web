@@ -34,6 +34,8 @@ export default function Home() {
     isLocked,
     setShowQRScanner,
     setError,
+    initialPassword,
+    showPasswordQR,
   } = useStore();
 
   useEffect(() => {
@@ -68,6 +70,12 @@ export default function Home() {
     fetchData();
   }, [isInitialized, pastelId, fetchModelMenu, setError]);
 
+  if (showPasswordQR && initialPassword) {
+    return (
+      <PasswordQRCode />
+    )
+  };
+
   if (isLoading || !isInitialized) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -89,7 +97,6 @@ export default function Home() {
       <main className="flex flex-col gap-6 transition-all duration-300 bg-bw-50">
         <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
           <Header />
-          <PasswordQRCode />
           <QRCodeScanner />
           {isLocked ? (
             <div className="text-center py-10">

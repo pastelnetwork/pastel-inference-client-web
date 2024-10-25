@@ -2,7 +2,7 @@
 
 'use client'
 
-import CryptoJS from "crypto-js";
+import { Sha3Wasm, Memory, keccak256 } from "@hazae41/sha3.wasm";
 import pako from "pako";
 import browserLogger from "@/app/lib/logger";
 import BrowserRPCReplacement from "@/app/lib/BrowserRPCReplacement";
@@ -19,6 +19,17 @@ import {
   SupernodeWithDistance,
   PastelIDType,
 } from "@/app/types";
+
+
+// Initialize WASM SHA3
+let sha3Initialized = false;
+async function initializeSha3() {
+  if (!sha3Initialized) {
+    await Sha3Wasm.initBundled();
+    sha3Initialized = true;
+  }
+}
+
 
 const rpc = BrowserRPCReplacement.getInstance();
 
@@ -266,12 +277,27 @@ export function transformCreditPackPurchaseRequestResponse(
   return transformedResult;
 }
 
-export function computeSHA3256Hexdigest(input: string): string {
-  return CryptoJS.SHA3(input, { outputLength: 256 }).toString();
+// No encoding specified - matches Node.js behavior
+export async function computeSHA3256Hexdigest(input: string): Promise<string> {
+  await initializeSha3();
+  const data = new TextEncoder().encode(input);
+  using memory = new Memory(data);
+  using digest = keccak256(memory);
+  return Array.from(digest.bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
-export function getSHA256HashOfInputData(inputData: string): string {
-  return CryptoJS.SHA256(inputData).toString();
+// Explicitly UTF-8 encoded - matches Node.js behavior
+export async function getSHA256HashOfInputData(inputData: string): Promise<string> {
+  await initializeSha3();
+  // TextEncoder uses UTF-8 by default
+  const data = new TextEncoder().encode(inputData);
+  using memory = new Memory(data);
+  using digest = keccak256(memory);
+  return Array.from(digest.bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 export async function compressDataWithZstd(
@@ -300,8 +326,8 @@ export async function calculateXORDistance(
   pastelID1: string,
   pastelID2: string
 ): Promise<bigint> {
-  const hash1 = CryptoJS.SHA3(pastelID1, { outputLength: 256 }).toString();
-  const hash2 = CryptoJS.SHA3(pastelID2, { outputLength: 256 }).toString();
+  const hash1 = await computeSHA3256Hexdigest(pastelID1);
+  const hash2 = await computeSHA3256Hexdigest(pastelID2);
   const xorResult = BigInt(`0x${hash1}`) ^ BigInt(`0x${hash2}`);
   return xorResult;
 }
@@ -439,7 +465,7 @@ export async function computeSHA3256HashOfSQLModelResponseFields(
       modelInstance
     );
   const sha256HashOfResponseFields =
-    getSHA256HashOfInputData(responseFieldsJSON);
+    await getSHA256HashOfInputData(responseFieldsJSON);
   return sha256HashOfResponseFields;
 }
 

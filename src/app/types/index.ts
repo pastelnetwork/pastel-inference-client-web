@@ -69,7 +69,7 @@ export interface PastelInstance {
   // -------------------------
   
   SignWithPastelID(pastelID: string, data: string, type: PastelIDType, flag: boolean): string;
-  VerifyWithPastelID(pastelID: string, data: string, signature: string, flag: boolean): boolean;
+  VerifyWithPastelID(pastelID: string, data: string, signature: string, flag: boolean): string;
   VerifyWithLegRoast(pubLegRoast: string, data: string, signature: string, flag: boolean): boolean;
 
   // -------------------------

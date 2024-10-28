@@ -392,9 +392,13 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     flag: boolean = true
   ): Promise<boolean> {
     this.ensureInitialized();
-    return this.executeWasmMethod(() =>
+    const response = await this.executeWasmMethod(() =>
       this.pastelInstance!.VerifyWithPastelID(pastelID, data, signature, flag)
     );
+    if (response) {
+      return JSON.parse(response).data
+    }
+    return false;
   }
 
   /**
@@ -605,7 +609,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
     const sendToJson = JSON.stringify(sendTo);
     const utxosJson = JSON.stringify(utxos);
-    return this.executeWasmMethod(() =>
+    const response = await this.executeWasmMethod(() =>
       this.pastelInstance!.CreateSendToTransaction(
         networkMode,
         sendToJson,
@@ -614,6 +618,10 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
         fee
       )
     );
+    if (response) {
+      return JSON.parse(response).data
+    }
+    return "";
   }
 
   /**

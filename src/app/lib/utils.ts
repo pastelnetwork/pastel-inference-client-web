@@ -2,7 +2,7 @@
 
 'use client'
 
-import { Sha3Wasm, Memory, keccak256 } from "@hazae41/sha3.wasm";
+import { sha3_256 } from 'js-sha3';
 import pako from "pako";
 import browserLogger from "@/app/lib/logger";
 import BrowserRPCReplacement from "@/app/lib/BrowserRPCReplacement";
@@ -19,17 +19,6 @@ import {
   SupernodeWithDistance,
   PastelIDType,
 } from "@/app/types";
-
-
-// Initialize WASM SHA3
-let sha3Initialized = false;
-async function initializeSha3() {
-  if (!sha3Initialized) {
-    await Sha3Wasm.initBundled();
-    sha3Initialized = true;
-  }
-}
-
 
 const rpc = BrowserRPCReplacement.getInstance();
 
@@ -279,25 +268,16 @@ export function transformCreditPackPurchaseRequestResponse(
 
 // No encoding specified - matches Node.js behavior
 export async function computeSHA3256Hexdigest(input: string): Promise<string> {
-  await initializeSha3();
-  const data = new TextEncoder().encode(input);
-  using memory = new Memory(data);
-  using digest = keccak256(memory);
-  return Array.from(digest.bytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+  const hash = sha3_256.create();
+  hash.update(input);
+  return hash.hex();
 }
 
 // Explicitly UTF-8 encoded - matches Node.js behavior
 export async function getSHA256HashOfInputData(inputData: string): Promise<string> {
-  await initializeSha3();
-  // TextEncoder uses UTF-8 by default
-  const data = new TextEncoder().encode(inputData);
-  using memory = new Memory(data);
-  using digest = keccak256(memory);
-  return Array.from(digest.bytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+  const hash = sha3_256.create();
+  hash.update(inputData);
+  return hash.hex();
 }
 
 export async function compressDataWithZstd(

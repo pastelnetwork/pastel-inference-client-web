@@ -65,7 +65,16 @@ class BrowserRPCReplacement {
    * Initializes the WASM module and Pastel instance.
    * Must be called before any other method.
    */
-  public async initialize(): Promise<void> {
+  public async initialize(forceNew: boolean = false): Promise<void> {
+    if (forceNew) {
+      this.wasmModule = await initWasm();
+      if (!this.wasmModule) {
+        throw new Error("WASM module not loaded");
+      }
+      this.pastelInstance = new this.wasmModule.Pastel();
+      this.isInitialized = true;
+      return
+    }
     if (!this.isInitialized) {
       this.wasmModule = await initWasm();
       if (!this.wasmModule) {
@@ -609,17 +618,20 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
     const sendToJson = JSON.stringify(sendTo);
     const utxosJson = JSON.stringify(utxos);
+    const currentBlockHeight = await this.getCurrentPastelBlockHeight();
     const response = await this.executeWasmMethod(() =>
       this.pastelInstance!.CreateSendToTransaction(
         networkMode,
         sendToJson,
         fromAddress,
         utxosJson,
-        fee
+        currentBlockHeight,
+        0
       )
     );
     if (response) {
-      return JSON.parse(response).data
+      const parseData = JSON.parse(JSON.parse(response).data)
+      return parseData?.txid
     }
     return "";
   }

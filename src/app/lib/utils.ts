@@ -2,6 +2,7 @@
 
 'use client'
 
+import { Sha3Wasm, Memory, keccak256 } from "@hazae41/sha3.wasm";
 import { sha3_256 } from 'js-sha3';
 import pako from "pako";
 import browserLogger from "@/app/lib/logger";
@@ -19,6 +20,15 @@ import {
   SupernodeWithDistance,
   PastelIDType,
 } from "@/app/types";
+
+// Initialize WASM SHA3
+let sha3Initialized = false;
+async function initializeSha3() {
+  if (!sha3Initialized) {
+    await Sha3Wasm.initBundled();
+    sha3Initialized = true;
+  }
+}
 
 const rpc = BrowserRPCReplacement.getInstance();
 
@@ -268,13 +278,36 @@ export function transformCreditPackPurchaseRequestResponse(
 
 // No encoding specified - matches Node.js behavior
 export async function computeSHA3256Hexdigest(input: string): Promise<string> {
+  await initializeSha3();
+  const data = new TextEncoder().encode(input);
+  using memory = new Memory(data);
+  using digest = keccak256(memory);
+  return Array.from(digest.bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+
+// Explicitly UTF-8 encoded - matches Node.js behavior
+export async function getSHA256HashOfInputData(inputData: string): Promise<string> {
+  await initializeSha3();
+  const data = new TextEncoder().encode(inputData);
+  using memory = new Memory(data);
+  using digest = keccak256(memory);
+  return Array.from(digest.bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+// No encoding specified - matches Node.js behavior
+export async function computeJSSHA3256Hexdigest(input: string): Promise<string> {
   const hash = sha3_256.create();
   hash.update(input);
   return hash.hex();
 }
 
 // Explicitly UTF-8 encoded - matches Node.js behavior
-export async function getSHA256HashOfInputData(inputData: string): Promise<string> {
+export async function getJSSHA256HashOfInputData(inputData: string): Promise<string> {
   const hash = sha3_256.create();
   hash.update(inputData);
   return hash.hex();
@@ -438,6 +471,18 @@ export async function extractResponseFieldsFromCreditPackTicketMessageDataAsJSON
 }
 
 export async function computeSHA3256HashOfSQLModelResponseFields(
+  modelInstance: Record<string, unknown>
+): Promise<string> {
+  const responseFieldsJSON =
+    await extractResponseFieldsFromCreditPackTicketMessageDataAsJSON(
+      modelInstance
+    );
+  const sha256HashOfResponseFields =
+    await getJSSHA256HashOfInputData(responseFieldsJSON);
+  return sha256HashOfResponseFields;
+}
+
+export async function computeSHA3256HashOfSQLModelResponseFields2(
   modelInstance: Record<string, unknown>
 ): Promise<string> {
   const responseFieldsJSON =
@@ -1324,7 +1369,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
     // Initialize WASM
     browserLogger.info("Initializing WASM...");
     const rpc = BrowserRPCReplacement.getInstance();
-    await rpc.initialize();
+    await rpc.initialize(true);
     browserLogger.info("WASM initialized successfully");
 
     // Parse the JSON data
@@ -1335,6 +1380,9 @@ export async function importPromotionalPack(jsonData: string): Promise<{
       requested_initial_credits_in_credit_pack: number;
       psl_credit_usage_tracking_address: string;
       psl_credit_usage_tracking_address_private_key: string;
+      wallet_address: string;
+      wallet_file_content: string;
+      wallet_password: string;
     }[] = JSON.parse(jsonData);
     if (!Array.isArray(packData)) {
       packData = [packData];
@@ -1344,7 +1392,18 @@ export async function importPromotionalPack(jsonData: string): Promise<{
       const pack = packData[i];
       browserLogger.info(`Processing pack ${i + 1} of ${packData.length}`);
 
-      // 1. Import PastelID
+      // // 1. Import Wallet
+      try {
+        await rpc.importWallet(pack.wallet_file_content);
+        await rpc.unlockWallet(pack.wallet_password)
+        browserLogger.info(
+          `Wallet imported successfully for tracking address: ${pack.wallet_address}`
+        );
+      } catch (error) {
+        browserLogger.warn("Failed to import wallet");
+      }
+
+      // 2. Import PastelID
       const importResult = await rpc.importPastelIDFileIntoWallet(pack.secureContainerBase64, pack.pastel_id_pubkey, pack.pastel_id_passphrase);
 
       if (importResult.success) {
@@ -1353,7 +1412,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
         throw new Error(`Failed to import PastelID: ${importResult.message}`);
       }
 
-      // 2. Import the tracking address private key
+      // 3. Import the tracking address private key
       browserLogger.info(
         `Importing private key for tracking address: ${pack.psl_credit_usage_tracking_address}`
       );
@@ -1367,7 +1426,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
         browserLogger.warn("Failed to import private key");
       }
 
-      // 3. Verify PastelID import and functionality
+      // 4. Verify PastelID import and functionality
       try {
         const testMessage = "This is a test message for PastelID verification";
         const signature = await rpc.signMessageWithPastelID(

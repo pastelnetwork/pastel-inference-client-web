@@ -113,7 +113,8 @@ export interface PastelInstance {
     sendTo: string,
     optionalField: string,
     utxos: string,
-    fee: number
+    blockHeight: number,
+    expiryBlockHeight: number,
   ): string;
   CreateSendToTransactionJson(
     mode: NetworkMode,

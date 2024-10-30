@@ -2,6 +2,8 @@
 
 'use client'
 
+import { v4 as uuidv4 } from 'uuid';
+
 import BrowserRPCReplacement from "@/app/lib/BrowserRPCReplacement";
 import { BrowserDatabase } from "@/app/lib/BrowserDatabase";
 import PastelInferenceClient from "@/app/lib/PastelInferenceClient";
@@ -135,7 +137,7 @@ export async function sendMessageAndCheckForNewIncomingMessages(
         PastelIDType.PastelID
       ),
       timestamp: new Date().toISOString(),
-      id: ""
+      id: uuidv4(),
     };
 
     const { error } = schemas.userMessageSchema.safeParse(userMessage);
@@ -211,7 +213,7 @@ export async function handleCreditPackTicketEndToEnd(
       sha3_256_hash_of_credit_pack_purchase_request_fields: "",
       requesting_end_user_pastelid_signature_on_request_hash: "",
     };
-
+    creditPackRequest.id = uuidv4();
     creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields =
       await utils.computeSHA3256HashOfSQLModelResponseFields(creditPackRequest);
     creditPackRequest.requesting_end_user_pastelid_signature_on_request_hash =

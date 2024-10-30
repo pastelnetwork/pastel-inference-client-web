@@ -1,5 +1,6 @@
 // src/app/lib/api.ts
 
+import browserLogger from "@/app/lib/logger";
 import BrowserRPCReplacement from './BrowserRPCReplacement';
 import {
   getNetworkFromLocalStorage,
@@ -184,9 +185,9 @@ export async function checkSupernodeList(): Promise<{ validMasternodeListFullDF:
   return await rpc.checkSupernodeList();
 }
 
-export async function registerPastelID(pastelid: string, address: string, fee: number = 0): Promise<string> {
+export async function registerPastelID(pastelid: string, address: string): Promise<string> {
   const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.createRegisterPastelIdTransaction(pastelid, address, fee);
+  return await rpc.createRegisterPastelIdTransaction(pastelid, address);
 }
 
 export async function getPastelTicket(txid: string, decodeProperties: boolean = true): Promise<unknown> {
@@ -292,8 +293,7 @@ export async function createAndRegisterPastelID(): Promise<{ pastelID: string; t
     const pastelID = await rpc.makeNewPastelID(false);
     console.log("New PastelID created:", pastelID);
     const address = await rpc.getMyPslAddressWithLargestBalance();
-    const fee = 0;
-    const txid = await rpc.createRegisterPastelIdTransaction(pastelID, address, fee);
+    const txid = await rpc.createRegisterPastelIdTransaction(pastelID, address);
     console.log("PastelID registered with txid:", txid);
     return { pastelID, txid };
   } catch (error) {
@@ -385,13 +385,14 @@ export async function createNewWallet(password: string): Promise<string> {
   return await rpc.createNewWallet(password);
 }
 
-export async function importPastelID(fileContent: string, network: string, passphrase: string): Promise<{ success: boolean; message: string }> {
+export async function importPastelID(fileContent: string | ArrayBuffer | null, network: string, passphrase: string, pastelID: string): Promise<{ success: boolean; message: string; importedPastelID: string }> {
   try {
     const rpc = BrowserRPCReplacement.getInstance();
-    return await rpc.importPastelIDFromFile(fileContent, network, passphrase);
+    await rpc.initialize()
+    return await rpc.importPastelIDFromFile(fileContent, network, passphrase, pastelID);
   } catch (error) {
     console.error("Error importing PastelID:", error);
-    return { success: false, message: `Failed to import PastelID: ${(error as Error).message}` };
+    return { success: false, message: `Failed to import PastelID: ${(error as Error).message}`, importedPastelID: '' };
   }
 }
 
@@ -580,10 +581,30 @@ export async function exportWallet(): Promise<string> {
   return rpc.exportWallet();
 }
 
+export async function importWalletFromDatFile(walletData: ArrayBuffer | string, password: string): Promise<boolean> {
+  try {
+    browserLogger.info("Initializing WASM...");
+    const rpc = BrowserRPCReplacement.getInstance();
+    await rpc.initialize(true);
+    browserLogger.info("WASM initialized successfully");
+    await rpc.importWallet(walletData);
+    await rpc.unlockWallet(password);
+    return true;
+  } catch (error) {
+    console.error("Error loading wallet from .dat file:", error);
+    return false;
+  }
+}
+
+export async function getAllAddresses(): Promise<string[]> {
+  const rpc = BrowserRPCReplacement.getInstance();
+  return rpc.getAllAddresses();
+}
+
 const api = {
   changeNetwork,
   unlockWallet,
-  createNewWallet,  
+  createNewWallet, 
   getNetworkInfo,
   getBestSupernodeUrl,
   getInferenceModelMenu,
@@ -643,6 +664,8 @@ const api = {
   makeNewPastelID,
   getAddressesCount,
   exportWallet,
+  importWalletFromDatFile,
+  getAllAddresses,
 };
 
 export default api;

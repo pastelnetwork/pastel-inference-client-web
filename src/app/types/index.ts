@@ -128,7 +128,8 @@ export interface PastelInstance {
     pastelID: string,
     address: string,
     utxos: string,
-    fee: number
+    blockHeight: number,
+    expiryHeight: number
   ): string;
   CreateRegisterPastelIdTransactionJson(
     mode: NetworkMode,
@@ -1040,4 +1041,13 @@ export interface AddressBalance {
   balance: number;
   received: number;
   addresses: AddressBalanceItem[]
+}
+
+export interface WalletData {
+  wallet: string;
+  balance: number;
+  listPastelIDs: string[];
+  addresses: string[];
+  walletPassword: string;
+  localPastelID: string;
 }

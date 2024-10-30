@@ -15,6 +15,7 @@ import {
   PastelIDType,
   SupernodeInfo,
   EmscriptenModule,
+  WalletData,
 } from "@/app/types";
 import browserLogger from "@/app/lib/logger";
 import { generateSecurePassword } from "../lib/passwordUtils";
@@ -160,7 +161,11 @@ interface WalletActions {
   fetchPastelIDs: () => Promise<void>;
   fetchMyPslAddress: () => Promise<void>;
   setQRCodeContent: (qrCode: string) => void;
+  saveWalletToLocalStorage: () => void;
+  loadWalletFromLocalStorage: () => Promise<boolean>;
 }
+
+const walletLocalStorageName = 'walletInfo';
 
 const useStore = create<WalletState & WalletActions>()(
   persist(
@@ -244,6 +249,11 @@ const useStore = create<WalletState & WalletActions>()(
           } catch (error) {
             console.error("Failed to get network info:", error);
             throw new Error("Failed to retrieve network information");
+          }
+
+          const result = await get().loadWalletFromLocalStorage();
+          if (result) {
+            return
           }
 
           // Handle wallet password
@@ -334,7 +344,7 @@ const useStore = create<WalletState & WalletActions>()(
 
           console.log("Wallet state set, waiting before refreshing data");
           await new Promise((resolve) => setTimeout(resolve, 2000));
-
+          await get().saveWalletToLocalStorage();
           try {
             await get().refreshWalletData();
           } catch (error) {
@@ -453,7 +463,6 @@ const useStore = create<WalletState & WalletActions>()(
           const addresses = Object.keys(addressAmounts);
           const pastelIDs = await api.listPastelIDs();
           const creditPacks = await api.getMyValidCreditPacks();
-
           set({
             balance,
             addresses,
@@ -581,6 +590,50 @@ const useStore = create<WalletState & WalletActions>()(
         } catch (error) {
           browserLogger.error("Error fetching PSL address:", error);
         }
+      },
+      saveWalletToLocalStorage: async () => {
+        const walletInfo = await api.exportWallet();
+        const balance = await api.getBalance();
+        const listPastelIDs = await api.listPastelIDs();
+        const localPastelID = get().localPastelID
+        const ids = listPastelIDs.filter((value) => value !== localPastelID);
+        const addresses = await api.getAllAddresses();
+        localStorage.removeItem(walletLocalStorageName);
+        console.log({
+          wallet: walletInfo,
+          balance,
+          listPastelIDs: ids,
+          addresses,
+          localPastelID,
+          walletPassword: localStorage.getItem('walletPassword')
+        })
+        localStorage.setItem(walletLocalStorageName, btoa(JSON.stringify({
+          wallet: walletInfo,
+          balance,
+          listPastelIDs: ids,
+          addresses,
+          localPastelID,
+          walletPassword: localStorage.getItem('walletPassword')
+        })))
+      },
+      loadWalletFromLocalStorage: async () => {
+        const walletData = localStorage.getItem(walletLocalStorageName);
+        if (walletData) {
+          const parseWalletData = JSON.parse(atob(walletData)) as WalletData;
+          if (parseWalletData.walletPassword) {
+            const success = await api.importWalletFromDatFile(parseWalletData.wallet, parseWalletData.walletPassword);
+            if (success) {
+              set({ isLoading: false, isInitialized: true });
+              await get().refreshWalletData();
+              get().unlockWallet(parseWalletData.walletPassword);
+              const listPastelIDs = await api.listPastelIDs();
+              const ids = listPastelIDs.filter((value) => value !== parseWalletData.localPastelID);
+              set({ pastelId: ids[0] || "", localPastelID: parseWalletData.localPastelID });
+              return true;
+            }
+          }
+        }
+        return false;
       },
     }),
     {

@@ -1042,3 +1042,12 @@ export interface AddressBalance {
   received: number;
   addresses: AddressBalanceItem[]
 }
+
+export interface WalletData {
+  wallet: string;
+  balance: number;
+  listPastelIDs: string[];
+  addresses: string[];
+  walletPassword: string;
+  localPastelID: string;
+}

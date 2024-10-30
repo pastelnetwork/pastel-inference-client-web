@@ -581,7 +581,7 @@ export async function exportWallet(): Promise<string> {
   return rpc.exportWallet();
 }
 
-export async function importWalletFromDatFile(walletData: ArrayBuffer, password: string): Promise<boolean> {
+export async function importWalletFromDatFile(walletData: ArrayBuffer | string, password: string): Promise<boolean> {
   try {
     browserLogger.info("Initializing WASM...");
     const rpc = BrowserRPCReplacement.getInstance();
@@ -596,11 +596,15 @@ export async function importWalletFromDatFile(walletData: ArrayBuffer, password:
   }
 }
 
+export async function getAllAddresses(): Promise<string[]> {
+  const rpc = BrowserRPCReplacement.getInstance();
+  return rpc.getAllAddresses();
+}
 
 const api = {
   changeNetwork,
   unlockWallet,
-  createNewWallet,  
+  createNewWallet, 
   getNetworkInfo,
   getBestSupernodeUrl,
   getInferenceModelMenu,
@@ -661,6 +665,7 @@ const api = {
   getAddressesCount,
   exportWallet,
   importWalletFromDatFile,
+  getAllAddresses,
 };
 
 export default api;

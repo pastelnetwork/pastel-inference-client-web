@@ -290,6 +290,33 @@ export class BrowserDatabase {
     });
   }
 
+   /**
+   * Adds data to a specified object store.
+   * @param {string} storeName - The name of the object store.
+   * @param {T} data - The data to add.
+   * @returns {Promise<IDBValidKey>} A promise that resolves with the key of the added data.
+   */
+   public async saveData<T>(storeName: string, data: T): Promise<IDBValidKey> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error("Database not initialized"));
+        return;
+      }
+
+      const transaction = this.db.transaction([storeName], "readwrite");
+      const store = transaction.objectStore(storeName);
+      const request = store.put(data);
+
+      request.onerror = (event) => {
+        reject((event.target as IDBRequest).error);
+      };
+
+      request.onsuccess = (event) => {
+        resolve((event.target as IDBRequest).result);
+      };
+    });
+  }
+
   /**
    * Retrieves data by primary key from a specified object store.
    * @param {string} storeName - The name of the object store.

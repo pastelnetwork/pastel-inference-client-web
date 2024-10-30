@@ -445,7 +445,7 @@ class PastelInferenceClient {
         validationSchemas.creditPackPurchaseRequestSchema.parse(
           creditPackRequest
         );
-      await db.addData("CreditPackPurchaseRequest", validatedCreditPackRequest);
+      await db.saveData("CreditPackPurchaseRequest", validatedCreditPackRequest);
       utils.logActionWithPayload(
         "requesting",
         "a new Pastel credit pack ticket",
@@ -482,7 +482,7 @@ class PastelInferenceClient {
           validationSchemas.creditPackPurchaseRequestRejectionSchema.parse(
             rejectionResponse
           );
-        await db.addData(
+        await db.saveData(
           "CreditPackPurchaseRequestRejection",
           validatedRejection
         );
@@ -498,7 +498,7 @@ class PastelInferenceClient {
           validationSchemas.creditPackPurchaseRequestPreliminaryPriceQuoteSchema.parse(
             preparedResult
           );
-        await db.addData(
+        await db.saveData(
           "CreditPackPurchaseRequestPreliminaryPriceQuote",
           validatedPriceQuote
         );

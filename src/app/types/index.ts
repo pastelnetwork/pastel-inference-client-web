@@ -128,7 +128,8 @@ export interface PastelInstance {
     pastelID: string,
     address: string,
     utxos: string,
-    fee: number
+    blockHeight: number,
+    expiryHeight: number
   ): string;
   CreateRegisterPastelIdTransactionJson(
     mode: NetworkMode,

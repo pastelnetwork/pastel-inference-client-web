@@ -2,12 +2,13 @@
 
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import browserLogger from "@/app/lib/logger";
 import * as api from "@/app/lib/api";
 import * as utils from "@/app/lib/utils";
 import useStore from "@/app/store/useStore";
 
+let timeout: NodeJS.Timeout | null = null;
 export default function UserInfo() {
   const {
     setPastelId,
@@ -20,6 +21,7 @@ export default function UserInfo() {
     fetchPastelIDs,
     fetchMyPslAddress,
     setSelectedPastelID,
+    refreshWalletData,
   } = useStore();
   const [showPassword, setShowPassword] = useState(false);
   const [passphrase, setPassphrase] = useState<string>("");
@@ -42,12 +44,29 @@ export default function UserInfo() {
   });
   const [shoModalMessage, setShowModalMessage] = useState<boolean>(false);
 
+  const refreshWalletInfo = useCallback(async () => {
+    timeout = setTimeout(() => {
+      fetchWalletInfo();
+      refreshWalletInfo();
+    }, 60000); // ~ 1 minute
+  }, [fetchWalletInfo])
+
+  useEffect(() => {
+    refreshWalletInfo();
+
+    return () => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    }
+  }, [refreshWalletInfo])
+
   useEffect(() => {
     fetchWalletInfo();
     fetchPastelIDs();
     fetchMyPslAddress();
   }, [fetchWalletInfo, fetchPastelIDs, fetchMyPslAddress]);
-  
+
   const handlePastelIDChange = (
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
@@ -73,6 +92,10 @@ export default function UserInfo() {
   };
 
   const handleCreatePastelID = async () => {
+    if (Number(walletBalance.replace(/,/g, "")) < 1000) {
+      setMessage("You don't have sufficient funds");
+      return;
+    }
     if (newPastelIDPassphrase.length < 6) {
       setMessage("Passphrase must be at least 6 characters long.");
       return;
@@ -108,7 +131,8 @@ export default function UserInfo() {
           setMessage(
             "Your PastelID has been registered and your wallet has been funded. The page will refresh shortly."
           );
-          setTimeout(() => window.location.reload(), 5000);
+          await api.setPastelIdAndPassphrase(pastelID, btoa(newPastelIDPassphrase))
+          refreshWalletData();
         } else {
           attempts++;
           if (attempts < maxAttempts) {
@@ -143,6 +167,21 @@ export default function UserInfo() {
     checkStatus();
   };
 
+  const selectAndReadWalletFile = async (file: File): Promise<string | ArrayBuffer | null> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+          resolve(reader.result);
+      };
+      reader.onerror = () => {
+          resolve(null);
+      };
+      reader.readAsArrayBuffer(file);
+    });
+}
+
+
   const handleImportPastelID = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -151,17 +190,25 @@ export default function UserInfo() {
       setMessage("Please select a PastelID file to import.");
       return;
     }
+    const importPassPhrase = prompt("Please enter the passphrase", "");
+    if (!importPassPhrase) {
+        alert("Passphrase is required!");
+        return;
+    }
     try {
       const networkInfo = await api.getNetworkInfo();
-      const fileContent = await file.text();
+      const fileContent = await selectAndReadWalletFile(file);
+      const pastelID = file.name;
       const result = await api.importPastelID(
         fileContent,
         networkInfo.network,
-        passphrase
+        importPassPhrase,
+        pastelID
       );
       if (result.success) {
         setMessage("PastelID imported successfully!");
-        window.location.reload();
+        await api.setPastelIdAndPassphrase(result.importedPastelID, btoa(importPassPhrase))
+        refreshWalletData();
       } else {
         setMessage(result.message || "Failed to import PastelID.");
       }

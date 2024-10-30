@@ -1,6 +1,6 @@
 // src/app/lib/BrowserRPCReplacement.ts
 
-import { initWasm, readWalletDataDirectory } from "./wasmLoader";
+import { initWasm } from "./wasmLoader";
 import {
   PastelInstance,
   NetworkMode,
@@ -611,7 +611,6 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
   public async createSendToTransaction(
     sendTo: { address: string; amount: number }[],
     fromAddress: string,
-    fee: number = 0
   ): Promise<string> {
     this.ensureInitialized();
     const utxos = await this.getAddressUtxos(fromAddress);
@@ -674,19 +673,20 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
   public async createRegisterPastelIdTransaction(
     pastelID: string,
     fundingAddress: string,
-    fee: number
   ): Promise<string> {
     this.ensureInitialized();
     const utxos = await this.getAddressUtxos(fundingAddress);
     const utxosJson = JSON.stringify(utxos);
     const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
+    const currentBlockHeight = await this.getCurrentPastelBlockHeight();
     return this.executeWasmMethod(() =>
       this.pastelInstance!.CreateRegisterPastelIdTransaction(
         networkMode,
         pastelID,
         fundingAddress,
         utxosJson,
-        fee
+        currentBlockHeight,
+        0
       )
     );
   }
@@ -1044,20 +1044,12 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
    * @param network - The network mode (Mainnet, Testnet, Devnet).
    * @returns An object indicating success and a message.
    */
-  public async importPastelIDFromFile(fileContent: string, network: string, passphrase: string): Promise<{ success: boolean; message: string }> {
+  public async importPastelIDFromFile(fileContent: string | ArrayBuffer | null, network: string, passphrase: string, pastelID: string): Promise<{ success: boolean; message: string; importedPastelID: string }> {
     this.ensureInitialized();
     let tempFilePath: string | null = null;
-    let contentLength = 0;
+    const contentLength = 0;
     try {
       const FS = this.wasmModule!.FS;
-  
-      // Decode the base64 encoded secure container
-      const binaryString = atob(fileContent);
-      contentLength = binaryString.length;
-      const bytes = new Uint8Array(contentLength);
-      for (let i = 0; i < contentLength; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
   
       // Ensure the directory exists in the Emscripten FS
       const dirPath = "/wallet_data";
@@ -1070,13 +1062,10 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
         }
       }
   
-      // Generate a unique filename for the PastelID
-      const pastelID = `pastelid_${Date.now()}.key`;
       tempFilePath = `${dirPath}/${pastelID}`;
-  
       // Write the decoded binary data to the Emscripten FS
+      const bytes = new Uint8Array(fileContent as ArrayBufferLike);
       FS.writeFile(tempFilePath, bytes);
-  
       // Sync the file system
       await new Promise<void>((resolve, reject) => {
         FS.syncfs(false, (err: Error | null) => {
@@ -1089,17 +1078,11 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
           }
         });
       });
-  
-      // Read and log the contents of the /wallet_data directory
-      const walletDataContents = readWalletDataDirectory();
-      console.log('Contents of /wallet_data:', walletDataContents);
-  
+
       // Import the PastelID keys
       let result: string;
       try {
-        result = await this.executeWasmMethod(() =>
-          this.pastelInstance!.ImportPastelIDKeys(pastelID, passphrase, dirPath)
-        );
+        result = await this.pastelInstance!.ImportPastelIDKeys(pastelID, passphrase, dirPath);
         if (result && typeof result === 'string') {
           result = JSON.parse(result);
         }
@@ -1107,7 +1090,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
         console.error("Error in ImportPastelIDKeys:", error);
         throw new Error(`ImportPastelIDKeys failed: ${(error as Error).message || "Unknown error"}`);
       }
-  
+
       if (result) {
         // Verify the import by retrieving the PastelID
         let importedPastelID: string;
@@ -1119,10 +1102,10 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
           console.error("Error in GetPastelID:", error);
           throw new Error(`GetPastelID failed: ${(error as Error).message || "Unknown error"}`);
         }
-  
+
         if (importedPastelID) {
           console.log(`PastelID ${importedPastelID} imported successfully on network ${network}`);
-          return { success: true, message: "PastelID imported successfully!" };
+          return { success: true, message: "PastelID imported successfully!", importedPastelID };
         } else {
           throw new Error("PastelID import could not be verified");
         }
@@ -1134,6 +1117,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
       return {
         success: false,
         message: `Failed to import PastelID: ${(error as Error).message}`,
+        importedPastelID: '',
       };
     } finally {
       // Clean up: overwrite the temporary file with zeros if it exists
@@ -1509,7 +1493,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     this.ensureInitialized();
     const sendTo = [{ address, amount }];
     const fromAddress = await this.getMyPslAddressWithLargestBalance();
-    return this.createSendToTransaction(sendTo, fromAddress, 0); // Assuming fee is 0
+    return this.createSendToTransaction(sendTo, fromAddress); // Assuming fee is 0
   }
 
   /**
@@ -1520,7 +1504,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
   public async sendMany(amounts: { address: string; amount: number }[]): Promise<string> {
     this.ensureInitialized();
     const fromAddress = await this.getMyPslAddressWithLargestBalance();
-    return this.createSendToTransaction(amounts, fromAddress, 0); // Assuming fee is 0
+    return this.createSendToTransaction(amounts, fromAddress); // Assuming fee is 0
   }
 
   /**
@@ -1622,7 +1606,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     burnAddress: string
   ): Promise<string> {
     const sendTo = [{ address: burnAddress, amount: creditUsageTrackingAmountInPSL }];
-    return this.createSendToTransaction(sendTo, creditUsageTrackingPSLAddress, 0); // Assuming fee is 0
+    return this.createSendToTransaction(sendTo, creditUsageTrackingPSLAddress); // Assuming fee is 0
   }
 
   // ------------------------- 

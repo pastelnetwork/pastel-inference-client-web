@@ -44,6 +44,7 @@ interface WalletState {
   walletBalance: string;
   myPslAddress: string;
   qrCodeContent: string;
+  localPastelID: string;
 }
 
 interface WalletActions {
@@ -124,7 +125,8 @@ interface WalletActions {
   importPastelID: (
     fileContent: string,
     network: string,
-    passphrase: string
+    passphrase: string,
+    pastelID: string
   ) => Promise<{ success: boolean; message: string }>;
   createWalletFromMnemonic: (
     password: string,
@@ -184,6 +186,7 @@ const useStore = create<WalletState & WalletActions>()(
       walletBalance: "Loading...",
       myPslAddress: "",
       qrCodeContent: "",
+      localPastelID: "",
 
       setLocked: (isLocked) => set({ isLocked }),
       setNetworkMode: (mode) => set({ networkMode: mode }),
@@ -310,8 +313,8 @@ const useStore = create<WalletState & WalletActions>()(
           try {
             existingPastelID = await api.checkForPastelID();
             if (!existingPastelID) {
-              await api.makeNewPastelID(false);
-              existingPastelID = await api.checkForPastelID();
+              const newPastelID = await api.makeNewPastelID(false);
+              set({ localPastelID: newPastelID });
             }
             const addressCount = await api.getAddressesCount();
             if (!addressCount) {
@@ -499,9 +502,8 @@ const useStore = create<WalletState & WalletActions>()(
       registerPastelID: async (
         pastelid: string,
         address: string,
-        fee?: number
       ) => {
-        return await api.registerPastelID(pastelid, address, fee);
+        return await api.registerPastelID(pastelid, address);
       },
 
       listPastelIDs: api.listPastelIDs,
@@ -560,7 +562,9 @@ const useStore = create<WalletState & WalletActions>()(
       },
       fetchPastelIDs: async () => {
         try {
-          const ids = await api.listPastelIDs();
+          const listPastelIDs = await api.listPastelIDs();
+          const localPastelID = get().localPastelID
+          const ids = listPastelIDs.filter((value) => value !== localPastelID)
           get().setPastelIDs(ids);
           if (ids.length > 0) {
             get().setSelectedPastelID(ids[0]);

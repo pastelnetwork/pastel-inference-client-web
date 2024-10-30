@@ -6,8 +6,12 @@ import React, { useState } from "react";
 import { AddressAmount, WalletInfo } from "@/app/types";
 import * as api from '@/app/lib/api';
 import { parseAndFormatNumber } from '@/app/lib/utils';
+import useStore from '@/app/store/useStore';
 
 export default function WalletManagement() {
+  const { refreshWalletData } = useStore()
+  const [password, setPassword] =
+    useState<string>("");
   const [privKey, setPrivKey] = useState<string>("");
   const [walletFile, setWalletFile] = useState<File | null>(null);
   const [addressAmounts, setAddressAmounts] = useState<AddressAmount | null>(
@@ -55,16 +59,22 @@ export default function WalletManagement() {
       alert("Please select a Wallet file to import.");
       return;
     }
+    if (!password) {
+      alert("Please enter password.");
+      return;
+    }
     setWalletManagementLoading({
       ...walletManagementLoading,
       isImportWalletLoading: true,
     });
     try {
       const arrayBuffer = await walletFile.arrayBuffer();
-      const success = await api.loadWalletFromDatFile(arrayBuffer);
+      const success = await api.importWalletFromDatFile(arrayBuffer, password);
       if (success) {
         alert("Wallet imported successfully!");
         setWalletFile(null);
+        setPassword('');
+        await refreshWalletData();
       } else {
         throw new Error("Failed to import wallet");
       }
@@ -199,6 +209,22 @@ export default function WalletManagement() {
             setWalletFile(e.target.files ? e.target.files[0] : null)
           }
         />
+        <div className="mt-2">
+          <label
+            className="block text-bw-700 font-bold mb-2"
+            htmlFor="newPastelIDPassphrase"
+          >
+            Enter password:
+          </label>
+          <input
+            className="input w-full"
+            type="password"
+            placeholder="Enter password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
         <div className="flex items-center gap-2 mt-2">
           <button
             id="importWalletButton"

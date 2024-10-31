@@ -394,7 +394,7 @@ export default function UserInfo() {
   };
 
   return (
-    <div className="grid grid-cols-5 gap-4 p-4 has-border rounded-xl bg-white shadow-md">
+    <div className="grid grid-cols-5 gap-4 p-4 has-border rounded-xl bg-white shadow-md mt-3">
       <h2 className="text-2xl col-span-full text-bw-800">User Information</h2>
 
       <div className="mt-4">

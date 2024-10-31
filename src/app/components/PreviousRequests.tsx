@@ -173,7 +173,7 @@ export default function PreviousRequests() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 has-border rounded-xl bg-white shadow-md" style={{height: '1000px', overflowY: 'auto'}}>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 has-border rounded-xl bg-white shadow-md mt-3" style={{height: '1000px', overflowY: 'auto'}}>
       <div className="lg:col-span-1 flex flex-col">
         <h2 className="text-2xl mb-4 text-bw-800">
           View Previous Inference Requests

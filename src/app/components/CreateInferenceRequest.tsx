@@ -290,7 +290,7 @@ export default function CreateInferenceRequest({ modelMenu }: CreateInferenceReq
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 p-4 has-border rounded-xl bg-white shadow-md">
+    <div className="grid grid-cols-1 gap-4 p-4 has-border rounded-xl bg-white shadow-md mt-3">
       <h2 className="text-2xl text-bw-800">Create New Inference Request</h2>
       <form id="inferenceRequestForm" className="grid grid-cols-2 gap-4" onSubmit={handleSubmit}>
         <div>

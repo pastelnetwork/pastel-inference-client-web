@@ -159,7 +159,7 @@ export default function CreateCreditPackTicket() {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 p-4 has-border rounded-xl bg-white shadow-md">
+    <div className="grid grid-cols-1 gap-4 p-4 has-border rounded-xl bg-white shadow-md mt-3">
       <h2 className="text-2xl text-bw-800">Create New Credit Pack Ticket</h2>
       <form
         id="createTicketForm"

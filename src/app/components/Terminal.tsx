@@ -95,14 +95,14 @@ const DynamicTerminal = dynamic(
       };
 
       return (
-        <div className="mt-4">
+        <div className="mt-4 mb-4">
           <button onClick={toggleTerminal} className="btn success outline mt-4">
             Toggle Terminal
           </button>
           <div className={isVisible ? 'block' : 'hidden'}>
             <h2 className="text-2xl mt-5">Terminal</h2>
             <div id="terminal" ref={terminalRef} className="bg-gray-900 text-white p-4 rounded-xl"></div>
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center mb-4 mt-2">
               <button id="exportTerminalButton" className="btn success outline" onClick={exportTerminalSession}>
                 Export Terminal Session Text
               </button>

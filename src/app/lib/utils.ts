@@ -123,16 +123,23 @@ export async function fetchCurrentPSLMarketPrice(): Promise<number> {
     priceCG: number | null;
   }> {
     try {
-      const [responseCMC, responseCG] = await Promise.all([
-        fetch("https://coinmarketcap.com/currencies/pastel/"),
+    const myHeaders = new Headers();
+    const requestOptions = {
+      method: "GET",
+      headers: myHeaders,
+      redirect: "follow"
+    };
+
+    const [responseCMC, responseCG] = await Promise.all([
+        fetch("https://min-api.cryptocompare.com/data/price?fsym=PSL&tsyms=USD", requestOptions as RequestInit),
         fetch(
-          "https://api.coingecko.com/api/v3/simple/price?ids=pastel&vs_currencies=usd"
+          "https://api.coingecko.com/api/v3/simple/price?ids=pastel&vs_currencies=usd", requestOptions as RequestInit
         ),
       ]);
-      const textCMC = await responseCMC.text();
-      const priceCMCMatch = textCMC.match(/price today is \$([0-9.]+) USD/);
-      const priceCMC = priceCMCMatch ? parseFloat(priceCMCMatch[1]) : null;
+
+      const jsonCMS = await responseCMC.json();
       const jsonCG = await responseCG.json();
+      const priceCMC = jsonCMS.USD ?? null;
       const priceCG = jsonCG.pastel?.usd ?? null;
       return { priceCMC, priceCG };
     } catch (error) {

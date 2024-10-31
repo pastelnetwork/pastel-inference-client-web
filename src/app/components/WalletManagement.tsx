@@ -151,7 +151,7 @@ export default function WalletManagement() {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 p-4 has-border rounded-xl">
+    <div className="grid grid-cols-1 gap-4 p-4 has-border rounded-xl mt-3">
       <h2 className="text-2xl">Manage Wallet</h2>
       <div className="mb-4">
         <label

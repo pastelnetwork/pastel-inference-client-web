@@ -57,7 +57,7 @@ export default function MessageSystem() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-4 has-border rounded-xl bg-white shadow-md">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-4 has-border rounded-xl bg-white shadow-md mt-3">
       <div>
         <h2 className="text-2xl mb-4 text-bw-800">
           Send and Receive Messages using PastelIDs

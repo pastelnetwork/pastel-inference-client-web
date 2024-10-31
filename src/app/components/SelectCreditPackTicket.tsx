@@ -118,7 +118,7 @@ export default function SelectCreditPackTicket() {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 p-4 has-border rounded-xl shadow-md">
+    <div className="grid grid-cols-1 gap-4 p-4 has-border rounded-xl shadow-md mt-3">
       <h2 className="text-2xl text-bw-800">
         Select Existing Credit Pack Ticket
       </h2>

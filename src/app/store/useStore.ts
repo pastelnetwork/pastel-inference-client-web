@@ -599,14 +599,6 @@ const useStore = create<WalletState & WalletActions>()(
         const ids = listPastelIDs.filter((value) => value !== localPastelID);
         const addresses = await api.getAllAddresses();
         localStorage.removeItem(walletLocalStorageName);
-        console.log({
-          wallet: walletInfo,
-          balance,
-          listPastelIDs: ids,
-          addresses,
-          localPastelID,
-          walletPassword: localStorage.getItem('walletPassword')
-        })
         localStorage.setItem(walletLocalStorageName, btoa(JSON.stringify({
           wallet: walletInfo,
           balance,

@@ -1406,7 +1406,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
         browserLogger.info(
           `Wallet imported successfully for tracking address: ${pack.wallet_address}`
         );
-      } catch (error) {
+      } catch {
         browserLogger.warn("Failed to import wallet");
       }
 

@@ -46,6 +46,7 @@ interface WalletState {
   myPslAddress: string;
   qrCodeContent: string;
   localPastelID: string;
+  showConnectWallet: boolean;
 }
 
 interface WalletActions {
@@ -163,6 +164,10 @@ interface WalletActions {
   setQRCodeContent: (qrCode: string) => void;
   saveWalletToLocalStorage: () => void;
   loadWalletFromLocalStorage: () => Promise<boolean>;
+  setShowConnectWallet: (status: boolean) => void;
+  closeQRCodeScan: () => void;
+  createNewWallet: () => void;
+  importedWalletByQRCode: () => void;
 }
 
 const walletLocalStorageName = 'walletInfo';
@@ -192,6 +197,7 @@ const useStore = create<WalletState & WalletActions>()(
       myPslAddress: "",
       qrCodeContent: "",
       localPastelID: "",
+      showConnectWallet: false,
 
       setLocked: (isLocked) => set({ isLocked }),
       setNetworkMode: (mode) => set({ networkMode: mode }),
@@ -214,6 +220,7 @@ const useStore = create<WalletState & WalletActions>()(
       setPastelIDs: (pastelIDs) => set({ pastelIDs }),
       setWalletBalance: (walletBalance: string) => set({ walletBalance }),
       setQRCodeContent: (qrCode: string) => set({ qrCodeContent: qrCode }),
+      setShowConnectWallet: (status: boolean) => set({ showConnectWallet: status }),
 
       initializeWallet: async () => {
         if (get().isLoading) return;
@@ -254,6 +261,35 @@ const useStore = create<WalletState & WalletActions>()(
           const result = await get().loadWalletFromLocalStorage();
           if (result) {
             return
+          }
+
+          if (get().showQRScanner) {
+            await new Promise<void>((resolve) => {
+              const checkAcknowledgement = () => {
+                if (!get().showQRScanner) {
+                  resolve();
+                } else {
+                  setTimeout(checkAcknowledgement, 1000);
+                }
+              };
+              checkAcknowledgement();
+            });
+          }
+
+          set({ showConnectWallet: true });
+          await new Promise<void>((resolve) => {
+            const checkAcknowledgement = () => {
+              if (!get().showConnectWallet) {
+                resolve();
+              } else {
+                setTimeout(checkAcknowledgement, 1000);
+              }
+            };
+            checkAcknowledgement();
+          });
+
+          if (get().showConnectWallet || get().showQRScanner) {
+            return;
           }
 
           // Handle wallet password
@@ -394,6 +430,18 @@ const useStore = create<WalletState & WalletActions>()(
         }
       },
 
+      closeQRCodeScan() {
+        set({ showConnectWallet: true, showQRScanner: false });
+      },
+
+      createNewWallet() {
+        set({ showConnectWallet: false, showQRScanner: false });
+      },
+
+      importedWalletByQRCode() {
+        set({ showConnectWallet: false, showQRScanner: false, isInitialized: true, isLoading: false });
+      },
+
       unlockWallet: async (password: string): Promise<boolean> => {
         set({ isLoading: true, error: null });
         try {
@@ -469,6 +517,7 @@ const useStore = create<WalletState & WalletActions>()(
             pastelId: pastelIDs[0] || "",
             creditPacks,
           });
+          get().saveWalletToLocalStorage();
         } catch (error) {
           console.error("Failed to refresh wallet data:", error);
           set({
@@ -616,11 +665,12 @@ const useStore = create<WalletState & WalletActions>()(
             const success = await api.importWalletFromDatFile(parseWalletData.wallet, parseWalletData.walletPassword);
             if (success) {
               set({ isLoading: false, isInitialized: true });
-              await get().refreshWalletData();
               get().unlockWallet(parseWalletData.walletPassword);
+              await get().refreshWalletData();
               const listPastelIDs = await api.listPastelIDs();
               const ids = listPastelIDs.filter((value) => value !== parseWalletData.localPastelID);
               set({ pastelId: ids[0] || "", localPastelID: parseWalletData.localPastelID });
+              await api.setPastelIdAndPassphrase(localStorage.getItem('MY_LOCAL_PASTELID') || '', localStorage.getItem('MY_PASTELID_PASSPHRASE') || '');
               return true;
             }
           }

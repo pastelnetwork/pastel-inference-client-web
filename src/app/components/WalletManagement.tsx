@@ -9,7 +9,7 @@ import { parseAndFormatNumber } from '@/app/lib/utils';
 import useStore from '@/app/store/useStore';
 
 export default function WalletManagement() {
-  const { refreshWalletData } = useStore()
+  const { refreshWalletData, saveWalletToLocalStorage } = useStore()
   const [password, setPassword] =
     useState<string>("");
   const [privKey, setPrivKey] = useState<string>("");
@@ -41,6 +41,7 @@ export default function WalletManagement() {
     });
     try {
       await api.importPrivKey(privKey);
+      saveWalletToLocalStorage();
       alert("Private key imported successfully!");
       setPrivKey("");
     } catch (error) {
@@ -75,6 +76,7 @@ export default function WalletManagement() {
         setWalletFile(null);
         setPassword('');
         await refreshWalletData();
+        saveWalletToLocalStorage();
       } else {
         throw new Error("Failed to import wallet");
       }

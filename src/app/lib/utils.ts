@@ -1403,6 +1403,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
       try {
         await rpc.importWallet(pack.wallet_file_content);
         await rpc.unlockWallet(pack.wallet_password)
+        localStorage.setItem('walletPassword', pack.wallet_password)
         browserLogger.info(
           `Wallet imported successfully for tracking address: ${pack.wallet_address}`
         );

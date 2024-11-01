@@ -589,6 +589,7 @@ export async function importWalletFromDatFile(walletData: ArrayBuffer | string, 
     browserLogger.info("WASM initialized successfully");
     await rpc.importWallet(walletData);
     await rpc.unlockWallet(password);
+    localStorage.setItem('walletPassword', password)
     return true;
   } catch (error) {
     console.error("Error loading wallet from .dat file:", error);

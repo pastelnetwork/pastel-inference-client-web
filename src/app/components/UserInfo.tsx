@@ -22,6 +22,7 @@ export default function UserInfo() {
     fetchMyPslAddress,
     setSelectedPastelID,
     refreshWalletData,
+    saveWalletToLocalStorage,
   } = useStore();
   const [showPassword, setShowPassword] = useState(false);
   const [passphrase, setPassphrase] = useState<string>("");
@@ -116,7 +117,7 @@ export default function UserInfo() {
     }
   };
 
-  const pollPastelIDStatus = async (pastelID: string) => {
+  const pollPastelIDStatus = async (pastelID: string, requireWalletBalance: number = 0) => {
     const pollInterval = 30000; // 30 seconds
     const maxAttempts = 20; // 10 minutes total
     let attempts = 0;
@@ -127,12 +128,13 @@ export default function UserInfo() {
         const walletInfo = await api.getWalletInfo();
         const walletBalance = walletInfo.balance;
 
-        if (isRegistered && walletBalance > 0) {
+        if (isRegistered && walletBalance > requireWalletBalance) {
           setMessage(
             "Your PastelID has been registered and your wallet has been funded. The page will refresh shortly."
           );
           await api.setPastelIdAndPassphrase(pastelID, btoa(newPastelIDPassphrase))
-          refreshWalletData();
+          await refreshWalletData();
+          await saveWalletToLocalStorage();
         } else {
           attempts++;
           if (attempts < maxAttempts) {
@@ -179,8 +181,7 @@ export default function UserInfo() {
       };
       reader.readAsArrayBuffer(file);
     });
-}
-
+  }
 
   const handleImportPastelID = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -206,9 +207,7 @@ export default function UserInfo() {
         pastelID
       );
       if (result.success) {
-        setMessage("PastelID imported successfully!");
-        await api.setPastelIdAndPassphrase(result.importedPastelID, btoa(importPassPhrase))
-        refreshWalletData();
+        pollPastelIDStatus(pastelID, -1);
       } else {
         setMessage(result.message || "Failed to import PastelID.");
       }

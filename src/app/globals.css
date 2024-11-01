@@ -491,6 +491,14 @@ body {
   margin: auto;
 }
 
+.camera-permission-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 400px;
+  height: 300px;
+}
+
 /* Media Queries */
 @media (max-width: 1200px) {
   .credit-pack-table {

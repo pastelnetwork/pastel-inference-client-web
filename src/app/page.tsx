@@ -17,6 +17,7 @@ import useStore from "./store/useStore";
 import browserLogger from "./lib/logger";
 import PasswordQRCode from "./components/PasswordQRCode";
 import QRCodeScanner from "./components/QRCodeScanner";
+import ConnectWallet from "./components/ConnectWallet";
 
 const DynamicTerminal = dynamic(() => import("./components/Terminal"), {
   ssr: false,
@@ -36,6 +37,8 @@ export default function Home() {
     setError,
     initialPassword,
     showPasswordQR,
+    showConnectWallet,
+    showQRScanner,
   } = useStore();
 
   useEffect(() => {
@@ -76,6 +79,18 @@ export default function Home() {
     )
   };
 
+  if (showConnectWallet) {
+    return (
+      <ConnectWallet />
+    )
+  }
+
+  if (showQRScanner) {
+    return (
+      <QRCodeScanner />
+    )
+  }
+
   if (isLoading || !isInitialized) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -97,7 +112,6 @@ export default function Home() {
       <main className="flex flex-col gap-6 transition-all duration-300 bg-bw-50">
         <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
           <Header />
-          <QRCodeScanner />
           {isLocked ? (
             <div className="text-center py-10">
               <h2 className="text-2xl font-bold mb-4">Wallet is locked</h2>

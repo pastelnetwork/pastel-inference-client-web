@@ -167,6 +167,7 @@ interface WalletActions {
   setShowConnectWallet: (status: boolean) => void;
   closeQRCodeScan: () => void;
   createNewWallet: () => void;
+  importedWalletByQRCode: () => void;
 }
 
 const walletLocalStorageName = 'walletInfo';
@@ -437,6 +438,10 @@ const useStore = create<WalletState & WalletActions>()(
         set({ showConnectWallet: false, showQRScanner: false });
       },
 
+      importedWalletByQRCode() {
+        set({ showConnectWallet: false, showQRScanner: false, isInitialized: true, isLoading: false });
+      },
+
       unlockWallet: async (password: string): Promise<boolean> => {
         set({ isLoading: true, error: null });
         try {
@@ -665,6 +670,7 @@ const useStore = create<WalletState & WalletActions>()(
               const listPastelIDs = await api.listPastelIDs();
               const ids = listPastelIDs.filter((value) => value !== parseWalletData.localPastelID);
               set({ pastelId: ids[0] || "", localPastelID: parseWalletData.localPastelID });
+              await api.setPastelIdAndPassphrase(localStorage.getItem('MY_LOCAL_PASTELID') || '', localStorage.getItem('MY_PASTELID_PASSPHRASE') || '');
               return true;
             }
           }

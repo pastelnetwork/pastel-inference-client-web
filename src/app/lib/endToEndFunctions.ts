@@ -4,6 +4,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 
+import api from "@/app/lib/api";
 import BrowserRPCReplacement from "@/app/lib/BrowserRPCReplacement";
 import { BrowserDatabase } from "@/app/lib/BrowserDatabase";
 import PastelInferenceClient from "@/app/lib/PastelInferenceClient";
@@ -864,8 +865,10 @@ export async function handleInferenceRequestEndToEnd(
         const proposedCostInCredits = parseFloat(
           usageRequestResponse.proposed_cost_of_request_in_inference_credits.toString()
         );
-        const creditUsageTrackingPSLAddress =
-          usageRequestResponse.credit_usage_tracking_psl_address;
+        const getAddress = async () => {
+          return api.getMyPslAddressWithLargestBalance();
+        }
+        const creditUsageTrackingPSLAddress = await getAddress();
         const creditUsageTrackingAmountInPSL =
           parseFloat(
             usageRequestResponse.request_confirmation_message_amount_in_patoshis.toString()

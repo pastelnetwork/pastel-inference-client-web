@@ -30,7 +30,7 @@ export default function CreateInferenceRequest({ modelMenu }: CreateInferenceReq
     const params: Record<string, string> = {};
     model.model_parameters.forEach((param: ModelParameter) => {
       if (param.inference_types_parameter_applies_to.includes(inferenceType)) {
-        params[param.name] = param.default.toString();
+        params[param.name] = param.default?.toString() || "";
       }
     });
     setModelParameters(params);

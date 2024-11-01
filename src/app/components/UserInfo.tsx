@@ -254,7 +254,7 @@ export default function UserInfo() {
           const newPastelID = result.processedPacks[0].pub_key;
           await setSelectedPastelIDAndPassphrase(newPastelID, "", true);
         }
-
+        saveWalletToLocalStorage();
         setModalContent({
           title: "Import Successful",
           message: "Import completed. Refreshing data...",

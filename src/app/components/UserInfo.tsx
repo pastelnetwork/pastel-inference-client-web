@@ -117,7 +117,7 @@ export default function UserInfo() {
     }
   };
 
-  const pollPastelIDStatus = async (pastelID: string, requireWalletBalance: number = 0) => {
+  const pollPastelIDStatus = async (pastelID: string, requireWalletBalance: number = 0, passphrase: string = '') => {
     const pollInterval = 30000; // 30 seconds
     const maxAttempts = 20; // 10 minutes total
     let attempts = 0;
@@ -132,7 +132,7 @@ export default function UserInfo() {
           setMessage(
             "Your PastelID has been registered and your wallet has been funded. The page will refresh shortly."
           );
-          await api.setPastelIdAndPassphrase(pastelID, btoa(newPastelIDPassphrase))
+          await api.setPastelIdAndPassphrase(pastelID, btoa(passphrase || newPastelIDPassphrase))
           await refreshWalletData();
           await saveWalletToLocalStorage();
         } else {
@@ -207,7 +207,7 @@ export default function UserInfo() {
         pastelID
       );
       if (result.success) {
-        pollPastelIDStatus(pastelID, -1);
+        pollPastelIDStatus(pastelID, -1, importPassPhrase);
       } else {
         setMessage(result.message || "Failed to import PastelID.");
       }

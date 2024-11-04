@@ -1051,3 +1051,20 @@ export interface WalletData {
   walletPassword: string;
   localPastelID: string;
 }
+
+export interface InferenceRequest {
+  selectedInferenceType: string;
+  prompt: string;
+  inputFields: {
+    imagePrompt?: string;
+    question?: string;
+    document_file_name?: string;
+    audio_file_name?: string;
+  };
+  selectedModelCanonicalName: string;
+  actualCreditsUsed: number;
+  remainingCredits: number;
+  requestTimestamp: string;
+  elapsedTimeInSeconds: number;
+  inferenceResultsDecoded: string;
+}

@@ -5,14 +5,17 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import compress from 'browser-image-compression';
+
 import { ModelMenu, ModelInfo, ModelParameter, InferenceResultDict, InferenceRequestParams } from '@/app/types';
 import * as api from '@/app/lib/api';
+import useStore from '@/app/store/useStore';
 
 interface CreateInferenceRequestProps {
   modelMenu: ModelMenu | null;
 }
 
 export default function CreateInferenceRequest({ modelMenu }: CreateInferenceRequestProps) {
+  const { getRequests } = useStore()
   const [inferenceType, setInferenceType] = useState<string>('text_completion');
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [prompt, setPrompt] = useState<string>('Write me a Shakespeare-style sonnet about Pastel Network and how it\'s really decentralized and powerful.');
@@ -129,6 +132,7 @@ export default function CreateInferenceRequest({ modelMenu }: CreateInferenceReq
         setStatus('Inference request created successfully.');
         setInferenceResult(result);
         saveInferenceRequestToLocalStorage(result);
+        getRequests();
       } else {
         throw new Error('Failed to create inference request');
       }
@@ -190,72 +194,73 @@ export default function CreateInferenceRequest({ modelMenu }: CreateInferenceReq
 
   const renderInferenceResult = () => {
     if (!inferenceResult) return null;
-
-    let content;
-    if (inferenceType === 'text_to_image') {
-      content = (
-        <div className="m-8">
-          <img 
-            src={`data:image/png;base64,${inferenceResult.generated_image_decoded || ''}`} 
-            alt="Generated Image" 
-            className="max-w-full max-h-96 mx-auto mb-4"
-          />
-          <p className="text-center">
-            <a 
-              href={`data:image/png;base64,${inferenceResult.generated_image_decoded || ''}`} 
-              download="generated_image.png" 
-              className="btn success outline m-4"
-            >
-              Download Image
-            </a>
-          </p>
-        </div>
-      );
-    } else if (inferenceType === 'embedding_audio') {
-      let formattedResult = '';
-      try {
-        formattedResult = JSON.stringify(JSON.parse(inferenceResult.inference_result_decoded || '{}'), null, 2);
-      } catch {
-        formattedResult = inferenceResult.inference_result_decoded || '';
-      }
-      const inputData = inferenceResult.model_input_data_json as { audio_file_name?: string; question?: string };
-      content = (
-        <div>
-          <p>Original File Name: {inputData.audio_file_name || 'N/A'}</p>
-          <p>Semantic Query String: {inputData.question || 'N/A'}</p>
-          <div style={{ maxHeight: '1000px', overflowY: 'auto' }}>
-            <pre>{formattedResult}</pre>
+    const getContent = () => {
+      if (inferenceType === 'text_to_image') {
+        return (
+          <div className="m-8">
+            <img
+              src={`data:image/png;base64,${inferenceResult.generated_image_decoded || ''}`}
+              alt="Generated Image"
+              className="max-w-full max-h-96 mx-auto mb-4"
+            />
+            <p className="text-center">
+              <a
+                href={`data:image/png;base64,${inferenceResult.generated_image_decoded || ''}`}
+                download="generated_image.png"
+                className="btn success outline m-4"
+              >
+                Download Image
+              </a>
+            </p>
           </div>
-        </div>
+        );
+      } else if (inferenceType === 'embedding_audio') {
+        let formattedResult = '';
+        try {
+          formattedResult = JSON.stringify(JSON.parse(inferenceResult.inference_result_decoded || '{}'), null, 2);
+        } catch {
+          formattedResult = inferenceResult.inference_result_decoded || '';
+        }
+        const inputData = inferenceResult.model_input_data_json as { audio_file_name?: string; question?: string };
+        return (
+          <div>
+            <p>Original File Name: {inputData.audio_file_name || 'N/A'}</p>
+            <p>Semantic Query String: {inputData.question || 'N/A'}</p>
+            <div style={{ maxHeight: '1000px', overflowY: 'auto' }}>
+              <pre>{formattedResult}</pre>
+            </div>
+          </div>
+        );
+      } else if (inferenceType === 'ask_question_about_an_image') {
+        const inputData = inferenceResult.model_input_data_json as { image?: string; question?: string };
+        return (
+          <div>
+            <img 
+              src={inputData.image || ''} 
+              alt="Input Image" 
+              style={{ maxWidth: '100%', maxHeight: '400px' }}
+            />
+            <p>Question: {inputData.question || 'N/A'}</p>
+            <p>Answer:</p>
+            <div dangerouslySetInnerHTML={{ __html: inferenceResult.inference_result_decoded ? JSON.parse(inferenceResult.inference_result_decoded) : '' }} />
+          </div>
+        );
+      }
+      return (
+        <div dangerouslySetInnerHTML={{ __html: inferenceResult.inference_result_decoded ? JSON.parse(inferenceResult.inference_result_decoded) : '' }} />
       );
-    } else if (inferenceType === 'ask_question_about_an_image') {
-      const inputData = inferenceResult.model_input_data_json as { image?: string; question?: string };
-      content = (
-        <div>
-          <img 
-            src={inputData.image || ''} 
-            alt="Input Image" 
-            style={{ maxWidth: '100%', maxHeight: '400px' }}
-          />
-          <p>Question: {inputData.question || 'N/A'}</p>
-          <p>Answer:</p>
-          <div dangerouslySetInnerHTML={{ __html: inferenceResult.inference_result_decoded || '' }} />
-        </div>
-      );
-    } else {
-      content = <div dangerouslySetInnerHTML={{ __html: inferenceResult.inference_result_decoded || '' }} />;
     }
 
-    const inputData = inferenceResult.model_input_data_json as { 
-      prompt?: string; 
-      imagePrompt?: string; 
-      question?: string; 
+    const inputData = inferenceResult.model_input_data_json as {
+      prompt?: string;
+      imagePrompt?: string;
+      question?: string;
     };
 
     return (
       <div className="inference-result">
         <h3 className="font-bold text-xl mb-4">Inference Result:</h3>
-        <div className="mb-4">{content}</div>
+        <div className="mb-4">{getContent()}</div>
         <h3 className="font-bold text-xl mt-6 mb-4">Misc. Inference Parameters and Statistics:</h3>
         <table className="inference-table">
           <tbody>

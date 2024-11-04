@@ -16,6 +16,7 @@ import {
   SupernodeInfo,
   EmscriptenModule,
   WalletData,
+  InferenceRequest,
 } from "@/app/types";
 import browserLogger from "@/app/lib/logger";
 import { generateSecurePassword } from "../lib/passwordUtils";
@@ -47,6 +48,7 @@ interface WalletState {
   qrCodeContent: string;
   localPastelID: string;
   showConnectWallet: boolean;
+  requests: InferenceRequest[];
 }
 
 interface WalletActions {
@@ -168,6 +170,7 @@ interface WalletActions {
   closeQRCodeScan: () => void;
   createNewWallet: () => void;
   importedWalletByQRCode: () => void;
+  getRequests: () => void;
 }
 
 const walletLocalStorageName = 'walletInfo';
@@ -198,6 +201,7 @@ const useStore = create<WalletState & WalletActions>()(
       qrCodeContent: "",
       localPastelID: "",
       showConnectWallet: false,
+      requests: [],
 
       setLocked: (isLocked) => set({ isLocked }),
       setNetworkMode: (mode) => set({ networkMode: mode }),
@@ -676,6 +680,12 @@ const useStore = create<WalletState & WalletActions>()(
           }
         }
         return false;
+      },
+      getRequests: () => {
+        const storedRequests = localStorage.getItem('inferenceRequests');
+        if (storedRequests) {
+          set({ requests: JSON.parse(storedRequests) });
+        }
       },
     }),
     {

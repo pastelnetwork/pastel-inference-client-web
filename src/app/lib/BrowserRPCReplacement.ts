@@ -630,7 +630,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     );
     if (response) {
       const parseData = JSON.parse(JSON.parse(response).data)
-      return parseData?.txid
+      return parseData?.vin[0].txid;
     }
     return "";
   }

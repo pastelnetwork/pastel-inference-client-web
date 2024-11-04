@@ -5,33 +5,16 @@
 
 import React, { useState, useEffect } from 'react';
 
-interface InferenceRequest {
-  selectedInferenceType: string;
-  prompt: string;
-  inputFields: {
-    imagePrompt?: string;
-    question?: string;
-    document_file_name?: string;
-    audio_file_name?: string;
-  };
-  selectedModelCanonicalName: string;
-  actualCreditsUsed: number;
-  remainingCredits: number;
-  requestTimestamp: string;
-  elapsedTimeInSeconds: number;
-  inferenceResultsDecoded: string;
-}
+import { InferenceRequest } from '@/app/types';
+import useStore from '@/app/store/useStore';
 
 export default function PreviousRequests() {
-  const [requests, setRequests] = useState<InferenceRequest[]>([]);
+  const { requests, getRequests } = useStore()
   const [selectedRequest, setSelectedRequest] = useState<InferenceRequest | null>(null);
 
   useEffect(() => {
-    const storedRequests = localStorage.getItem('inferenceRequests');
-    if (storedRequests) {
-      setRequests(JSON.parse(storedRequests));
-    }
-  }, []);
+    getRequests();
+  }, [getRequests]);
 
   const getInferenceTypeIcon = (type: string) => {
     switch (type) {
@@ -66,8 +49,8 @@ export default function PreviousRequests() {
 
   const deleteRequest = (index: number) => {
     const updatedRequests = requests.filter((_, i) => i !== index);
-    setRequests(updatedRequests);
     localStorage.setItem('inferenceRequests', JSON.stringify(updatedRequests));
+    getRequests();
     if (selectedRequest === requests[index]) {
       setSelectedRequest(null);
     }
@@ -88,7 +71,7 @@ export default function PreviousRequests() {
       if (request.selectedInferenceType === 'text_to_image') {
         markdownContent += `![Generated Image](${request.inferenceResultsDecoded})\n\n`;
       } else {
-        markdownContent += `\`\`\`\n${request.inferenceResultsDecoded}\n\`\`\`\n\n`;
+        markdownContent += `\`\`\`\n${JSON.parse(request.inferenceResultsDecoded)}\n\`\`\`\n\n`;
       }
 
       markdownContent += `**Model**: ${request.selectedModelCanonicalName}\n`;
@@ -118,7 +101,6 @@ export default function PreviousRequests() {
 
   const renderRequestPreview = (request: InferenceRequest) => {
     let content: JSX.Element;
-
     if (request.selectedInferenceType === 'text_to_image') {
       content = (
         <div className="mb-4">
@@ -129,7 +111,7 @@ export default function PreviousRequests() {
     } else {
       content = (
         <div className="mb-4">
-          <pre className="whitespace-pre-wrap">{request.inferenceResultsDecoded}</pre>
+          <pre className="whitespace-pre-wrap">{JSON.parse(request.inferenceResultsDecoded)}</pre>
         </div>
       );
     }
@@ -173,7 +155,7 @@ export default function PreviousRequests() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 has-border rounded-xl bg-white shadow-md mt-3" style={{height: '1000px', overflowY: 'auto'}}>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 has-border rounded-xl bg-white shadow-md mt-3">
       <div className="lg:col-span-1 flex flex-col">
         <h2 className="text-2xl mb-4 text-bw-800">
           View Previous Inference Requests
@@ -185,7 +167,7 @@ export default function PreviousRequests() {
             requests.map((request, index) => (
               <div 
                 key={index}
-                className="mb-2 p-2 bg-white rounded-lg flex justify-between items-center cursor-pointer"
+                className={`mb-2 p-2 bg-white rounded-lg flex justify-between items-center cursor-pointer border ${JSON.stringify(request || '') === JSON.stringify(selectedRequest || '') ? 'border-gray-200' : 'border-transparent'}`}
                 onClick={() => setSelectedRequest(request)}
               >
                 <span>
@@ -206,17 +188,21 @@ export default function PreviousRequests() {
             ))
           )}
         </div>
-        <button 
-          id="exportRequestsButton" 
-          className="btn success outline mt-4 flex items-center self-start"
-          onClick={exportRequests}
-        >
-          💾 Export all Saved Inference Requests
-        </button>
+        <div className='mt-4'>
+          <button 
+            id="exportRequestsButton" 
+            className="btn success outline flex items-center self-start"
+            onClick={exportRequests}
+          >
+            💾 Export all Saved Inference Requests
+          </button>
+        </div>
       </div>
       <div id="requestPreview" className="lg:col-span-2 bg-gray-50 p-4 rounded-lg">
         {selectedRequest ? (
-          renderRequestPreview(selectedRequest)
+          <div style={{height: '1000px', overflowY: 'auto'}}>
+            {renderRequestPreview(selectedRequest)}
+          </div>
         ) : (
           <p className="text-gray-500">Select a request to view details</p>
         )}

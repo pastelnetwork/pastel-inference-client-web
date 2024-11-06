@@ -18,7 +18,7 @@ const ImportExistingWallet: React.FC = () => {
     importedWalletFile,
     unlockWallet,
     setBackConnectWallet,
-    closeQRCodeScan,
+    closeImportExistingWallet,
     setShowQRScanner,
     showImportExistingWallet,
   } = useStore();
@@ -146,7 +146,7 @@ const ImportExistingWallet: React.FC = () => {
   const onBack = () => {
     setShowImportExistingWallet(false);
     setBackConnectWallet(true);
-    closeQRCodeScan();
+    closeImportExistingWallet();
   }
 
   const handleImportQR = () => {

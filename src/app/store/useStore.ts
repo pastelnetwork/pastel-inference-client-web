@@ -177,6 +177,7 @@ interface WalletActions {
   setShowImportExistingWallet: (status: boolean) => void;
   setBackConnectWallet: (status: boolean) => void;
   importedWalletFile: (password: string) => Promise<void>;
+  closeImportExistingWallet: () => void;
 }
 
 const walletLocalStorageName = 'walletInfo';
@@ -474,6 +475,10 @@ const useStore = create<WalletState & WalletActions>()(
       importedWalletFile: async (password: string): Promise<void> => {
         const walletContent = await api.exportWallet();
         set({ showConnectWallet: false, showQRScanner: false, showPasswordQR: true, initialPassword: password, qrCodeContent: btoa(`${walletContent}@$@&@${password}`) });
+      },
+
+      closeImportExistingWallet() {
+        set({ showConnectWallet: true, showImportExistingWallet: false });
       },
 
       unlockWallet: async (password: string): Promise<boolean> => {

@@ -75,6 +75,10 @@ export default function WalletManagement() {
         alert("Wallet imported successfully!");
         setWalletFile(null);
         setPassword('');
+        const existingPastelID = await api.checkForPastelID();
+        if (!existingPastelID) {
+          await api.makeNewPastelID(false);
+        }
         await refreshWalletData();
         saveWalletToLocalStorage();
       } else {

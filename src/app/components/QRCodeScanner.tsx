@@ -1,8 +1,10 @@
 // src/app/components/QRCodeScanner.tsx
+
 import React, { useState, useEffect } from 'react';
 import { QrReader } from 'react-qr-reader';
 import jsQR from 'jsqr';
-import { Button, Typography, Modal } from "antd";
+import { Button, Typography, Modal, Spin } from "antd";
+import { LoadingOutlined } from '@ant-design/icons';
 
 const { Title, Paragraph } = Typography;
 
@@ -11,7 +13,15 @@ import * as api from '@/app/lib/api';
 
 const QRCodeScanner: React.FC = () => {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const { showQRScanner, closeQRCodeScan } = useStore();
+  const [isLoading, setLoading] = useState(false);
+  const {
+    showQRScanner,
+    closeQRCodeScan,
+    refreshWalletData,
+    importedWalletByQRCode,
+    saveWalletToLocalStorage,
+    unlockWallet,
+  } = useStore();
 
   useEffect(() => {
     if (!hasPermission) {
@@ -23,10 +33,18 @@ const QRCodeScanner: React.FC = () => {
 
   const handleImportWallet = async (walletData: string) => {
     if (walletData) {
-      const data = JSON.parse(atob(walletData))
-      const success = await api.importWalletFromDatFile(data.walletContent, data.initialPassword);
+      const data = atob(walletData);
+      const parseData = data.split('@$@&@');
+      const walletContent = parseData[0];
+      const initialPassword = parseData[1];
+      const success = await api.importWalletFromDatFile(walletContent, initialPassword);
       if (success) {
-        // TODO:
+        await unlockWallet(initialPassword);
+        await refreshWalletData();
+        importedWalletByQRCode();
+        saveWalletToLocalStorage();
+        setLoading(false);
+        window.location.reload();
       }
     }
   }
@@ -40,14 +58,14 @@ const QRCodeScanner: React.FC = () => {
         setHasPermission(permissionStatus.state === 'granted');
       };
     } catch (err) {
-      console.error("Trình duyệt không hỗ trợ kiểm tra quyền camera:", err);
+      console.error("The browser does not support checking camera permissions. ", err);
     }
   };
 
   const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
+    setLoading(true);
     const reader = new FileReader();
     reader.onloadend = () => {
       const img = new Image();
@@ -69,71 +87,72 @@ const QRCodeScanner: React.FC = () => {
   };
 
   const handleOpenPermission = () => {
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(() => {
-        setHasPermission(true);
-      })
-      .catch((error) => {
-        // TODO:
-        console.error(error);
-      });
+    if (navigator.mediaDevices) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(() => {
+          setHasPermission(true);
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    }
   }
 
   const handleQrReaderResult = async (data: string) => {
-    // TODO:
-    console.log(data)
+    if (data) {
+      await handleImportWallet(data)
+    }
   }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <Modal
         centered
-        open
-        width={580}
-        maskClosable={false}
-        closable={false}
+        open={showQRScanner}
+        width={700}
         footer={null}
+        onCancel={closeQRCodeScan}
       >
         <div className="bg-white p-4 rounded-lg w-full">
-          <Title level={2} className="text-2xl font-bold mb-4">Scan QR code to import your wallet</Title>
-          <div className='text-center flex justify-center'>
-            {hasPermission ?
-              <QrReader
-                onResult={(result) => {
-                  if (result) {
-                    handleQrReaderResult(result.getText())
-                  }
-                }}
-                constraints={{ facingMode: 'user' }}
-                containerStyle={{ width: '400px', height: '400px', maxHeight: '400px' }}
-                videoContainerStyle={{ maxHeight: '400px', height: '400px' }}
-              /> :
-              <div>
-                <div className='camera-permission-wrapper bg-gray-200'>
-                  <Paragraph className="text-base text-center">Make sure to allow camera access!</Paragraph>
+          <Title level={2} className="text-2xl font-bold mb-4">Scan QR Code</Title>
+          <div className='w-full relative mt-8'>
+            <div className='text-center flex justify-center qr-reader-wrapper'>
+              {hasPermission && showQRScanner ?
+                <QrReader
+                  onResult={(result) => {
+                    if (result) {
+                      handleQrReaderResult(result.getText())
+                    }
+                  }}
+                  constraints={{ facingMode: 'user' }}
+                  containerStyle={{ width: '600px', height: '460px' }}
+                  videoContainerStyle={{ height: '450px' }}
+                /> :
+                <div>
+                  <div className='camera-permission-wrapper bg-gray-200'>
+                    <Paragraph className="text-base text-center">Make sure to allow camera access!</Paragraph>
+                  </div>
+                  <Button
+                    className="mt-3 btn text-base font-bold w-full"
+                    onClick={handleOpenPermission}
+                  >
+                    Open Camera
+                  </Button>
                 </div>
-                <Button
-                  className="mt-3 btn text-base font-bold w-full"
-                  onClick={handleOpenPermission}
-                >
-                  Open Camera
-                </Button>
+              }
+            </div>
+            <div className='mt-4 hidden'>
+              <Paragraph className="mb-1 text-base">Please import an existing wallet or create a new wallet.</Paragraph>
+              <label className='w-full'>
+                <input type="file" onChange={handleImageChange} />
+              </label>
+            </div>
+            {isLoading ? (
+              <div className='absolute top-0 left-0 right-0 bottom-0 flex justify-center items-center z-50 w-full h-full bg-opacity-60 bg-slate-50'>
+                <Spin indicator={<LoadingOutlined style={{ fontSize: 48 }} spin />} />
+                <div>Loading ...</div>
               </div>
-            }
-          </div>
-          <div className='mt-4 hidden'>
-            <Paragraph className="mb-1 text-base">Please import an existing wallet or create a new wallet.</Paragraph>
-            <label className='w-full'>
-              <input type="file" onChange={handleImageChange} />
-            </label>
-          </div>
-          <div>
-            <Button
-              className="mt-8 bg-red-500 btn text-white text-base font-bold w-40"
-              onClick={closeQRCodeScan}
-            >
-              Cancel
-            </Button>
+            ) : null }
           </div>
         </div>
       </Modal>

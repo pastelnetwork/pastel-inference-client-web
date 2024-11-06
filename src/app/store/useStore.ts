@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+
 import api from "../lib/api";
 import * as initializeApp from "../lib/initializeApp";
 import {
@@ -49,6 +50,8 @@ interface WalletState {
   localPastelID: string;
   showConnectWallet: boolean;
   requests: InferenceRequest[];
+  showImportExistingWallet: boolean;
+  isBackConnectWallet: boolean;
 }
 
 interface WalletActions {
@@ -171,6 +174,8 @@ interface WalletActions {
   createNewWallet: () => void;
   importedWalletByQRCode: () => void;
   getRequests: () => void;
+  setShowImportExistingWallet: (status: boolean) => void;
+  setBackConnectWallet: (status: boolean) => void;
 }
 
 const walletLocalStorageName = 'walletInfo';
@@ -202,6 +207,8 @@ const useStore = create<WalletState & WalletActions>()(
       localPastelID: "",
       showConnectWallet: false,
       requests: [],
+      showImportExistingWallet: false,
+      isBackConnectWallet: false,
 
       setLocked: (isLocked) => set({ isLocked }),
       setNetworkMode: (mode) => set({ networkMode: mode }),
@@ -225,6 +232,8 @@ const useStore = create<WalletState & WalletActions>()(
       setWalletBalance: (walletBalance: string) => set({ walletBalance }),
       setQRCodeContent: (qrCode: string) => set({ qrCodeContent: qrCode }),
       setShowConnectWallet: (status: boolean) => set({ showConnectWallet: status }),
+      setShowImportExistingWallet: (status: boolean) => set({ showImportExistingWallet: status }),
+      setBackConnectWallet: (status: boolean) => set({ isBackConnectWallet: status }),
 
       initializeWallet: async () => {
         if (get().isLoading) return;
@@ -233,7 +242,7 @@ const useStore = create<WalletState & WalletActions>()(
         const initializationTimeout = setTimeout(() => {
           console.error("Wallet initialization timed out");
           set({ isLoading: false, error: "Wallet initialization timed out" });
-        }, 30000);
+        }, 120000);
 
         try {
           console.log("Starting wallet initialization");
@@ -261,7 +270,6 @@ const useStore = create<WalletState & WalletActions>()(
             console.error("Failed to get network info:", error);
             throw new Error("Failed to retrieve network information");
           }
-
           const result = await get().loadWalletFromLocalStorage();
           if (result) {
             return
@@ -280,19 +288,34 @@ const useStore = create<WalletState & WalletActions>()(
             });
           }
 
-          set({ showConnectWallet: true });
-          await new Promise<void>((resolve) => {
-            const checkAcknowledgement = () => {
-              if (!get().showConnectWallet) {
-                resolve();
-              } else {
-                setTimeout(checkAcknowledgement, 1000);
-              }
-            };
-            checkAcknowledgement();
-          });
+          if (get().showImportExistingWallet) {
+            await new Promise<void>((resolve) => {
+              const checkAcknowledgement = () => {
+                if (!get().showImportExistingWallet) {
+                  resolve();
+                } else {
+                  setTimeout(checkAcknowledgement, 1000);
+                }
+              };
+              checkAcknowledgement();
+            });
+          }
 
-          if (get().showConnectWallet || get().showQRScanner) {
+          if (!get().isBackConnectWallet) {
+            set({ showConnectWallet: true });
+            await new Promise<void>((resolve) => {
+              const checkAcknowledgement = () => {
+                if (!get().showConnectWallet) {
+                  resolve();
+                } else {
+                  setTimeout(checkAcknowledgement, 1000);
+                }
+              };
+              checkAcknowledgement();
+            });
+          }
+
+          if (get().showConnectWallet || get().showQRScanner || get().showImportExistingWallet) {
             return;
           }
 
@@ -394,13 +417,10 @@ const useStore = create<WalletState & WalletActions>()(
 
           // Set isInitialized to true if we have both a PastelID and the wallet is unlocked
           if (get().pastelId && !get().isLocked) {
-            set({ isInitialized: true });
+            set({ isInitialized: true, isBackConnectWallet: false });
             if (isNewWalletPassword) {
               const walletContent = await api.exportWallet();
-              set({ initialPassword: password, showPasswordQR: true, qrCodeContent: btoa(JSON.stringify({
-                walletContent,
-                initialPassword: password,
-              })) });
+              set({ initialPassword: password, showPasswordQR: true, qrCodeContent: btoa(`${walletContent}@$@&@${password}`) });
               await new Promise<void>((resolve) => {
                 const checkAcknowledgement = () => {
                   if (!get().showPasswordQR) {
@@ -427,6 +447,7 @@ const useStore = create<WalletState & WalletActions>()(
           set({
             error: `Failed to initialize wallet: ${(error as Error).message}`,
             isInitialized: false,
+            isBackConnectWallet: false,
           });
         } finally {
           clearTimeout(initializationTimeout);
@@ -439,7 +460,10 @@ const useStore = create<WalletState & WalletActions>()(
       },
 
       createNewWallet() {
-        set({ showConnectWallet: false, showQRScanner: false });
+        set({ showConnectWallet: false, showQRScanner: false, showImportExistingWallet: false });
+        if (get().isBackConnectWallet) {
+          get().initializeWallet();
+        }
       },
 
       importedWalletByQRCode() {
@@ -645,41 +669,58 @@ const useStore = create<WalletState & WalletActions>()(
         }
       },
       saveWalletToLocalStorage: async () => {
-        const walletInfo = await api.exportWallet();
-        const balance = await api.getBalance();
-        const listPastelIDs = await api.listPastelIDs();
-        const localPastelID = get().localPastelID
-        const ids = listPastelIDs.filter((value) => value !== localPastelID);
-        const addresses = await api.getAllAddresses();
-        localStorage.removeItem(walletLocalStorageName);
-        localStorage.setItem(walletLocalStorageName, btoa(JSON.stringify({
-          wallet: walletInfo,
-          balance,
-          listPastelIDs: ids,
-          addresses,
-          localPastelID,
-          walletPassword: localStorage.getItem('walletPassword')
-        })))
+        try {
+          const walletInfo = await api.exportWallet();
+          const balance = await api.getBalance();
+          const listPastelIDs = await api.listPastelIDs();
+          const localPastelID = get().localPastelID
+          const ids = listPastelIDs.filter((value) => value !== localPastelID);
+          const addresses = await api.getAllAddresses();
+          localStorage.removeItem(walletLocalStorageName);
+          localStorage.setItem(walletLocalStorageName, btoa(JSON.stringify({
+            wallet: walletInfo,
+            balance,
+            listPastelIDs: ids,
+            addresses,
+            localPastelID,
+            walletPassword: localStorage.getItem('walletPassword')
+          })))
+        } catch (error) {
+          console.error(error)
+        }
       },
       loadWalletFromLocalStorage: async () => {
-        const walletData = localStorage.getItem(walletLocalStorageName);
-        if (walletData) {
-          const parseWalletData = JSON.parse(atob(walletData)) as WalletData;
-          if (parseWalletData.walletPassword) {
-            const success = await api.importWalletFromDatFile(parseWalletData.wallet, parseWalletData.walletPassword);
-            if (success) {
-              set({ isLoading: false, isInitialized: true });
-              get().unlockWallet(parseWalletData.walletPassword);
-              await get().refreshWalletData();
-              const listPastelIDs = await api.listPastelIDs();
-              const ids = listPastelIDs.filter((value) => value !== parseWalletData.localPastelID);
-              set({ pastelId: ids[0] || "", localPastelID: parseWalletData.localPastelID });
-              await api.setPastelIdAndPassphrase(localStorage.getItem('MY_LOCAL_PASTELID') || '', localStorage.getItem('MY_PASTELID_PASSPHRASE') || '');
-              return true;
+        try {
+          const walletData = localStorage.getItem(walletLocalStorageName);
+          if (walletData) {
+            const parseWalletData = JSON.parse(atob(walletData)) as WalletData;
+            if (parseWalletData.walletPassword) {
+              const success = await api.importWalletFromDatFile(parseWalletData.wallet, parseWalletData.walletPassword);
+              if (success) {
+                localStorage.setItem("walletPassword", parseWalletData.walletPassword);
+                get().unlockWallet(parseWalletData.walletPassword);
+                const existingPastelID = await api.checkForPastelID();
+                if (!existingPastelID) {
+                  const log = await api.makeNewPastelID(false);
+                }
+                await get().refreshWalletData();
+                const listPastelIDs = await api.listPastelIDs();
+                const ids = listPastelIDs.filter((value) => value !== parseWalletData.localPastelID);
+                set({ pastelId: ids[0] || "", localPastelID: parseWalletData.localPastelID });
+                const localPastelID = localStorage.getItem('MY_LOCAL_PASTELID') || '';
+                if (localPastelID) {
+                  await api.setPastelIdAndPassphrase(localPastelID, localStorage.getItem('MY_PASTELID_PASSPHRASE') || '');
+                }
+                set({ isLoading: false, isInitialized: true });
+                return true;
+              }
             }
           }
+          return false;
+        } catch (error) {
+          console.error(error)
+          return false;
         }
-        return false;
       },
       getRequests: () => {
         const storedRequests = localStorage.getItem('inferenceRequests');

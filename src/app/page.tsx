@@ -18,6 +18,7 @@ import browserLogger from "./lib/logger";
 import PasswordQRCode from "./components/PasswordQRCode";
 import QRCodeScanner from "./components/QRCodeScanner";
 import ConnectWallet from "./components/ConnectWallet";
+import ImportExistingWallet from "./components/ImportExistingWallet";
 
 const DynamicTerminal = dynamic(() => import("./components/Terminal"), {
   ssr: false,
@@ -39,6 +40,7 @@ export default function Home() {
     showPasswordQR,
     showConnectWallet,
     showQRScanner,
+    showImportExistingWallet,
   } = useStore();
 
   useEffect(() => {
@@ -72,6 +74,12 @@ export default function Home() {
     };
     fetchData();
   }, [isInitialized, pastelId, fetchModelMenu, setError]);
+
+  if (showImportExistingWallet) {
+    return (
+      <ImportExistingWallet />
+    )
+  };
 
   if (showPasswordQR && initialPassword) {
     return (

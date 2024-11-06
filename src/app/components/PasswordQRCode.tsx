@@ -29,7 +29,7 @@ const PasswordQRCode: React.FC = () => {
         <h2 className="text-2xl font-bold mb-4">Your Wallet Password</h2>
         <p className="mb-4">Take a picture of this QR code with your smartphone to save your wallet password securely.</p>
         <div className="flex justify-center flex-col items-center qr-code-wrapper">
-          <QRCodeCanvas id="fancy-qr-code" value={qrCodeContent} size={640} level="H" />
+          <QRCodeCanvas id="fancy-qr-code" value={qrCodeContent} size={1200} level="H" />
           <a href="#" onClick={handleDownload} className='text-green-600 hover:text-green-800 text-sm mt-1'>Download</a>
         </div>
         <p className="mt-4 mb-8 hidden">Password: <b>{initialPassword}</b> <button

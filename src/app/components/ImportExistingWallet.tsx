@@ -12,11 +12,10 @@ const { Title } = Typography;
 const ImportExistingWallet: React.FC = () => {
   const {
     saveWalletToLocalStorage,
-    setShowPasswordQR,
     setShowImportExistingWallet,
     setInitialPassword,
     setQRCodeContent,
-    importedWalletByQRCode,
+    importedWalletFile,
     unlockWallet,
     setBackConnectWallet,
     closeQRCodeScan,
@@ -89,8 +88,7 @@ const ImportExistingWallet: React.FC = () => {
       alert("Private key imported successfully!");
       setPrivKey("");
       setShowImportExistingWallet(false);
-      importedWalletByQRCode();
-      setShowPasswordQR(true);
+      importedWalletFile(password);
     } catch (error) {
       console.error("Error importing private key:", error);
       alert("Failed to import private key. Please try again.");
@@ -130,8 +128,7 @@ const ImportExistingWallet: React.FC = () => {
         setPassword('');
         saveWalletToLocalStorage();
         setShowImportExistingWallet(false);
-        importedWalletByQRCode();
-        setShowPasswordQR(true);
+        importedWalletFile(password);
       } else {
         throw new Error("Failed to import wallet");
       }

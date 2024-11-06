@@ -456,7 +456,7 @@ const useStore = create<WalletState & WalletActions>()(
       },
 
       closeQRCodeScan() {
-        set({ showConnectWallet: true, showQRScanner: false });
+        set({ showConnectWallet: false, showQRScanner: false, showImportExistingWallet: true });
       },
 
       createNewWallet() {
@@ -701,7 +701,7 @@ const useStore = create<WalletState & WalletActions>()(
                 get().unlockWallet(parseWalletData.walletPassword);
                 const existingPastelID = await api.checkForPastelID();
                 if (!existingPastelID) {
-                  const log = await api.makeNewPastelID(false);
+                  await api.makeNewPastelID(false);
                 }
                 await get().refreshWalletData();
                 const listPastelIDs = await api.listPastelIDs();

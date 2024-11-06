@@ -7,7 +7,10 @@ import useStore from '@/app/store/useStore';
 const { Title, Paragraph } = Typography;
 
 const ConnectWallet: React.FC = () => {
-  const { setShowConnectWallet, createNewWallet, setShowImportExistingWallet } = useStore();
+  const { setShowConnectWallet, createNewWallet, setShowImportExistingWallet, showConnectWallet } = useStore();
+  if (!showConnectWallet) {
+    return null;
+  }
 
   const handleImportExistingWallet = () => {
     setShowConnectWallet(false)

@@ -499,6 +499,10 @@ body {
   height: 300px;
 }
 
+.qr-reader-wrapper section > div {
+  padding-top: 0 !important;
+}
+
 /* Media Queries */
 @media (max-width: 1200px) {
   .credit-pack-table {

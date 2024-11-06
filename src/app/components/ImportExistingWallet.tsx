@@ -20,6 +20,8 @@ const ImportExistingWallet: React.FC = () => {
     unlockWallet,
     setBackConnectWallet,
     closeQRCodeScan,
+    setShowQRScanner,
+    showImportExistingWallet,
   } = useStore();
 
   const [privKey, setPrivKey] = useState<string>("");
@@ -33,6 +35,9 @@ const ImportExistingWallet: React.FC = () => {
     isPrivateKeyLoading: false,
   });
 
+  if (!showImportExistingWallet) {
+    return null;
+  }
   const getImportPrivateKeyTitle = () => {
     return (
       <div className='ant-card-head-title'>
@@ -45,6 +50,14 @@ const ImportExistingWallet: React.FC = () => {
     return (
       <div className='ant-card-head-title'>
         Import Wallet <Tooltip title="Import a wallet file into your wallet."><InfoCircleOutlined /></Tooltip>
+      </div>
+    )
+  }
+
+  const getImportByQRTitle = () => {
+    return (
+      <div className='ant-card-head-title'>
+        Import by QR <Tooltip title="Import a QR code into your wallet."><InfoCircleOutlined /></Tooltip>
       </div>
     )
   }
@@ -139,6 +152,11 @@ const ImportExistingWallet: React.FC = () => {
     closeQRCodeScan();
   }
 
+  const handleImportQR = () => {
+    setShowImportExistingWallet(false);
+    setShowQRScanner(true)
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <Modal
@@ -210,6 +228,16 @@ const ImportExistingWallet: React.FC = () => {
                     </Button>
                     {walletManagementLoading.isImportWalletLoading && <div className="btn is-loading">Importing...</div>}
                   </div>
+                </Card>
+              </Col>
+              <Col span={24} className='mt-4 text-left'>
+                <Card title={getImportByQRTitle()} className='w-full text-left'>
+                  <Button
+                    onClick={handleImportQR}
+                    className="btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block"
+                  >
+                    Import QR
+                  </Button>
                 </Card>
               </Col>
             </Row>

@@ -468,12 +468,12 @@ const useStore = create<WalletState & WalletActions>()(
       },
 
       importedWalletByQRCode() {
-        set({ showConnectWallet: false, showQRScanner: false, isInitialized: true, isLoading: false });
+        set({ showConnectWallet: false, showQRScanner: false, isInitialized: true, isLoading: false, showPasswordQR: false });
       },
 
       importedWalletFile: async (password: string): Promise<void> => {
         const walletContent = await api.exportWallet();
-        set({ showConnectWallet: false, showQRScanner: false, isInitialized: false, isLoading: false, showPasswordQR: true, initialPassword: password, qrCodeContent: btoa(`${walletContent}@$@&@${password}`) });
+        set({ showConnectWallet: false, showQRScanner: false, showPasswordQR: true, initialPassword: password, qrCodeContent: btoa(`${walletContent}@$@&@${password}`) });
       },
 
       unlockWallet: async (password: string): Promise<boolean> => {

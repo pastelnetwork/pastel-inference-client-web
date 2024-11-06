@@ -4,7 +4,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import useStore from '../store/useStore';
 
 const PasswordQRCode: React.FC = () => {
-  const { initialPassword, showPasswordQR, qrCodeContent, setShowPasswordQR } = useStore();
+  const { initialPassword, showPasswordQR, qrCodeContent, importedWalletByQRCode } = useStore();
 
   if (!showPasswordQR || !initialPassword) return null;
 
@@ -41,7 +41,7 @@ const PasswordQRCode: React.FC = () => {
               </button></p>
         <button
           className="bg-blue-500 text-white px-4 py-2 rounded mt-4"
-          onClick={() => setShowPasswordQR(false)}
+          onClick={() => importedWalletByQRCode()}
         >
           I&apos;ve Saved My Password
         </button>

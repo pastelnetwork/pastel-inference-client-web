@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Button, Typography, Modal, Card, Col, Row, Tooltip, Input } from "antd";
 import { InfoCircleOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import jsQR from 'jsqr';
 
 import useStore from '@/app/store/useStore';
 import * as api from '@/app/lib/api';
@@ -21,6 +22,8 @@ const ImportExistingWallet: React.FC = () => {
     closeImportExistingWallet,
     setShowQRScanner,
     showImportExistingWallet,
+    refreshWalletData,
+    importedWalletByQRCode,
   } = useStore();
 
   const [privKey, setPrivKey] = useState<string>("");
@@ -29,9 +32,11 @@ const ImportExistingWallet: React.FC = () => {
   const [walletManagementLoading, setWalletManagementLoading] = useState<{
     isImportWalletLoading: boolean;
     isPrivateKeyLoading: boolean;
+    isUploadQRLoading: boolean;
   }>({
     isImportWalletLoading: false,
     isPrivateKeyLoading: false,
+    isUploadQRLoading: false,
   });
 
   if (!showImportExistingWallet) {
@@ -48,7 +53,7 @@ const ImportExistingWallet: React.FC = () => {
   const getImportWalletTitle = () => {
     return (
       <div className='ant-card-head-title'>
-        Import Wallet <Tooltip title="Import a wallet file into your wallet."><InfoCircleOutlined /></Tooltip>
+        Import Wallet File <Tooltip title="You can use the wallet file (*.wallet) from the Pastel Lite to import to the Inference Client "><InfoCircleOutlined /></Tooltip>
       </div>
     )
   }
@@ -56,7 +61,7 @@ const ImportExistingWallet: React.FC = () => {
   const getImportByQRTitle = () => {
     return (
       <div className='ant-card-head-title'>
-        Import by QR <Tooltip title="Import a QR code into your wallet."><InfoCircleOutlined /></Tooltip>
+        Import by QR <Tooltip title="Import QR code into your wallet."><InfoCircleOutlined /></Tooltip>
       </div>
     )
   }
@@ -130,7 +135,7 @@ const ImportExistingWallet: React.FC = () => {
         setShowImportExistingWallet(false);
         importedWalletFile(password);
       } else {
-        throw new Error("Failed to import wallet");
+        alert('Failed to import wallet.')
       }
     } catch (error) {
       console.error("Error importing wallet:", error);
@@ -153,6 +158,77 @@ const ImportExistingWallet: React.FC = () => {
     setShowImportExistingWallet(false);
     setShowQRScanner(true)
   }
+
+  const handleImportWalletByQR = async (walletData: string) => {
+    if (walletData) {
+      try {
+        const data = atob(walletData);
+        const parseData = data.split('@$@&@');
+        const walletContent = parseData[0];
+        const initialPassword = parseData[1];
+        const success = await api.importWalletFromDatFile(walletContent, initialPassword);
+        if (success) {
+          await unlockWallet(initialPassword);
+          await refreshWalletData();
+          importedWalletByQRCode();
+          saveWalletToLocalStorage();
+          setWalletManagementLoading({
+            ...walletManagementLoading,
+            isUploadQRLoading: false,
+          });
+          saveWalletToLocalStorage();
+          setShowImportExistingWallet(false);
+        } else {
+          alert('Import failed')
+        }
+      } catch (error) {
+        console.error("Error importing wallet:", error);
+        alert("Import failed");
+      } finally {
+        setWalletManagementLoading({
+          ...walletManagementLoading,
+          isUploadQRLoading: false,
+        });
+      }
+    }
+  }
+
+  const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setWalletManagementLoading({
+      ...walletManagementLoading,
+      isUploadQRLoading: true,
+    });
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const img = new Image();
+      img.src = reader.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d')!;
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        setWalletManagementLoading({
+          ...walletManagementLoading,
+          isUploadQRLoading: false,
+        });
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code?.data) {
+          handleImportWalletByQR(code?.data);
+        } else {
+          alert("QR code invalid")
+          setWalletManagementLoading({
+            ...walletManagementLoading,
+            isUploadQRLoading: false,
+          });
+        }
+      };
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -221,7 +297,7 @@ const ImportExistingWallet: React.FC = () => {
                       className="btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block"
                       disabled={walletManagementLoading.isImportWalletLoading}
                     >
-                      Import Wallet
+                      Import Wallet File
                     </Button>
                     {walletManagementLoading.isImportWalletLoading && <div className="btn is-loading">Importing...</div>}
                   </div>
@@ -229,12 +305,24 @@ const ImportExistingWallet: React.FC = () => {
               </Col>
               <Col span={24} className='mt-4 text-left'>
                 <Card title={getImportByQRTitle()} className='w-full text-left'>
-                  <Button
-                    onClick={handleImportQR}
-                    className="btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block"
-                  >
-                    Import QR
-                  </Button>
+                  <div className='flex gap-3 items-center'>
+                    <Button
+                      onClick={handleImportQR}
+                      className="btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block"
+                    >
+                      Scan QR
+                    </Button>
+                    <div>- Or -</div>
+                    <div>
+                      <div className='flex items-center'>
+                        <label className={`btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block custom-button ${walletManagementLoading.isUploadQRLoading ? 'disabled' : ''}`}>
+                          <span>Upload QR</span>
+                          <input type="file" onChange={handleImageChange} className='opacity-0 w-0 h-0' />
+                        </label>
+                        {walletManagementLoading.isUploadQRLoading && <div className="btn is-loading">Importing...</div>}
+                      </div>
+                    </div>
+                  </div>
                 </Card>
               </Col>
             </Row>

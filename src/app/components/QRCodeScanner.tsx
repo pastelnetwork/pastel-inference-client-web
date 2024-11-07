@@ -1,7 +1,7 @@
 // src/app/components/QRCodeScanner.tsx
 
 import React, { useState, useEffect } from 'react';
-import { QrReader } from 'react-qr-reader';
+import { QrScan } from 'pastel-qr-scan';
 import jsQR from 'jsqr';
 import { Button, Typography, Modal, Spin } from "antd";
 import { LoadingOutlined } from '@ant-design/icons';
@@ -118,15 +118,15 @@ const QRCodeScanner: React.FC = () => {
           <div className='w-full relative mt-8'>
             <div className='text-center flex justify-center qr-reader-wrapper'>
               {hasPermission && showQRScanner ?
-                <QrReader
+                <QrScan
                   onResult={(result) => {
-                    if (result) {
-                      handleQrReaderResult(result.getText())
+                    if (result?.text) {
+                      handleQrReaderResult(result.text)
                     }
                   }}
-                  constraints={{ facingMode: 'user' }}
-                  containerStyle={{ width: '600px', height: '460px' }}
-                  videoContainerStyle={{ height: '450px' }}
+                  videoHeight='500px'
+                  videoWidth='620px'
+                  className="w-full"
                 /> :
                 <div>
                   <div className='camera-permission-wrapper bg-gray-200'>

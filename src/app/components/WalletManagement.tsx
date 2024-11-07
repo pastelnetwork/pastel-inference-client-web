@@ -201,7 +201,7 @@ export default function WalletManagement() {
           Import Wallet
           <span
             className="tooltip"
-            data-tooltip="Import a wallet file into your wallet."
+            data-tooltip="You can use the wallet file (*.wallet) from the Pastel Lite to import to the Inference Client"
           >
             &#9432;
           </span>
@@ -210,7 +210,7 @@ export default function WalletManagement() {
           id="importWallet"
           className="input w-full"
           type="file"
-          accept=".dat"
+          accept=".wallet"
           onChange={(e) =>
             setWalletFile(e.target.files ? e.target.files[0] : null)
           }

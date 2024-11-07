@@ -396,7 +396,7 @@ export default function UserInfo() {
     <div className="grid grid-cols-5 gap-4 p-4 has-border rounded-xl bg-white shadow-md mt-3">
       <h2 className="text-2xl col-span-full text-bw-800">User Information</h2>
 
-      <div className="mt-4">
+      <div className="mt-4 col-span-full">
         <div className="flex items-center">
           <button
             onClick={() => setShowPassword(!showPassword)}
@@ -408,8 +408,8 @@ export default function UserInfo() {
 
         {showPassword && walletPassword && (
           <div className="mt-2 p-4 bg-gray-50 border border-gray-300 rounded-lg w-full">
-            <p className="text-sm text-gray-700 mb-2">Wallet Password:</p>
-            <div className="flex items-center justify-between bg-white border border-gray-200 p-2 rounded">
+            <p className="text-bw-700 font-bold text-gray-700 mb-2">Wallet Password:</p>
+            <div className="inline-flex items-center justify-between bg-white border border-gray-200 p-2 rounded w-auto">
               <span className="font-medium text-gray-900 break-all">
                 {walletPassword}
               </span>

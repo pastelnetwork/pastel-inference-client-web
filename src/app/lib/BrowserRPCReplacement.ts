@@ -1,5 +1,7 @@
 // src/app/lib/BrowserRPCReplacement.ts
 
+import axios from "axios";
+
 import { initWasm } from "./wasmLoader";
 import {
   PastelInstance,
@@ -630,7 +632,8 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     );
     if (response) {
       const parseData = JSON.parse(JSON.parse(response).data)
-      return parseData?.vin[0].txid;
+      const { data } = await axios.post(`${this.apiBaseUrl}/sendrawtransaction?hex_string=${parseData.hex}&allow_high_fees=false`);
+      return data;
     }
     return "";
   }

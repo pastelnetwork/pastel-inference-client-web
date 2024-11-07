@@ -491,16 +491,8 @@ body {
   margin: auto;
 }
 
-.camera-permission-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 400px;
-  height: 300px;
-}
-
-.qr-reader-wrapper section > div {
-  padding-top: 0 !important;
+.qr-reader-wrapper > div {
+  height: 480px;
 }
 
 /* Media Queries */

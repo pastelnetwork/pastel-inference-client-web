@@ -53,7 +53,7 @@ const ImportExistingWallet: React.FC = () => {
   const getImportWalletTitle = () => {
     return (
       <div className='ant-card-head-title'>
-        Import Wallet File <Tooltip title="You can use the wallet file (*.wallet) from the Pastel Lite to import to the Inference Client "><InfoCircleOutlined /></Tooltip>
+        Import Wallet File <Tooltip title="You can use the wallet file (*.wallet) from the Pastel Lite to import to the Inference Client"><InfoCircleOutlined /></Tooltip>
       </div>
     )
   }
@@ -276,7 +276,7 @@ const ImportExistingWallet: React.FC = () => {
                   <div>
                     <Input
                       type='file'
-                      accept=".dat"
+                      accept=".wallet"
                       onChange={(e) =>
                         setWalletFile(e.target.files ? e.target.files[0] : null)
                       }
@@ -317,7 +317,7 @@ const ImportExistingWallet: React.FC = () => {
                       <div className='flex items-center'>
                         <label className={`btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block custom-button ${walletManagementLoading.isUploadQRLoading ? 'disabled' : ''}`}>
                           <span>Upload QR</span>
-                          <input type="file" onChange={handleImageChange} className='opacity-0 w-0 h-0' />
+                          <input type="file" accept=".png" onChange={handleImageChange} className='opacity-0 w-0 h-0' />
                         </label>
                         {walletManagementLoading.isUploadQRLoading && <div className="btn is-loading">Importing...</div>}
                       </div>

@@ -531,11 +531,6 @@ body {
   z-index: 40;
 }
 
-.video-container {
-  height: 460px;
-  width: 516px;
-}
-
 .qr-code-container {
   border: 10px solid #fff;
   border-radius: 8px;

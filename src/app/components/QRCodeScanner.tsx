@@ -136,7 +136,7 @@ const QRCodeScanner: React.FC = () => {
               {hasPermission && showQRScanner ?
                 <>
                   <div className='qr-overlay'></div>
-                  <video ref={videoRef} autoPlay playsInline className='video-container'></video>
+                  <video ref={videoRef} autoPlay playsInline className='video-container' width="2000" height="1500"></video>
                   <canvas ref={canvasRef} className='hidden' width="400" height="400"></canvas>
                 </> :
                 <div>

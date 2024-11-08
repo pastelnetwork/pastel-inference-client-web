@@ -7,14 +7,16 @@ import useStore from '../store/useStore';
 
 const PasswordQRCode: React.FC = () => {
   const { initialPassword, showPasswordQR, qrCodeContent, importedWalletByQRCode } = useStore();
-  const qrRef = useRef(null);
+  const qrRef = useRef<HTMLDivElement>(null);
 
   if (!showPasswordQR || !initialPassword) return null;
 
   const handleDownload = () => {
     const qrElement = qrRef.current;
     if (qrElement) {
-      html2canvas(qrElement, { backgroundColor: null }).then((canvas) => {
+      const targetSize = 1918;
+      const scale = targetSize / qrElement.offsetWidth;
+      html2canvas(qrElement, { backgroundColor: null, scale: scale, }).then((canvas) => {
         const link = document.createElement("a");
         link.href = canvas.toDataURL("image/png");
         link.download = "pastel-network-password.png";

@@ -1,6 +1,6 @@
 // src/app/components/QRCodeScanner.tsx
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import jsQR from 'jsqr';
 import { Button, Typography, Modal, Spin } from "antd";
 import { LoadingOutlined } from '@ant-design/icons';
@@ -21,8 +21,6 @@ const QRCodeScanner: React.FC = () => {
     saveWalletToLocalStorage,
     unlockWallet,
   } = useStore();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const handleImportWallet = useCallback(async (walletData: string) => {
     if (walletData) {
@@ -41,7 +39,6 @@ const QRCodeScanner: React.FC = () => {
           window.location.reload();
         }
       } catch (error) {
-        alert('Import failed');
         setLoading(false);
         console.error(error)
       }
@@ -49,46 +46,63 @@ const QRCodeScanner: React.FC = () => {
   }, [importedWalletByQRCode, refreshWalletData, saveWalletToLocalStorage, unlockWallet]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext('2d');
-
-    const enableCamera = async () => {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-          if (video) {
-            video.srcObject = stream;
-            video.play();
-          }
-        } catch (error) {
-          console.error("Can't open camera", error);
-        }
-      }
-    };
-
-    const scanQRCode = () => {
-      if (canvas && video && context) {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code?.data) {
-          setLoading(true);
-          handleImportWallet(code.data);
-        }
-      }
-    };
-
-    let interval: NodeJS.Timeout | null = null
+    let elStream: MediaStream | null = null;
     if (!hasPermission) {
       checkCameraPermission();
     } else {
-      enableCamera();
-      interval = setInterval(scanQRCode, 500);
+      const video = document.createElement("video");
+      video.setAttribute("width", "2000");
+      video.setAttribute("height", "1500");
+      const canvasElement = document.getElementById("canvas") as HTMLCanvasElement;
+      if (canvasElement) {
+        const canvas = canvasElement.getContext("2d");
+
+        const drawLine = (begin: { x: number; y: number }, end: { x: number; y: number }, color: string) => {
+          if (canvas) {
+            canvas.beginPath();
+            canvas.moveTo(begin.x, begin.y);
+            canvas.lineTo(end.x, end.y);
+            canvas.lineWidth = 3;
+            canvas.strokeStyle = color;
+            canvas.stroke();
+          }
+        }
+
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
+          elStream = stream;
+          video.srcObject = stream;
+          video.setAttribute("playsinline", 'true');
+          video.play();
+          requestAnimationFrame(tick);
+        });
+
+        const tick = () => {
+          if (video.readyState === video.HAVE_ENOUGH_DATA && canvas) {
+            canvasElement.hidden = false;
+
+            canvasElement.height = video.videoHeight;
+            canvasElement.width = video.videoWidth;
+            canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+            const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "dontInvert",
+            });
+            if (code) {
+              drawLine(code.location.topLeftCorner, code.location.topRightCorner, "#FF3B58");
+              drawLine(code.location.topRightCorner, code.location.bottomRightCorner, "#FF3B58");
+              drawLine(code.location.bottomRightCorner, code.location.bottomLeftCorner, "#FF3B58");
+              drawLine(code.location.bottomLeftCorner, code.location.topLeftCorner, "#FF3B58");
+              setLoading(true);
+              handleImportWallet(code.data);
+            }
+          }
+          requestAnimationFrame(tick);
+        }
+      }
     }
     return () => {
-      if (interval) {
-        clearInterval(interval)
+      if (elStream) {
+        elStream.getTracks().forEach(track => track.stop());
       }
     };
   }, [hasPermission, handleImportWallet]);
@@ -136,10 +150,9 @@ const QRCodeScanner: React.FC = () => {
               {hasPermission && showQRScanner ?
                 <>
                   <div className='qr-overlay'></div>
-                  <video ref={videoRef} autoPlay playsInline className='video-container' width="2000" height="1500"></video>
-                  <canvas ref={canvasRef} className='hidden' width="400" height="400"></canvas>
+                  <canvas id="canvas" hidden width="400" height="400"></canvas>
                 </> :
-                <div>
+                <div className='w-full'>
                   <div className='camera-permission-wrapper bg-gray-200'>
                     <Paragraph className="text-base text-center">Make sure to allow camera access!</Paragraph>
                   </div>

@@ -132,7 +132,7 @@ const QRCodeScanner: React.FC = () => {
         <div className="bg-white p-4 rounded-lg w-full">
           <Title level={2} className="text-2xl font-bold mb-4">Scan QR Code</Title>
           <div className='w-full relative mt-8'>
-            <div className='text-center flex justify-center qr-reader-wrapper relative bg-black'>
+            <div className={`text-center flex justify-center qr-reader-wrapper relative ${hasPermission && showQRScanner ? 'bg-black' : 'permission-wrapper'}`}>
               {hasPermission && showQRScanner ?
                 <>
                   <div className='qr-overlay'></div>

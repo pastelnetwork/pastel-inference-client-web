@@ -1,25 +1,25 @@
 // src/app/components/PasswordQRCode.tsx
-import React from 'react';
+import React, { useRef } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
+import html2canvas from "html2canvas";
+
 import useStore from '../store/useStore';
 
 const PasswordQRCode: React.FC = () => {
   const { initialPassword, showPasswordQR, qrCodeContent, importedWalletByQRCode } = useStore();
+  const qrRef = useRef(null);
 
   if (!showPasswordQR || !initialPassword) return null;
 
   const handleDownload = () => {
-    const canvas = document.querySelector("#fancy-qr-code") as HTMLCanvasElement;
-    if (canvas) {
-      const pngUrl = canvas
-        .toDataURL("image/png")
-        .replace("image/png", "image/octet-stream")
-      const downloadLink = document.createElement("a");
-      downloadLink.href = pngUrl;
-      downloadLink.download = 'pastel-network-password.png';
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
+    const qrElement = qrRef.current;
+    if (qrElement) {
+      html2canvas(qrElement, { backgroundColor: null }).then((canvas) => {
+        const link = document.createElement("a");
+        link.href = canvas.toDataURL("image/png");
+        link.download = "pastel-network-password.png";
+        link.click();
+      });
     }
   };
 
@@ -29,7 +29,9 @@ const PasswordQRCode: React.FC = () => {
         <h2 className="text-2xl font-bold mb-4">Your Wallet Password</h2>
         <p className="mb-4">Take a picture of this QR code with your smartphone to save your wallet password securely.</p>
         <div className="flex justify-center flex-col items-center qr-code-wrapper">
-          <QRCodeCanvas id="fancy-qr-code" value={qrCodeContent} size={1200} level="H" />
+          <div ref={qrRef} className='qr-code-container'>
+            <QRCodeCanvas value={qrCodeContent} size={1918} level="H" bgColor='#fff' />
+          </div>
           <a href="#" onClick={handleDownload} className='text-green-600 hover:text-green-800 text-sm mt-1'>Download</a>
         </div>
         <p className="mt-4 mb-8 hidden">Password: <b>{initialPassword}</b> <button

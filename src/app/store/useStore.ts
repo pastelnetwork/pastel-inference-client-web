@@ -652,6 +652,7 @@ const useStore = create<WalletState & WalletActions>()(
           get().setWalletBalance(
             utils.parseAndFormatNumber(balance.toString())
           );
+          get().setBalance(balance);
         } catch (error) {
           browserLogger.error("Error retrieving wallet info:", error);
           get().setWalletBalance("Failed to load balance");

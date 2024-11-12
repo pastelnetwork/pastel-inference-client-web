@@ -2,9 +2,11 @@
 
 'use client';
 
+import React, { useState, useEffect, useCallback } from "react";
+
 import * as api from '@/app/lib/api';
 import { CreditPackCreationResult } from '@/app/types';
-import React, { useState, useEffect, useCallback } from "react";
+import useStore from "@/app/store/useStore";
 
 interface CreditPackTicketDetails {
   pastel_api_credit_pack_ticket_registration_txid: string;
@@ -14,6 +16,7 @@ interface CreditPackTicketDetails {
 }
 
 export default function CreateCreditPackTicket() {
+  const { balance } = useStore();
   const [numCredits, setNumCredits] = useState<string>("1500");
   const [maxTotalPrice, setMaxTotalPrice] = useState<string>("150000");
   const [maxPerCreditPrice, setMaxPerCreditPrice] = useState<string>("100.0");
@@ -83,30 +86,53 @@ export default function CreateCreditPackTicket() {
     setIsLoading(true);
     setStatus("Initializing ticket creation...");
     setNewTicketDetails(null);
-  
+
     try {
-      const result: CreditPackCreationResult = await api.createCreditPackTicket(
-        parseInt(numCredits.replace(/,/g, "")),
-        maxPerCreditPrice,
-        parseFloat(maxTotalPrice.replace(/,/g, "")),
-        parseFloat(maxPerCreditPrice.replace(/,/g, ""))
+      const creditPriceCushionPercentage = 0.15;
+      const amountOfPSLForTrackingTransactions = 10.0;
+      const estimatedTotalCostInPSLForCreditPack = await api.estimateCreditPackCost(parseInt(numCredits.replace(/,/g, "")), creditPriceCushionPercentage);
+
+      const amountToFundCreditTrackingAddress = Math.round(
+        amountOfPSLForTrackingTransactions +
+        estimatedTotalCostInPSLForCreditPack
       );
-  
-      if (result) {
-        setStatus("Credit pack ticket created successfully.");
-        const confirmation = result.creditPackPurchaseRequestConfirmation;
-        const ticketDetails: CreditPackTicketDetails = {
-          pastel_api_credit_pack_ticket_registration_txid: confirmation.pastel_api_credit_pack_ticket_registration_txid as string,
-          sha3_256_hash_of_credit_pack_purchase_request_fields: confirmation.sha3_256_hash_of_credit_pack_purchase_request_fields,
-          responding_supernode_pastelid: result.creditPackPurchaseRequestConfirmationResponse?.responding_supernode_pastelid || '',
-          credit_pack_confirmation_outcome_string: result.creditPackPurchaseRequestConfirmationResponse?.credit_pack_confirmation_outcome_string || '',
-        };
-        setNewTicketDetails(ticketDetails);
-        pollCreditPackStatus(
-          confirmation.pastel_api_credit_pack_ticket_registration_txid as string
+      if (amountToFundCreditTrackingAddress > balance) {
+        const insufficientFundsMessage = `The purchase of this credit pack would require ${amountToFundCreditTrackingAddress.toLocaleString()} PSL, but you only have ${balance.toLocaleString()} PSL in your wallet. Please send at least ${(
+          amountToFundCreditTrackingAddress - balance
+        ).toLocaleString()} more PSL to your wallet and try again. Alternatively, you can reduce the number of credits in the credit pack you are trying to purchase to ${Math.floor(
+          balance /
+          (estimatedTotalCostInPSLForCreditPack / parseInt(numCredits.replace(/,/g, "")))
+        ).toLocaleString()} credits instead of ${numCredits.toLocaleString()} credits.`;
+
+        setStatus(insufficientFundsMessage);
+        return;
+      }
+
+      const { newCreditTrackingAddress } = await api.createAndFundNewAddress(amountToFundCreditTrackingAddress);
+      if (newCreditTrackingAddress) {
+        const result: CreditPackCreationResult = await api.createCreditPackTicket(
+          parseInt(numCredits.replace(/,/g, "")),
+          newCreditTrackingAddress,
+          parseFloat(maxTotalPrice.replace(/,/g, "")),
+          parseFloat(maxPerCreditPrice.replace(/,/g, ""))
         );
-      } else {
-        throw new Error("Failed to create new credit pack ticket");
+
+        if (result) {
+          setStatus("Credit pack ticket created successfully.");
+          const confirmation = result.creditPackPurchaseRequestConfirmation;
+          const ticketDetails: CreditPackTicketDetails = {
+            pastel_api_credit_pack_ticket_registration_txid: confirmation.pastel_api_credit_pack_ticket_registration_txid as string,
+            sha3_256_hash_of_credit_pack_purchase_request_fields: confirmation.sha3_256_hash_of_credit_pack_purchase_request_fields,
+            responding_supernode_pastelid: result.creditPackPurchaseRequestConfirmationResponse?.responding_supernode_pastelid || '',
+            credit_pack_confirmation_outcome_string: result.creditPackPurchaseRequestConfirmationResponse?.credit_pack_confirmation_outcome_string || '',
+          };
+          setNewTicketDetails(ticketDetails);
+          pollCreditPackStatus(
+            confirmation.pastel_api_credit_pack_ticket_registration_txid as string
+          );
+        } else {
+          throw new Error("Failed to create new credit pack ticket");
+        }
       }
     } catch (error) {
       console.error("Error creating credit pack ticket:", error);

@@ -2,6 +2,8 @@
 
 'use client';
 
+import { v4 as uuidv4 } from 'uuid';
+
 import BrowserRPCReplacement from "./BrowserRPCReplacement";
 import { BrowserDatabase } from "./BrowserDatabase";
 import * as utils from "./utils";
@@ -532,7 +534,7 @@ class PastelInferenceClient {
     if (!maximumTotalCreditPackPriceInPSL && !maximumPerCreditPriceInPSL) {
       maximumPerCreditPriceInPSL = parseFloat(
         localStorage.getItem("MAXIMUM_PER_CREDIT_PRICE_IN_PSL_FOR_CLIENT") ||
-          "0.1"
+          "100.0"
       );
     }
     const {
@@ -562,7 +564,7 @@ class PastelInferenceClient {
       parseFloat(
         localStorage.getItem(
           "MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING"
-        ) || "0.001"
+        ) || "0.05"
       );
 
     const numberFormat = new Intl.NumberFormat("en-US");
@@ -677,6 +679,7 @@ class PastelInferenceClient {
           "",
         requesting_end_user_pastelid_signature_on_preliminary_price_quote_response_hash:
           "",
+        id: uuidv4(),
       };
 
       priceQuoteResponse.sha3_256_hash_of_credit_pack_purchase_request_preliminary_price_quote_response_fields =

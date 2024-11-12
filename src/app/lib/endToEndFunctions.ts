@@ -383,6 +383,7 @@ async function buildCreditPackPurchaseRequestConfirmation(
     sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields: "",
     requesting_end_user_pastelid_signature_on_sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields:
       "",
+    id: uuidv4(),
   };
 
   confirmation.sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields =

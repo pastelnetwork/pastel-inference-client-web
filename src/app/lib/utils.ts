@@ -46,7 +46,7 @@ const TARGET_VALUE_PER_CREDIT_IN_USD = parseFloat(
   safeLocalStorage()?.getItem("TARGET_VALUE_PER_CREDIT_IN_USD") || "0.01"
 );
 const TARGET_PROFIT_MARGIN = parseFloat(
-  safeLocalStorage()?.getItem("TARGET_PROFIT_MARGIN") || "0.1"
+  safeLocalStorage()?.getItem("TARGET_PROFIT_MARGIN") || "0.15"
 );
 const MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING =
   parseFloat(

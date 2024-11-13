@@ -1618,7 +1618,9 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
       const checkAcknowledgement = async () => {
         const data = await this.getTxOutProof(txID);
         if (data) {
-          resolve();
+          setTimeout(() => {
+            resolve();
+          }, 5000);
         } else {
           setTimeout(checkAcknowledgement, 10000);
         }

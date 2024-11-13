@@ -251,7 +251,7 @@ export function abbreviateJSON(jsonString: string, maxLength: number): string {
 
 export function formattedPayload(jsonPayload: unknown) {
   const maxPayloadLength = 10000;
-  let formattedPayload = prettyJSON(jsonPayload);
+  const formattedPayload = prettyJSON(jsonPayload);
   if (formattedPayload.length > maxPayloadLength) {
     return abbreviateJSON(formattedPayload, maxPayloadLength);
   }

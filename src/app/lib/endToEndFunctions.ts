@@ -821,7 +821,7 @@ function safeStringify(obj: unknown, space = 2) {
         return value.toISOString();
       }
       if (value.constructor === Object) {
-        const sortedObj: any = {};
+        const sortedObj: T = {};
         Object.keys(value)
           .sort()
           .forEach((key) => {

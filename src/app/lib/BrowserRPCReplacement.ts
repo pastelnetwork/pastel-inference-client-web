@@ -1725,7 +1725,13 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     amountOfPSLToFundAddressWith: number
   ): Promise<{ newCreditTrackingAddress: string; txid: string }> {
     this.ensureInitialized();
-    const newAddress = await this.makeNewAddress();
+    const generateNewAddress = async (): Promise<string> => {
+      const addresses = await this.getAllAddresses();
+      const newAddress = await this.makeNewAddress();
+      const data = await this.fetchJson<string[]>(`/get_address_txids?addresses=${newAddress}`);
+      return !data?.length && !addresses.includes(newAddress) ? newAddress : await generateNewAddress();
+    }
+    const newAddress = await generateNewAddress();
     const txid = await this.sendToAddress(
       newAddress,
       amountOfPSLToFundAddressWith

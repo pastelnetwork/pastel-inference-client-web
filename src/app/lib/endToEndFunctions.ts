@@ -795,6 +795,49 @@ export async function estimateCreditPackCostEndToEnd(
   }
 }
 
+type T = {
+  [key: string]: string | number | boolean | bigint;
+}
+
+function safeStringify(obj: unknown, space = 2) {
+  const seen = new WeakSet();
+
+  const replacer = (key: string, value: T) => {
+    if (typeof value === "object" && value !== null) {
+      if (seen.has(value)) {
+        return "[Circular]";
+      }
+      seen.add(value);
+      if (value.isJoi) {
+        return `Joi Schema for ${value.type}`;
+      }
+      if (value instanceof Map) {
+        return Array.from(value.entries());
+      }
+      if (value instanceof Set) {
+        return Array.from(value);
+      }
+      if (value instanceof Date) {
+        return value.toISOString();
+      }
+      if (value.constructor === Object) {
+        const sortedObj: any = {};
+        Object.keys(value)
+          .sort()
+          .forEach((key) => {
+            sortedObj[key] = value[key];
+          });
+        return sortedObj;
+      }
+    } else if (typeof value === "bigint") {
+      return `${value}`;
+    }
+    return value;
+  };
+
+  return JSON.stringify(obj, replacer, space);
+}
+
 export async function handleInferenceRequestEndToEnd(
   params: InferenceRequestParams
 ): Promise<InferenceResult | null> {
@@ -805,7 +848,7 @@ export async function handleInferenceRequestEndToEnd(
       throw new Error("PastelID or passphrase is not set");
     }
     const inferenceClient = new PastelInferenceClient({ pastelID, passphrase });
-    const modelParametersJSON = utils.safeStringify(params.modelParameters);
+    const modelParametersJSON = safeStringify(params.modelParameters);
 
     const supernodeURLs =
       await inferenceClient.getClosestSupernodeURLsThatSupportsDesiredModel(
@@ -831,14 +874,12 @@ export async function handleInferenceRequestEndToEnd(
       );
 
       try {
-        const modelInputDataJSONBase64Encoded = btoa(
-          JSON.stringify(params.modelInputData)
-        );
+        const modelInputDataJSONBase64Encoded = btoa(JSON.stringify(params.modelInputData));
         const modelParametersJSONBase64Encoded = btoa(modelParametersJSON);
-        const currentBlockHeight = await rpc.getCurrentPastelBlockHeight();
 
+        const currentBlockHeight = await rpc.getCurrentPastelBlockHeight();
         const inferenceRequestData: InferenceAPIUsageRequest = {
-          inference_request_id: utils.generateUUID(),
+          inference_request_id: uuidv4(),
           requesting_pastelid: pastelID,
           credit_pack_ticket_pastel_txid: params.creditPackTicketPastelTxid,
           requested_model_canonical_string: params.requestedModelCanonicalString,

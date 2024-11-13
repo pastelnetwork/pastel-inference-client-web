@@ -255,7 +255,7 @@ export function formattedPayload(jsonPayload: unknown) {
   if (formattedPayload.length > maxPayloadLength) {
     return abbreviateJSON(formattedPayload, maxPayloadLength);
   }
-  return '';
+  return formattedPayload;
 }
 
 export function logActionWithPayload(

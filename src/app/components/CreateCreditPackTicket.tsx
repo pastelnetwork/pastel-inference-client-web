@@ -81,6 +81,13 @@ export default function CreateCreditPackTicket() {
     }
   };
 
+  const handleLogger = (value: string) => {
+    const parseValue = JSON.parse(value);
+    if (parseValue.message) {
+      setStatus(parseValue.message);
+    }
+  }
+
   const createNewCreditPackTicket = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -114,7 +121,8 @@ export default function CreateCreditPackTicket() {
           parseInt(numCredits.replace(/,/g, "")),
           newCreditTrackingAddress,
           parseFloat(maxTotalPrice.replace(/,/g, "")),
-          parseFloat(maxPerCreditPrice.replace(/,/g, ""))
+          parseFloat(maxPerCreditPrice.replace(/,/g, "")),
+          handleLogger
         );
 
         if (result) {

@@ -440,7 +440,8 @@ class PastelInferenceClient {
 
   async creditPackTicketInitialPurchaseRequest(
     supernodeURL: string,
-    creditPackRequest: CreditPackPurchaseRequest
+    creditPackRequest: CreditPackPurchaseRequest,
+    callback: (value: string) => void,
   ): Promise<PreliminaryPriceQuote | CreditPackPurchaseRequestRejection> {
     try {
       const validatedCreditPackRequest =
@@ -448,6 +449,7 @@ class PastelInferenceClient {
           creditPackRequest
         );
       await db.saveData("CreditPackPurchaseRequest", validatedCreditPackRequest);
+      callback(JSON.stringify({ message: `Now requesting a new Pastel credit pack ticket with payload:\n${utils.formattedPayload(validatedCreditPackRequest)}` }))
       utils.logActionWithPayload(
         "requesting",
         "a new Pastel credit pack ticket",
@@ -476,6 +478,7 @@ class PastelInferenceClient {
       const result = await response.json();
 
       if ("rejection_reason_string" in result) {
+        callback(JSON.stringify({ message: `Credit pack purchase request rejected: ${result.rejection_reason_string}` }))
         console.error(
           `Credit pack purchase request rejected: ${result.rejection_reason_string}`
         );
@@ -490,6 +493,7 @@ class PastelInferenceClient {
         );
         return validatedRejection;
       } else {
+        callback(JSON.stringify({ message: `Now receiving response to credit pack purchase request with payload:\n${utils.formattedPayload(result)}` }))
         utils.logActionWithPayload(
           "receiving",
           "response to credit pack purchase request",
@@ -507,6 +511,9 @@ class PastelInferenceClient {
         return validatedPriceQuote;
       }
     } catch (error) {
+      callback(JSON.stringify({ message: `Error initiating credit pack ticket purchase: ${utils.safeStringify(
+        error
+      )}` }))
       console.error(
         `Error initiating credit pack ticket purchase: ${utils.safeStringify(
           error
@@ -529,7 +536,8 @@ class PastelInferenceClient {
   async confirmPreliminaryPriceQuote(
     preliminaryPriceQuote: PreliminaryPriceQuote,
     maximumTotalCreditPackPriceInPSL: number,
-    maximumPerCreditPriceInPSL: number
+    maximumPerCreditPriceInPSL: number,
+    callback: (value: string) => void
   ): Promise<boolean> {
     if (!maximumTotalCreditPackPriceInPSL && !maximumPerCreditPriceInPSL) {
       maximumPerCreditPriceInPSL = parseFloat(
@@ -576,6 +584,19 @@ class PastelInferenceClient {
       priceDifferencePercentage <=
         MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING
     ) {
+      callback(JSON.stringify({ message: `Preliminary price quote is within the acceptable range: ${numberFormat.format(
+        quotedPricePerCredit
+      )} PSL per credit, ${numberFormat.format(
+        quotedTotalPrice
+      )} PSL total, which is within the maximum of ${numberFormat.format(
+        maximumPerCreditPriceInPSL
+      )} PSL per credit and ${numberFormat.format(
+        maximumTotalCreditPackPriceInPSL
+      )} PSL total. The price difference from the estimated fair market price is ${percentageFormat(
+        priceDifferencePercentage * 100
+      )}%, which is within the allowed maximum of ${percentageFormat(
+        MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING * 100
+      )}%. Please be patient while the new credit pack request is initialized.` }))
       console.info(
         `Preliminary price quote is within the acceptable range: ${numberFormat.format(
           quotedPricePerCredit
@@ -593,6 +614,19 @@ class PastelInferenceClient {
       );
       return true;
     } else {
+      callback(JSON.stringify({ message: `Preliminary price quote exceeds the maximum acceptable price or the price difference from the estimated fair price is too high! Quoted price: ${numberFormat.format(
+        quotedPricePerCredit
+      )} PSL per credit, ${numberFormat.format(
+        quotedTotalPrice
+      )} PSL total, maximum price: ${numberFormat.format(
+        maximumPerCreditPriceInPSL
+      )} PSL per credit, ${numberFormat.format(
+        maximumTotalCreditPackPriceInPSL
+      )} PSL total. The price difference from the estimated fair market price is ${percentageFormat(
+        priceDifferencePercentage * 100
+      )}%, which exceeds the allowed maximum of ${percentageFormat(
+        MAXIMUM_LOCAL_CREDIT_PRICE_DIFFERENCE_TO_ACCEPT_CREDIT_PRICING * 100
+      )}%.` }))
       console.warn(
         `Preliminary price quote exceeds the maximum acceptable price or the price difference from the estimated fair price is too high! Quoted price: ${numberFormat.format(
           quotedPricePerCredit
@@ -633,13 +667,15 @@ class PastelInferenceClient {
     creditPackRequest: CreditPackPurchaseRequest,
     preliminaryPriceQuote: PreliminaryPriceQuote,
     maximumTotalCreditPackPriceInPSL: number,
-    maximumPerCreditPriceInPSL: number
+    maximumPerCreditPriceInPSL: number,
+    callback: (value: string) => void
   ): Promise<
     | CreditPackPurchaseRequestResponse
     | CreditPackPurchaseRequestResponseTermination
   > {
     try {
       if ("rejection_reason_string" in preliminaryPriceQuote) {
+        callback(JSON.stringify({ message: `Credit pack purchase request rejected: ${preliminaryPriceQuote.rejection_reason_string}` }))
         console.error(
           `Credit pack purchase request rejected: ${preliminaryPriceQuote.rejection_reason_string}`
         );
@@ -649,9 +685,10 @@ class PastelInferenceClient {
       const agreeWithPriceQuote = await this.confirmPreliminaryPriceQuote(
         preliminaryPriceQuote,
         maximumTotalCreditPackPriceInPSL,
-        maximumPerCreditPriceInPSL
+        maximumPerCreditPriceInPSL,
+        callback
       );
-
+      callback(JSON.stringify({ message: `Agree with price quote: ${agreeWithPriceQuote}; responding to preliminary price quote to Supernode at ${supernodeURL}...` }))
       console.info(
         `Agree with price quote: ${agreeWithPriceQuote}; responding to preliminary price quote to Supernode at ${supernodeURL}...`
       );
@@ -728,6 +765,7 @@ class PastelInferenceClient {
       const result = await response.json();
 
       if ("termination_reason_string" in result) {
+        callback(JSON.stringify({ message: `Credit pack purchase request response terminated: ${result.termination_reason_string}` }))
         console.error(
           `Credit pack purchase request response terminated: ${result.termination_reason_string}`
         );
@@ -748,6 +786,7 @@ class PastelInferenceClient {
           utils.transformCreditPackPurchaseRequestResponse(
             await utils.prepareModelForValidation(result)
           );
+        callback(JSON.stringify({ message: `Now receiving response to credit pack purchase request with payload:\n${utils.formattedPayload(transformedResult)}` }))
         utils.logActionWithPayload(
           "receiving",
           "response to credit pack purchase request",
@@ -764,6 +803,9 @@ class PastelInferenceClient {
         return validatedResponse;
       }
     } catch (error) {
+      callback(JSON.stringify({ message: `Error responding to preliminary price quote: ${utils.safeStringify(
+        error
+      )}` }))
       console.error(
         `Error responding to preliminary price quote: ${utils.safeStringify(
           error
@@ -775,7 +817,8 @@ class PastelInferenceClient {
 
   async confirmCreditPurchaseRequest(
     supernodeURL: string,
-    creditPackPurchaseRequestConfirmation: CreditPackPurchaseRequestConfirmation
+    creditPackPurchaseRequestConfirmation: CreditPackPurchaseRequestConfirmation,
+    callback: (value: string) => void
   ): Promise<CreditPackPurchaseRequestConfirmationResponse> {
     try {
       const { challenge, challenge_id, challenge_signature } =
@@ -783,6 +826,7 @@ class PastelInferenceClient {
       const payload = await utils.prepareModelForEndpoint(
         creditPackPurchaseRequestConfirmation
       );
+      callback(JSON.stringify({ message: `Now confirming credit pack purchase request with payload:\n${utils.formattedPayload(payload)}` }))
       utils.logActionWithPayload(
         "confirming",
         "credit pack purchase request",
@@ -804,6 +848,7 @@ class PastelInferenceClient {
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
+      callback(JSON.stringify({ message: `Now receiving response to credit pack purchase confirmation with payload:\n${utils.formattedPayload(result)}` }))
       utils.logActionWithPayload(
         "receiving",
         "response to credit pack purchase confirmation",
@@ -819,6 +864,9 @@ class PastelInferenceClient {
       );
       return validatedResult as CreditPackPurchaseRequestConfirmationResponse;
     } catch (error) {
+      callback(JSON.stringify({ message: `Error confirming credit pack purchase request: ${utils.safeStringify(
+        error
+      )}` }))
       console.error(
         `Error confirming credit pack purchase request: ${utils.safeStringify(
           error
@@ -830,7 +878,8 @@ class PastelInferenceClient {
 
   async checkStatusOfCreditPurchaseRequest(
     supernodeURL: string,
-    creditPackPurchaseRequestHash: string
+    creditPackPurchaseRequestHash: string,
+    callback: (value: string) => void
   ): Promise<CreditPackPurchaseRequestStatus> {
     try {
       const { challenge, challenge_id, challenge_signature } =
@@ -850,7 +899,7 @@ class PastelInferenceClient {
       const validatedStatusCheck =
         validationSchemas.creditPackRequestStatusCheckSchema.parse(statusCheck);
       delete (validatedStatusCheck as Partial<CreditPackRequestStatusCheck>).id;
-
+      callback(JSON.stringify({ message: `Now checking status of credit pack purchase request with payload:\n${utils.formattedPayload(validatedStatusCheck)}` }))
       utils.logActionWithPayload(
         "checking",
         "status of credit pack purchase request",
@@ -875,6 +924,7 @@ class PastelInferenceClient {
         );
       }
       const responseData = await response.json();
+      callback(JSON.stringify({ message: `Now receiving credit pack purchase request response from Supernode with payload:\n${utils.formattedPayload(responseData)}` }))
       utils.logActionWithPayload(
         "receiving",
         "credit pack purchase request response from Supernode",
@@ -891,6 +941,9 @@ class PastelInferenceClient {
       await db.addData("CreditPackPurchaseRequestStatus", validatedResult);
       return validatedResult;
     } catch (error) {
+      callback(JSON.stringify({ message: `Error checking status of credit purchase request: ${utils.safeStringify(
+        error
+      )}` }))
       console.error(
         `Error checking status of credit purchase request: ${utils.safeStringify(
           error
@@ -958,7 +1011,8 @@ class PastelInferenceClient {
 
   async creditPackStorageRetryRequest(
     supernodeURL: string,
-    creditPackStorageRetryRequest: CreditPackStorageRetryRequest
+    creditPackStorageRetryRequest: CreditPackStorageRetryRequest,
+    callback: (value: string) => void
   ): Promise<CreditPackStorageRetryRequestResponse> {
     try {
       const validatedRequest =
@@ -972,6 +1026,7 @@ class PastelInferenceClient {
         await this.requestAndSignChallenge(supernodeURL);
 
       const payload = await utils.prepareModelForEndpoint(validatedRequest);
+      callback(JSON.stringify({ message: `Now sending credit pack storage retry request with payload:\n${utils.formattedPayload(payload)}` }))
       utils.logActionWithPayload(
         "sending",
         "credit pack storage retry request",
@@ -995,6 +1050,7 @@ class PastelInferenceClient {
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
+      callback(JSON.stringify({ message: `Now receiving response to credit pack storage retry request with payload:\n${utils.formattedPayload(result)}` }))
       utils.logActionWithPayload(
         "receiving",
         "response to credit pack storage retry request",
@@ -1015,6 +1071,9 @@ class PastelInferenceClient {
       );
       return validatedResponse;
     } catch (error) {
+      callback(JSON.stringify({ message: `Error sending credit pack storage retry request: ${utils.safeStringify(
+        error
+      )}` }))
       console.error(
         `Error sending credit pack storage retry request: ${utils.safeStringify(
           error
@@ -1174,7 +1233,8 @@ class PastelInferenceClient {
 
   async makeInferenceAPIUsageRequest(
     supernodeURL: string,
-    requestData: InferenceRequestData
+    requestData: InferenceRequestData,
+    callback: (value: string) => void
   ): Promise<InferenceAPIUsageResponse> {
     try {
       const validatedRequest =
@@ -1188,6 +1248,7 @@ class PastelInferenceClient {
         "inference usage request",
         validatedRequest
       );
+      callback(JSON.stringify({ message: `Now making inference usage request with payload:\n${utils.formattedPayload(validatedRequest)}` }))
       const response = await fetch(
         `${supernodeURL}/make_inference_api_usage_request`,
         {
@@ -1209,6 +1270,7 @@ class PastelInferenceClient {
         "response to inference usage request",
         result
       );
+      callback(JSON.stringify({ message: `Now received response to inference usage request with payload:\n${utils.formattedPayload(result)}` }))
       const transformedResult = await utils.prepareModelForValidation(result);
       delete (transformedResult as Partial<InferenceAPIUsageResponse>).id;
       const validatedResponse =
@@ -1218,6 +1280,9 @@ class PastelInferenceClient {
       await db.addData("InferenceAPIUsageResponse", validatedResponse);
       return validatedResponse;
     } catch (error) {
+      callback(JSON.stringify({ message: `Error making inference API usage request: ${utils.safeStringify(
+        error
+      )}` }))
       console.error(
         `Error making inference API usage request: ${utils.safeStringify(
           error
@@ -1229,7 +1294,8 @@ class PastelInferenceClient {
 
   async sendInferenceConfirmation(
     supernodeURL: string,
-    confirmationData: InferenceConfirmationData
+    confirmationData: InferenceConfirmationData,
+    callback: (value: string) => void
   ): Promise<unknown> {
     try {
       const confirmationDataJSON = { ...confirmationData };
@@ -1246,6 +1312,7 @@ class PastelInferenceClient {
       const payload = await utils.prepareModelForEndpoint(
         validatedConfirmation
       );
+      callback(JSON.stringify({ message: `Now sending inference confirmation with payload:\n${utils.formattedPayload(payload)}` }))
       utils.logActionWithPayload(
         "sending",
         "inference confirmation",
@@ -1267,6 +1334,7 @@ class PastelInferenceClient {
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
+      callback(JSON.stringify({ message: `Now receiving response to inference confirmation with payload:\n${utils.formattedPayload(result)}` }))
       utils.logActionWithPayload(
         "receiving",
         "response to inference confirmation",
@@ -1278,19 +1346,21 @@ class PastelInferenceClient {
       console.error(
         `Error sending inference confirmation: ${utils.safeStringify(error)}`
       );
+      callback(JSON.stringify({ message: `Error sending inference confirmation: ${utils.safeStringify(error)}` }))
       throw error;
     }
   }
 
   async checkStatusOfInferenceRequestResults(
     supernodeURL: string,
-    inferenceResponseID: string
+    inferenceResponseID: string,
+    callback: (value: string) => void
   ): Promise<boolean> {
     try {
       console.info(
         `Checking status of inference request results for ID ${inferenceResponseID}`
       );
-
+      callback(JSON.stringify({ message: `Checking status of inference request results for ID ${inferenceResponseID}` }))
       const response = await fetch(
         `${supernodeURL}/check_status_of_inference_request_results/${inferenceResponseID}`
       );
@@ -1298,6 +1368,7 @@ class PastelInferenceClient {
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
+      callback(JSON.stringify({ message: `Now receiving status of inference request results for ID ${inferenceResponseID} with payload:\n${utils.formattedPayload(result)}` }))
       utils.logActionWithPayload(
         "receiving",
         `status of inference request results for ID ${inferenceResponseID}`,
@@ -1306,6 +1377,9 @@ class PastelInferenceClient {
 
       return typeof result === "boolean" ? result : false;
     } catch (error) {
+      callback(JSON.stringify({ message: `Error checking status of inference request results from Supernode URL: ${supernodeURL}: ${utils.safeStringify(
+        error
+      )}` }))
       console.error(
         `Error checking status of inference request results from Supernode URL: ${supernodeURL}: ${utils.safeStringify(
           error
@@ -1318,7 +1392,8 @@ class PastelInferenceClient {
   async retrieveInferenceOutputResults(
     supernodeURL: string,
     inferenceRequestID: string,
-    inferenceResponseID: string
+    inferenceResponseID: string,
+    callback: (value: string) => void
   ): Promise<InferenceAPIOutputResult> {
     try {
       const { challenge, challenge_id, challenge_signature } =
@@ -1330,6 +1405,7 @@ class PastelInferenceClient {
         challenge_id,
         challenge_signature,
       });
+      callback(JSON.stringify({ message: `Now attempting to retrieve inference output results for response ID ${inferenceResponseID} with payload:\n${utils.formattedPayload(params)}` }))
       utils.logActionWithPayload(
         "attempting",
         `to retrieve inference output results for response ID ${inferenceResponseID}`,
@@ -1345,6 +1421,7 @@ class PastelInferenceClient {
         throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
       delete (result as Partial<InferenceAPIUsageResponse>).id;
+      callback(JSON.stringify({ message: `Now receiving inference output results with payload:\n${utils.formattedPayload(result)}` }))
       utils.logActionWithPayload(
         "receiving",
         "inference output results",
@@ -1358,6 +1435,9 @@ class PastelInferenceClient {
       await db.addData("InferenceAPIOutputResult", validatedResult);
       return validatedResult;
     } catch (error) {
+      callback(JSON.stringify({ message: `Error retrieving inference output results: ${utils.safeStringify(
+        error
+      )}` }))
       console.error(
         `Error retrieving inference output results: ${utils.safeStringify(
           error

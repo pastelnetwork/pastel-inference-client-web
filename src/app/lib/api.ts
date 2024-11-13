@@ -152,14 +152,16 @@ export async function createCreditPackTicket(
   numCredits: number,
   creditUsageTrackingPSLAddress: string,
   maxTotalPrice: number,
-  maxPerCreditPrice: number
+  maxPerCreditPrice: number,
+  callback: (value: string) => void
 ): Promise<CreditPackCreationResult> {
   return await endToEndFunctions.handleCreditPackTicketEndToEnd(
     numCredits,
     creditUsageTrackingPSLAddress,
     burnAddress,
     maxTotalPrice,
-    maxPerCreditPrice
+    maxPerCreditPrice,
+    callback
   );
 }
 
@@ -176,8 +178,8 @@ export async function getMyPslAddressWithLargestBalance(): Promise<string> {
   return await rpc.getMyPslAddressWithLargestBalance();
 }
 
-export async function createInferenceRequest(params: InferenceRequestParams): Promise<InferenceResult | null> {
-  return await endToEndFunctions.handleInferenceRequestEndToEnd(params);
+export async function createInferenceRequest(params: InferenceRequestParams, callback: (value: string) => void): Promise<InferenceResult | null> {
+  return await endToEndFunctions.handleInferenceRequestEndToEnd(params, callback);
 }
 
 export async function checkSupernodeList(): Promise<{ validMasternodeListFullDF: SupernodeInfo[] }> {

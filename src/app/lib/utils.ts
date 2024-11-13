@@ -249,6 +249,15 @@ export function abbreviateJSON(jsonString: string, maxLength: number): string {
   return abbreviated + "}".repeat(openBraces) + "]".repeat(openBrackets);
 }
 
+export function formattedPayload(jsonPayload: unknown) {
+  const maxPayloadLength = 10000;
+  let formattedPayload = prettyJSON(jsonPayload);
+  if (formattedPayload.length > maxPayloadLength) {
+    return abbreviateJSON(formattedPayload, maxPayloadLength);
+  }
+  return '';
+}
+
 export function logActionWithPayload(
   action: string,
   payloadName: string,

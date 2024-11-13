@@ -845,6 +845,7 @@ class PastelInferenceClient {
             creditPackPurchaseRequestHash,
             PastelIDType.PastelID
           ),
+        id: uuidv4(),
       };
       const validatedStatusCheck =
         validationSchemas.creditPackRequestStatusCheckSchema.parse(statusCheck);

@@ -293,17 +293,17 @@ export default function CreateCreditPackTicket() {
               </thead>
               <tbody id="newCreditPackTicketDetails">
                 <tr>
-                  <td>
+                  <td className="truncate">
                     {
                       newTicketDetails.pastel_api_credit_pack_ticket_registration_txid
                     }
                   </td>
-                  <td>
+                  <td className="truncate">
                     {
                       newTicketDetails.sha3_256_hash_of_credit_pack_purchase_request_fields
                     }
                   </td>
-                  <td>{newTicketDetails.responding_supernode_pastelid}</td>
+                  <td className="truncate">{newTicketDetails.responding_supernode_pastelid}</td>
                   <td>
                     {newTicketDetails.credit_pack_confirmation_outcome_string}
                   </td>

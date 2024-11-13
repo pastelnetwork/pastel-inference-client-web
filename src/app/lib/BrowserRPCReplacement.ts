@@ -776,6 +776,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
           activedays: item.activedays,
         })
       }
+
       return {
         validMasternodeListFullDF: validMasternodeListFullDF.filter(
           (data) =>
@@ -1492,11 +1493,11 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
    * @param amount - The amount of PSL to send.
    * @returns The transaction ID.
    */
-  public async sendToAddress(address: string, amount: number): Promise<string> {
+  public async sendToAddress(address: string, amount: number, creditUsageTrackingPSLAddress: string = ''): Promise<string> {
     this.ensureInitialized();
     const sendTo = [{ address, amount }];
     const fromAddress = await this.getMyPslAddressWithLargestBalance();
-    return this.createSendToTransaction(sendTo, fromAddress); // Assuming fee is 0
+    return this.createSendToTransaction(sendTo, creditUsageTrackingPSLAddress || fromAddress); // Assuming fee is 0
   }
 
   /**

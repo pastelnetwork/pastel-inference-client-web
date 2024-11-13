@@ -271,12 +271,25 @@ export async function handleCreditPackTicketEndToEnd(
         const signedCreditPackTicket =
           signedCreditPackTicketOrRejection as CreditPackPurchaseRequestResponse;
 
+        await new Promise<void>((resolve) => {
+          const checkAcknowledgement = async () => {
+            const utxos = await rpc.getAddressUtxos(creditUsageTrackingPSLAddress);
+            if (utxos?.length) {
+              resolve();
+            } else {
+              setTimeout(checkAcknowledgement, 5000);
+            }
+          };
+          checkAcknowledgement();
+        });
+
         const burnTransactionResponse = await rpc.sendToAddress(
           burnAddress,
           Math.round(
             signedCreditPackTicket.proposed_total_cost_of_credit_pack_in_psl *
               100000
           ) / 100000,
+          creditUsageTrackingPSLAddress,
         );
 
         if (!burnTransactionResponse) {
@@ -328,13 +341,19 @@ export async function handleCreditPackTicketEndToEnd(
 
           return {
             creditPackRequest,
-            creditPackPurchaseRequestConfirmation,
+            creditPackPurchaseRequestConfirmation: {
+              ...creditPackPurchaseRequestConfirmation,
+              pastel_api_credit_pack_ticket_registration_txid: creditPackPurchaseRequestConfirmationResponse.pastel_api_credit_pack_ticket_registration_txid
+            },
             creditPackStorageRetryRequestResponse,
           };
         } else {
           return {
             creditPackRequest,
-            creditPackPurchaseRequestConfirmation,
+            creditPackPurchaseRequestConfirmation: {
+              ...creditPackPurchaseRequestConfirmation,
+              pastel_api_credit_pack_ticket_registration_txid: creditPackPurchaseRequestConfirmationResponse.pastel_api_credit_pack_ticket_registration_txid
+            },
             creditPackPurchaseRequestConfirmationResponse,
           };
         }

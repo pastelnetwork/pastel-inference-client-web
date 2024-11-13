@@ -26,7 +26,6 @@ export default function RootLayout({
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@sira-ui/tailwind/dist/css/styles.css" />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/default.min.css" />
-        <meta httpEquiv="Content-Security-Policy" content="upgrade-insecure-requests"></meta>
       </head>
       <body className={montserrat.className} suppressHydrationWarning={true}>
         {children}

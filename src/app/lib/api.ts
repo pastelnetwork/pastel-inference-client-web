@@ -542,14 +542,16 @@ export async function sendTrackingAmountFromControlAddressToBurnAddressToConfirm
   inferenceRequestId: string,
   creditUsageTrackingPSLAddress: string,
   creditUsageTrackingAmountInPSL: number,
-  burnAddress: string
+  burnAddress: string,
+  callback: (value: string) => void
 ): Promise<string> {
   const rpc = BrowserRPCReplacement.getInstance();
   return await rpc.sendTrackingAmountFromControlAddressToBurnAddressToConfirmInferenceRequest(
     inferenceRequestId,
     creditUsageTrackingPSLAddress,
     creditUsageTrackingAmountInPSL,
-    burnAddress
+    burnAddress,
+    callback
   );
 }
 

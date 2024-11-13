@@ -152,14 +152,16 @@ export async function createCreditPackTicket(
   numCredits: number,
   creditUsageTrackingPSLAddress: string,
   maxTotalPrice: number,
-  maxPerCreditPrice: number
+  maxPerCreditPrice: number,
+  callback: (value: string) => void
 ): Promise<CreditPackCreationResult> {
   return await endToEndFunctions.handleCreditPackTicketEndToEnd(
     numCredits,
     creditUsageTrackingPSLAddress,
     burnAddress,
     maxTotalPrice,
-    maxPerCreditPrice
+    maxPerCreditPrice,
+    callback
   );
 }
 
@@ -176,8 +178,8 @@ export async function getMyPslAddressWithLargestBalance(): Promise<string> {
   return await rpc.getMyPslAddressWithLargestBalance();
 }
 
-export async function createInferenceRequest(params: InferenceRequestParams): Promise<InferenceResult | null> {
-  return await endToEndFunctions.handleInferenceRequestEndToEnd(params);
+export async function createInferenceRequest(params: InferenceRequestParams, callback: (value: string) => void): Promise<InferenceResult | null> {
+  return await endToEndFunctions.handleInferenceRequestEndToEnd(params, callback);
 }
 
 export async function checkSupernodeList(): Promise<{ validMasternodeListFullDF: SupernodeInfo[] }> {
@@ -190,9 +192,9 @@ export async function registerPastelID(pastelid: string, address: string): Promi
   return await rpc.createRegisterPastelIdTransaction(pastelid, address);
 }
 
-export async function getPastelTicket(txid: string, decodeProperties: boolean = true): Promise<unknown> {
+export async function getPastelTicket(txid: string): Promise<unknown> {
   const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.getPastelTicket(txid, decodeProperties);
+  return await rpc.getPastelTicket(txid);
 }
 
 export async function listContractTickets(ticketTypeIdentifier: string, startingBlockHeight: number = 0): Promise<unknown[]> {
@@ -540,14 +542,16 @@ export async function sendTrackingAmountFromControlAddressToBurnAddressToConfirm
   inferenceRequestId: string,
   creditUsageTrackingPSLAddress: string,
   creditUsageTrackingAmountInPSL: number,
-  burnAddress: string
+  burnAddress: string,
+  callback: (value: string) => void
 ): Promise<string> {
   const rpc = BrowserRPCReplacement.getInstance();
   return await rpc.sendTrackingAmountFromControlAddressToBurnAddressToConfirmInferenceRequest(
     inferenceRequestId,
     creditUsageTrackingPSLAddress,
     creditUsageTrackingAmountInPSL,
-    burnAddress
+    burnAddress,
+    callback
   );
 }
 

@@ -776,6 +776,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
           activedays: item.activedays,
         })
       }
+
       return {
         validMasternodeListFullDF: validMasternodeListFullDF.filter(
           (data) =>
@@ -1343,9 +1344,9 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
    * @param decodeProperties - Whether to decode the properties of the ticket.
    * @returns The ticket data.
    */
-  public async getPastelTicket(txid: string, decodeProperties: boolean = true): Promise<unknown> {
+  public async getPastelTicket(txid: string): Promise<unknown> {
     this.ensureInitialized();
-    return this.fetchJson<unknown>(`/tickets/get/${txid}?decode_properties=${decodeProperties}`);
+    return this.fetchJson<unknown>(`/get_ticket_by_txid/${txid}`);
   }
 
   /**
@@ -1492,11 +1493,11 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
    * @param amount - The amount of PSL to send.
    * @returns The transaction ID.
    */
-  public async sendToAddress(address: string, amount: number): Promise<string> {
+  public async sendToAddress(address: string, amount: number, creditUsageTrackingPSLAddress: string = ''): Promise<string> {
     this.ensureInitialized();
     const sendTo = [{ address, amount }];
     const fromAddress = await this.getMyPslAddressWithLargestBalance();
-    return this.createSendToTransaction(sendTo, fromAddress); // Assuming fee is 0
+    return this.createSendToTransaction(sendTo, creditUsageTrackingPSLAddress || fromAddress); // Assuming fee is 0
   }
 
   /**
@@ -1606,10 +1607,27 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     inferenceRequestId: string,
     creditUsageTrackingPSLAddress: string,
     creditUsageTrackingAmountInPSL: number,
-    burnAddress: string
+    burnAddress: string,
+    callback: (value: string) => void,
   ): Promise<string> {
     const sendTo = [{ address: burnAddress, amount: creditUsageTrackingAmountInPSL }];
-    return this.createSendToTransaction(sendTo, creditUsageTrackingPSLAddress); // Assuming fee is 0
+    callback(JSON.stringify({ message: `Sending ${creditUsageTrackingAmountInPSL} PSL to confirm an inference request.` }))
+    const txID = await this.createSendToTransaction(sendTo, creditUsageTrackingPSLAddress); // Assuming fee is 0
+    callback(JSON.stringify({ message: `Verifying the transaction id(${txID}) to confirm an inference request.` }))
+    await new Promise<void>((resolve) => {
+      const checkAcknowledgement = async () => {
+        const data = await this.getTxOutProof(txID);
+        if (data) {
+          setTimeout(() => {
+            resolve();
+          }, 5000);
+        } else {
+          setTimeout(checkAcknowledgement, 10000);
+        }
+      };
+      checkAcknowledgement();
+    });
+    return txID;
   }
 
   // ------------------------- 
@@ -1724,7 +1742,30 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     amountOfPSLToFundAddressWith: number
   ): Promise<{ newCreditTrackingAddress: string; txid: string }> {
     this.ensureInitialized();
-    const newAddress = await this.makeNewAddress();
+    const addresses = await this.getAllAddresses();
+    const localAddress = localStorage.getItem('MY_LOCAL_ADDRESSES');
+    if (!localAddress) {
+      localStorage.setItem('MY_LOCAL_ADDRESSES', JSON.stringify(addresses));
+    } else {
+      const parseAddress = JSON.parse(localAddress);
+      const combined: string[] = Array.from(new Set([...addresses, ...parseAddress]));
+      const newAddresses = [...combined]
+      localStorage.setItem('MY_LOCAL_ADDRESSES', JSON.stringify(newAddresses));
+    }
+    const generateNewAddress = async (): Promise<string> => {
+      const newAddress = await this.makeNewAddress();
+      const data = await this.fetchJson<string[]>(`/get_address_txids?addresses=${newAddress}`);
+      const localAddress = localStorage.getItem('MY_LOCAL_ADDRESSES');
+      let parseAddress = [];
+      if (localAddress) {
+        parseAddress = JSON.parse(localAddress);
+      }
+      if (parseAddress.indexOf(newAddress) === -1 && !data?.length) {
+        return newAddress;
+      }
+      return await generateNewAddress();
+    }
+    const newAddress = await generateNewAddress();
     const txid = await this.sendToAddress(
       newAddress,
       amountOfPSLToFundAddressWith

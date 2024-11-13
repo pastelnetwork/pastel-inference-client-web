@@ -97,13 +97,15 @@ interface WalletActions {
     numCredits: number,
     creditUsageTrackingPSLAddress: string,
     maxTotalPrice: number,
-    maxPerCreditPrice: number
+    maxPerCreditPrice: number,
+    callback: (value: string) => void
   ) => Promise<CreditPackCreationResult>;
   getCreditPackInfo: (txid: string) => Promise<CreditPackTicketInfo>;
   getMyValidCreditPacks: () => Promise<CreditPack[]>;
   getMyPslAddressWithLargestBalance: () => Promise<string>;
   createInferenceRequest: (
-    params: InferenceRequestParams
+    params: InferenceRequestParams,
+    callback: (value: string) => void
   ) => Promise<InferenceResult | null>;
   checkSupernodeList: () => Promise<{
     validMasternodeListFullDF: SupernodeInfo[];
@@ -652,6 +654,7 @@ const useStore = create<WalletState & WalletActions>()(
           get().setWalletBalance(
             utils.parseAndFormatNumber(balance.toString())
           );
+          get().setBalance(balance);
         } catch (error) {
           browserLogger.error("Error retrieving wallet info:", error);
           get().setWalletBalance("Failed to load balance");

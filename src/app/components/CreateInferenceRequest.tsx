@@ -74,6 +74,13 @@ export default function CreateInferenceRequest({ modelMenu }: CreateInferenceReq
     setModelParameters(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleLogger = (value: string) => {
+    const parseValue = JSON.parse(value);
+    if (parseValue.message) {
+      setStatus(parseValue.message);
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -126,7 +133,7 @@ export default function CreateInferenceRequest({ modelMenu }: CreateInferenceReq
         maximumInferenceCostInCredits: parseFloat(maxCost),
       };
   
-      const result = await api.createInferenceRequest(params);
+      const result = await api.createInferenceRequest(params, handleLogger);
   
       if (result) {
         setStatus('Inference request created successfully.');

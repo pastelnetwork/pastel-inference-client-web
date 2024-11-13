@@ -178,8 +178,9 @@ export async function handleCreditPackTicketEndToEnd(
   burnAddress: string,
   maximumTotalCreditPackPriceInPSL: number,
   maximumPerCreditPriceInPSL: number,
+  callback: (value: string) => void,
   optionalPastelID?: string,
-  optionalPassphrase?: string
+  optionalPassphrase?: string,
 ): Promise<CreditPackCreationResult> {
   let pastelID: string, passphrase: string;
 
@@ -192,6 +193,7 @@ export async function handleCreditPackTicketEndToEnd(
   }
 
   if (!pastelID || !passphrase) {
+    callback(JSON.stringify({ message: "PastelID or passphrase is not set" }))
     throw new Error("PastelID or passphrase is not set");
   }
 
@@ -230,11 +232,13 @@ export async function handleCreditPackTicketEndToEnd(
       validMasternodeListFullDF
     );
     if (closestSupernodes.length === 0) {
+      callback(JSON.stringify({ message: "No responsive supernodes found." }))
       throw new Error("No responsive supernodes found.");
     }
 
     for (const supernode of closestSupernodes) {
       try {
+        callback(JSON.stringify({ message: `Attempting credit pack request with supernode: ${supernode.url}` }))
         browserLogger.info(
           `Attempting credit pack request with supernode: ${supernode.url}`
         );
@@ -242,10 +246,12 @@ export async function handleCreditPackTicketEndToEnd(
         const preliminaryPriceQuote =
           await inferenceClient.creditPackTicketInitialPurchaseRequest(
             supernode.url,
-            creditPackRequest
+            creditPackRequest,
+            callback
           );
 
         if ("rejection_reason_string" in preliminaryPriceQuote) {
+          callback(JSON.stringify({ message: `Credit pack purchase request rejected: ${preliminaryPriceQuote.rejection_reason_string}` }))
           browserLogger.info(
             `Credit pack purchase request rejected: ${preliminaryPriceQuote.rejection_reason_string}`
           );
@@ -258,10 +264,12 @@ export async function handleCreditPackTicketEndToEnd(
             creditPackRequest,
             preliminaryPriceQuote,
             maximumTotalCreditPackPriceInPSL,
-            maximumPerCreditPriceInPSL
+            maximumPerCreditPriceInPSL,
+            callback
           );
 
         if ("termination_reason_string" in signedCreditPackTicketOrRejection) {
+          callback(JSON.stringify({ message: `Credit pack purchase request terminated: ${signedCreditPackTicketOrRejection.termination_reason_string}` }))
           browserLogger.info(
             `Credit pack purchase request terminated: ${signedCreditPackTicketOrRejection.termination_reason_string}`
           );
@@ -271,15 +279,29 @@ export async function handleCreditPackTicketEndToEnd(
         const signedCreditPackTicket =
           signedCreditPackTicketOrRejection as CreditPackPurchaseRequestResponse;
 
+        await new Promise<void>((resolve) => {
+          const checkAcknowledgement = async () => {
+            const utxos = await rpc.getAddressUtxos(creditUsageTrackingPSLAddress);
+            if (utxos?.length) {
+              resolve();
+            } else {
+              setTimeout(checkAcknowledgement, 5000);
+            }
+          };
+          checkAcknowledgement();
+        });
+
         const burnTransactionResponse = await rpc.sendToAddress(
           burnAddress,
           Math.round(
             signedCreditPackTicket.proposed_total_cost_of_credit_pack_in_psl *
               100000
           ) / 100000,
+          creditUsageTrackingPSLAddress,
         );
 
         if (!burnTransactionResponse) {
+          callback(JSON.stringify({ message: `Error sending PSL to burn address` }))
           throw new Error(`Error sending PSL to burn address`);
         }
 
@@ -301,10 +323,12 @@ export async function handleCreditPackTicketEndToEnd(
         const creditPackPurchaseRequestConfirmationResponse =
           await inferenceClient.confirmCreditPurchaseRequest(
             supernode.url,
-            creditPackPurchaseRequestConfirmation
+            creditPackPurchaseRequestConfirmation,
+            callback
           );
 
         if (!creditPackPurchaseRequestConfirmationResponse) {
+          callback(JSON.stringify({ message: "Credit pack ticket storage failed" }))
           throw new Error("Credit pack ticket storage failed");
         }
 
@@ -313,7 +337,8 @@ export async function handleCreditPackTicketEndToEnd(
             inferenceClient,
             supernode.url,
             creditPackRequest,
-            closestSupernodes
+            closestSupernodes,
+            callback
           );
 
         if (creditPackPurchaseRequestStatus.status !== "completed") {
@@ -323,22 +348,32 @@ export async function handleCreditPackTicketEndToEnd(
               creditPackRequest,
               signedCreditPackTicket,
               validMasternodeListFullDF,
-              pastelID
+              pastelID,
+              callback
             );
 
           return {
             creditPackRequest,
-            creditPackPurchaseRequestConfirmation,
+            creditPackPurchaseRequestConfirmation: {
+              ...creditPackPurchaseRequestConfirmation,
+              pastel_api_credit_pack_ticket_registration_txid: creditPackPurchaseRequestConfirmationResponse.pastel_api_credit_pack_ticket_registration_txid
+            },
             creditPackStorageRetryRequestResponse,
           };
         } else {
           return {
             creditPackRequest,
-            creditPackPurchaseRequestConfirmation,
+            creditPackPurchaseRequestConfirmation: {
+              ...creditPackPurchaseRequestConfirmation,
+              pastel_api_credit_pack_ticket_registration_txid: creditPackPurchaseRequestConfirmationResponse.pastel_api_credit_pack_ticket_registration_txid
+            },
             creditPackPurchaseRequestConfirmationResponse,
           };
         }
       } catch (error) {
+        callback(JSON.stringify({ message: `Failed to create credit pack with supernode ${supernode.url}: ${
+          (error as Error).message
+        }` }))
         browserLogger.warn(
           `Failed to create credit pack with supernode ${supernode.url}: ${
             (error as Error).message
@@ -346,7 +381,7 @@ export async function handleCreditPackTicketEndToEnd(
         );
       }
     }
-
+    callback(JSON.stringify({ message: "Failed to create credit pack ticket with all available supernodes" }))
     throw new Error(
       "Failed to create credit pack ticket with all available supernodes"
     );
@@ -354,6 +389,7 @@ export async function handleCreditPackTicketEndToEnd(
     browserLogger.error(
       `Error in handleCreditPackTicketEndToEnd: ${(error as Error).message}`
     );
+    callback(JSON.stringify({ message: "An unexpected error occurred while processing your credit pack purchase. Please try again later." }))
     throw new Error(
       "An unexpected error occurred while processing your credit pack purchase. Please try again later."
     );
@@ -383,6 +419,7 @@ async function buildCreditPackPurchaseRequestConfirmation(
     sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields: "",
     requesting_end_user_pastelid_signature_on_sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields:
       "",
+    id: uuidv4(),
   };
 
   confirmation.sha3_256_hash_of_credit_pack_purchase_request_confirmation_fields =
@@ -409,13 +446,18 @@ async function checkCreditPackPurchaseRequestStatus(
   inferenceClient: PastelInferenceClient,
   highestRankedSupernodeURL: string,
   creditPackRequest: CreditPackPurchaseRequest,
-  closestSupernodes: SupernodeURL[]
+  closestSupernodes: SupernodeURL[],
+  callback: (value: string) => void
 ): Promise<schemas.CreditPackPurchaseRequestStatus> {
   try {
     const status = await inferenceClient.checkStatusOfCreditPurchaseRequest(
       highestRankedSupernodeURL,
-      creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields
+      creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields,
+      callback
     );
+    callback(JSON.stringify({ message: `Credit pack purchase request status from the original supernode: ${JSON.stringify(
+      status
+    )}` }))
     browserLogger.info(
       `Credit pack purchase request status from the original supernode: ${JSON.stringify(
         status
@@ -423,6 +465,9 @@ async function checkCreditPackPurchaseRequestStatus(
     );
     return status;
   } catch (error) {
+    callback(JSON.stringify({ message: `Error checking status with original supernode: ${
+      (error as Error).message
+    }. Trying other supernodes.` }))
     browserLogger.debug(
       `Error checking status with original supernode: ${
         (error as Error).message
@@ -432,13 +477,18 @@ async function checkCreditPackPurchaseRequestStatus(
       try {
         const status = await inferenceClient.checkStatusOfCreditPurchaseRequest(
           supernode.url,
-          creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields
+          creditPackRequest.sha3_256_hash_of_credit_pack_purchase_request_fields,
+          callback
         );
+        callback(JSON.stringify({ message: `Credit pack purchase request status: ${JSON.stringify(status)}` }))
         browserLogger.info(
           `Credit pack purchase request status: ${JSON.stringify(status)}`
         );
         return status;
       } catch (retryError) {
+        callback(JSON.stringify({ message: `Error checking status with supernode ${supernode.url}: ${
+          (retryError as Error).message
+        }` }))
         browserLogger.debug(
           `Error checking status with supernode ${supernode.url}: ${
             (retryError as Error).message
@@ -446,6 +496,7 @@ async function checkCreditPackPurchaseRequestStatus(
         );
       }
     }
+    callback(JSON.stringify({ message: "Failed to check status of credit purchase request with all Supernodes" }))
     throw new Error(
       "Failed to check status of credit purchase request with all Supernodes"
     );
@@ -458,6 +509,7 @@ async function initiateStorageRetry(
   signedCreditPackTicket: CreditPackPurchaseRequestResponse,
   validMasternodeListFullDF: SupernodeInfo[],
   pastelID: string,
+  callback: (value: string) => void
 ): Promise<CreditPackStorageRetryRequestResponse> {
   const closestAgreeingSupernodePastelID =
     await utils.getClosestSupernodePastelIDFromList(
@@ -468,6 +520,7 @@ async function initiateStorageRetry(
     );
 
   if (closestAgreeingSupernodePastelID === null) {
+    callback(JSON.stringify({ message: "No agreeing Supernode found for credit pack storage retry" }))
     throw new Error("No agreeing Supernode found for credit pack storage retry");
   }
 
@@ -492,7 +545,8 @@ async function initiateStorageRetry(
   const creditPackStorageRetryRequestResponse =
     await inferenceClient.creditPackStorageRetryRequest(
       closestAgreeingSupernodeURL,
-      creditPackStorageRetryRequest
+      creditPackStorageRetryRequest,
+      callback
     );
 
   const { success, error } =
@@ -775,17 +829,62 @@ export async function estimateCreditPackCostEndToEnd(
   }
 }
 
+type T = {
+  [key: string]: string | number | boolean | bigint;
+}
+
+function safeStringify(obj: unknown, space = 2) {
+  const seen = new WeakSet();
+
+  const replacer = (key: string, value: T) => {
+    if (typeof value === "object" && value !== null) {
+      if (seen.has(value)) {
+        return "[Circular]";
+      }
+      seen.add(value);
+      if (value.isJoi) {
+        return `Joi Schema for ${value.type}`;
+      }
+      if (value instanceof Map) {
+        return Array.from(value.entries());
+      }
+      if (value instanceof Set) {
+        return Array.from(value);
+      }
+      if (value instanceof Date) {
+        return value.toISOString();
+      }
+      if (value.constructor === Object) {
+        const sortedObj: T = {};
+        Object.keys(value)
+          .sort()
+          .forEach((key) => {
+            sortedObj[key] = value[key];
+          });
+        return sortedObj;
+      }
+    } else if (typeof value === "bigint") {
+      return `${value}`;
+    }
+    return value;
+  };
+
+  return JSON.stringify(obj, replacer, space);
+}
+
 export async function handleInferenceRequestEndToEnd(
-  params: InferenceRequestParams
+  params: InferenceRequestParams,
+  callback: (value: string) => void
 ): Promise<InferenceResult | null> {
   try {
     const pastelID = pastelGlobals.getPastelId();
     const passphrase = pastelGlobals.getPassphrase();
     if (!pastelID || !passphrase) {
+      callback(JSON.stringify({ message: "PastelID or passphrase is not set" }))
       throw new Error("PastelID or passphrase is not set");
     }
     const inferenceClient = new PastelInferenceClient({ pastelID, passphrase });
-    const modelParametersJSON = utils.safeStringify(params.modelParameters);
+    const modelParametersJSON = safeStringify(params.modelParameters);
 
     const supernodeURLs =
       await inferenceClient.getClosestSupernodeURLsThatSupportsDesiredModel(
@@ -796,6 +895,7 @@ export async function handleInferenceRequestEndToEnd(
       );
 
     if (!supernodeURLs || supernodeURLs.length === 0) {
+      callback(JSON.stringify({ message: `No supporting supernode found with adequate performance for the desired model: ${params.requestedModelCanonicalString} with inference type: ${params.modelInferenceTypeString}` }))
       console.error(
         `No supporting supernode found with adequate performance for the desired model: ${params.requestedModelCanonicalString} with inference type: ${params.modelInferenceTypeString}`
       );
@@ -806,19 +906,18 @@ export async function handleInferenceRequestEndToEnd(
 
     for (let i = 0; i < maxTries; i++) {
       const supernodeURL = supernodeURLs[i];
+      callback(JSON.stringify({ message: `Attempting inference request to Supernode URL: ${supernodeURL}` }))
       console.log(
         `Attempting inference request to Supernode URL: ${supernodeURL}`
       );
 
       try {
-        const modelInputDataJSONBase64Encoded = btoa(
-          JSON.stringify(params.modelInputData)
-        );
+        const modelInputDataJSONBase64Encoded = btoa(JSON.stringify(params.modelInputData));
         const modelParametersJSONBase64Encoded = btoa(modelParametersJSON);
-        const currentBlockHeight = await rpc.getCurrentPastelBlockHeight();
 
+        const currentBlockHeight = await rpc.getCurrentPastelBlockHeight();
         const inferenceRequestData: InferenceAPIUsageRequest = {
-          inference_request_id: utils.generateUUID(),
+          inference_request_id: uuidv4(),
           requesting_pastelid: pastelID,
           credit_pack_ticket_pastel_txid: params.creditPackTicketPastelTxid,
           requested_model_canonical_string: params.requestedModelCanonicalString,
@@ -847,12 +946,16 @@ export async function handleInferenceRequestEndToEnd(
         const usageRequestResponse =
           await inferenceClient.makeInferenceAPIUsageRequest(
             supernodeURL,
-            inferenceRequestData
+            inferenceRequestData,
+            callback
           );
 
         const validationErrors =
           await utils.validateCreditPackTicketMessageData(usageRequestResponse);
         if (validationErrors && validationErrors.length > 0) {
+          callback(JSON.stringify({ message: `Invalid inference request response from Supernode URL ${supernodeURL}: ${validationErrors.join(
+            ", "
+          )}` }))
           throw new Error(
             `Invalid inference request response from Supernode URL ${supernodeURL}: ${validationErrors.join(
               ", "
@@ -879,6 +982,9 @@ export async function handleInferenceRequestEndToEnd(
         );
 
         if (trackingAddressBalance < creditUsageTrackingAmountInPSL) {
+          callback(JSON.stringify({ message: `Insufficient balance in tracking address: ${creditUsageTrackingPSLAddress}; amount needed: ${creditUsageTrackingAmountInPSL}; current balance: ${trackingAddressBalance}; shortfall: ${
+            creditUsageTrackingAmountInPSL - trackingAddressBalance
+          }` }))
           console.error(
             `Insufficient balance in tracking address: ${creditUsageTrackingPSLAddress}; amount needed: ${creditUsageTrackingAmountInPSL}; current balance: ${trackingAddressBalance}; shortfall: ${
               creditUsageTrackingAmountInPSL - trackingAddressBalance
@@ -894,7 +1000,8 @@ export async function handleInferenceRequestEndToEnd(
               inferenceRequestID,
               creditUsageTrackingPSLAddress,
               creditUsageTrackingAmountInPSL,
-              burnAddress
+              burnAddress,
+              callback
             );
 
           const txidLooksValid = /^[0-9a-fA-F]{64}$/.test(
@@ -911,9 +1018,12 @@ export async function handleInferenceRequestEndToEnd(
             const confirmationResult =
               await inferenceClient.sendInferenceConfirmation(
                 supernodeURL,
-                confirmationData
+                confirmationData,
+                callback
               );
-
+            callback(JSON.stringify({ message: `Sent inference confirmation: ${utils.prettyJSON(
+                confirmationResult
+              )}` }))
             console.log(
               `Sent inference confirmation: ${utils.prettyJSON(
                 confirmationResult
@@ -926,6 +1036,11 @@ export async function handleInferenceRequestEndToEnd(
 
             for (let cnt = 0; cnt < maxTriesToGetConfirmation; cnt++) {
               waitTimeInSeconds = waitTimeInSeconds * 1.04 ** cnt;
+              callback(JSON.stringify({ message: `Waiting for the inference results for ${Math.round(
+                waitTimeInSeconds
+              )} seconds... (Attempt ${
+                cnt + 1
+              }/${maxTriesToGetConfirmation}); Checking with Supernode URL: ${supernodeURL}` }))
               console.log(
                 `Waiting for the inference results for ${Math.round(
                   waitTimeInSeconds
@@ -948,7 +1063,8 @@ export async function handleInferenceRequestEndToEnd(
               const resultsAvailable =
                 await inferenceClient.checkStatusOfInferenceRequestResults(
                   supernodeURL,
-                  inferenceResponseID
+                  inferenceResponseID,
+                  callback
                 );
 
               if (resultsAvailable) {
@@ -956,7 +1072,8 @@ export async function handleInferenceRequestEndToEnd(
                   await inferenceClient.retrieveInferenceOutputResults(
                     supernodeURL,
                     inferenceRequestID,
-                    inferenceResponseID
+                    inferenceResponseID,
+                    callback
                   );
 
                 const inferenceResult: InferenceResult = {
@@ -996,11 +1113,12 @@ export async function handleInferenceRequestEndToEnd(
                   console.log(
                     "Waiting 3 seconds for audit results to be available..."
                   );
+                  callback(JSON.stringify({ message: "Waiting 3 seconds for audit results to be available..." }))
                   await new Promise((resolve) => setTimeout(resolve, 3000));
 
                   const auditResults =
                     await inferenceClient.auditInferenceRequestResponseID(
-                      inferenceResponseID
+                      inferenceResponseID,
                     );
                   const validationResults = utils.validateInferenceData(
                     inferenceResult,
@@ -1009,17 +1127,21 @@ export async function handleInferenceRequestEndToEnd(
                   console.log(
                     `Validation results: ${utils.prettyJSON(validationResults)}`
                   );
+                  callback(JSON.stringify({ message: `Validation results: ${utils.prettyJSON(validationResults)}` }))
                   if (!auditResults) {
                     console.warn("Audit results are null");
+                    callback(JSON.stringify({ message: "Audit results are null" }))
                   }
                   if (!validationResults) {
                     console.warn("Validation results are null");
+                    callback(JSON.stringify({ message: "Validation results are null" }))
                   }
                 }
 
                 return inferenceResult;
               } else {
                 console.log("Inference results not available yet; retrying...");
+                callback(JSON.stringify({ message: "Inference results not available yet; retrying..." }))
               }
             }
           }
@@ -1027,22 +1149,26 @@ export async function handleInferenceRequestEndToEnd(
           console.log(
             `Quoted price of ${proposedCostInCredits} credits exceeds the maximum allowed cost of ${params.maximumInferenceCostInCredits} credits. Inference request not confirmed.`
           );
+          callback(JSON.stringify({ message: `Quoted price of ${proposedCostInCredits} credits exceeds the maximum allowed cost of ${params.maximumInferenceCostInCredits} credits. Inference request not confirmed.` }))
         }
       } catch (err) {
         console.warn(
           `Failed inference request to Supernode URL ${supernodeURL}. Moving on to the next one. Error: ${(err as Error).message}`
         );
+        callback(JSON.stringify({ message: `Failed inference request to Supernode URL ${supernodeURL}. Moving on to the next one. Error: ${(err as Error).message}`}))
       }
     }
 
     console.error(
       `Failed to make inference request after ${maxTries} tries.`
     );
+    callback(JSON.stringify({ message: `Failed to make inference request after ${maxTries} tries.` }))
     return null;
   } catch (error) {
     console.error(
       `Error in handleInferenceRequestEndToEnd: ${(error as Error).message}`
     );
+    callback(JSON.stringify({ message: `Error in handleInferenceRequestEndToEnd: ${(error as Error).message}` }))
     throw error;
   }
 }

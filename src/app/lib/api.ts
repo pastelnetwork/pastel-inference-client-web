@@ -192,9 +192,9 @@ export async function registerPastelID(pastelid: string, address: string): Promi
   return await rpc.createRegisterPastelIdTransaction(pastelid, address);
 }
 
-export async function getPastelTicket(txid: string, decodeProperties: boolean = true): Promise<unknown> {
+export async function getPastelTicket(txid: string): Promise<unknown> {
   const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.getPastelTicket(txid, decodeProperties);
+  return await rpc.getPastelTicket(txid);
 }
 
 export async function listContractTickets(ticketTypeIdentifier: string, startingBlockHeight: number = 0): Promise<unknown[]> {

@@ -1344,9 +1344,9 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
    * @param decodeProperties - Whether to decode the properties of the ticket.
    * @returns The ticket data.
    */
-  public async getPastelTicket(txid: string, decodeProperties: boolean = true): Promise<unknown> {
+  public async getPastelTicket(txid: string): Promise<unknown> {
     this.ensureInitialized();
-    return this.fetchJson<unknown>(`/tickets/get/${txid}?decode_properties=${decodeProperties}`);
+    return this.fetchJson<unknown>(`/get_ticket_by_txid/${txid}`);
   }
 
   /**

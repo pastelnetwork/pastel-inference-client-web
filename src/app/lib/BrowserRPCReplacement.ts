@@ -633,7 +633,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     if (response) {
       const parseData = JSON.parse(JSON.parse(response).data)
       const { data } = await axios.post(`${this.apiBaseUrl}/sendrawtransaction?hex_string=${parseData.hex}&allow_high_fees=false`);
-      return data;
+      return data.txid;
     }
     return "";
   }
@@ -1616,13 +1616,13 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     callback(JSON.stringify({ message: `Verifying the transaction id(${txID}) to confirm an inference request.` }))
     await new Promise<void>((resolve) => {
       const checkAcknowledgement = async () => {
-        const data = await this.getTxOutProof(txID);
-        if (data) {
+        const { data } = await axios.get(`${this.apiBaseUrl}/gettransactionconfirmations/${txID}`);
+        if (data?.confirmed) {
           setTimeout(() => {
             resolve();
-          }, 5000);
+          }, 1000);
         } else {
-          setTimeout(checkAcknowledgement, 10000);
+          setTimeout(checkAcknowledgement, 15000);
         }
       };
       checkAcknowledgement();

@@ -371,9 +371,6 @@ export async function handleCreditPackTicketEndToEnd(
           };
         }
       } catch (error) {
-        callback(JSON.stringify({ message: `Failed to create credit pack with supernode ${supernode.url}: ${
-          (error as Error).message
-        }` }))
         browserLogger.warn(
           `Failed to create credit pack with supernode ${supernode.url}: ${
             (error as Error).message
@@ -381,7 +378,6 @@ export async function handleCreditPackTicketEndToEnd(
         );
       }
     }
-    callback(JSON.stringify({ message: "Failed to create credit pack ticket with all available supernodes" }))
     throw new Error(
       "Failed to create credit pack ticket with all available supernodes"
     );
@@ -389,7 +385,6 @@ export async function handleCreditPackTicketEndToEnd(
     browserLogger.error(
       `Error in handleCreditPackTicketEndToEnd: ${(error as Error).message}`
     );
-    callback(JSON.stringify({ message: "An unexpected error occurred while processing your credit pack purchase. Please try again later." }))
     throw new Error(
       "An unexpected error occurred while processing your credit pack purchase. Please try again later."
     );
@@ -874,9 +869,13 @@ function safeStringify(obj: unknown, space = 2) {
 
 export async function handleInferenceRequestEndToEnd(
   params: InferenceRequestParams,
-  callback: (value: string) => void
+  callback: (value: string) => void,
+  times: number = 0
 ): Promise<InferenceResult | null> {
   try {
+    if (times > 5) {
+      return null;
+    }
     const pastelID = pastelGlobals.getPastelId();
     const passphrase = pastelGlobals.getPassphrase();
     if (!pastelID || !passphrase) {
@@ -995,20 +994,33 @@ export async function handleInferenceRequestEndToEnd(
 
         if (proposedCostInCredits <= params.maximumInferenceCostInCredits) {
           const burnAddress = await rpc.getBurnAddress();
-          const trackingTransactionTxid =
-            await rpc.sendTrackingAmountFromControlAddressToBurnAddressToConfirmInferenceRequest(
+          let trackingTransactionTxid = '';
+          const inferenceLocal = localStorage.getItem('MY_LOCAL_INFERENCE_REQUEST_INFO');
+          if (inferenceLocal) {
+            const parseInferenceLocal = JSON.parse(inferenceLocal);
+            if (JSON.stringify(params) === JSON.stringify(parseInferenceLocal.params)) {
+              trackingTransactionTxid = parseInferenceLocal.txid;
+            }
+          }
+          if (!trackingTransactionTxid) {
+            trackingTransactionTxid = await rpc.sendTrackingAmountFromControlAddressToBurnAddressToConfirmInferenceRequest(
               inferenceRequestID,
               creditUsageTrackingPSLAddress,
               creditUsageTrackingAmountInPSL,
               burnAddress,
               callback
             );
+          }
 
           const txidLooksValid = /^[0-9a-fA-F]{64}$/.test(
             trackingTransactionTxid
           );
 
           if (txidLooksValid) {
+            localStorage.setItem('MY_LOCAL_INFERENCE_REQUEST_INFO', JSON.stringify({
+              txid: trackingTransactionTxid,
+              params
+            }))
             const confirmationData: InferenceConfirmation = {
               inference_request_id: inferenceRequestID,
               requesting_pastelid: pastelID,
@@ -1021,6 +1033,10 @@ export async function handleInferenceRequestEndToEnd(
                 confirmationData,
                 callback
               );
+            if (!confirmationResult) {
+              handleInferenceRequestEndToEnd(params, callback, times + 1);
+              return null;
+            }
             callback(JSON.stringify({ message: `Sent inference confirmation: ${utils.prettyJSON(
                 confirmationResult
               )}` }))
@@ -1029,7 +1045,7 @@ export async function handleInferenceRequestEndToEnd(
                 confirmationResult
               )}`
             );
-
+            localStorage.removeItem('MY_LOCAL_INFERENCE_REQUEST_INFO')
             const maxTriesToGetConfirmation = 60;
             const initialWaitTimeInSeconds = 3;
             let waitTimeInSeconds = initialWaitTimeInSeconds;

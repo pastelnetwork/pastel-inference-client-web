@@ -194,6 +194,7 @@ export default function CreateCreditPackTicket() {
       }
     };
 
+    setStatus('Checking credit pack status...')
     checkStatus();
   };
 

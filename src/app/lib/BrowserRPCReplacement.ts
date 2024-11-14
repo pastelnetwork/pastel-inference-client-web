@@ -1614,20 +1614,23 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     callback(JSON.stringify({ message: `Sending ${creditUsageTrackingAmountInPSL} PSL to confirm an inference request.` }))
     const txID = await this.createSendToTransaction(sendTo, creditUsageTrackingPSLAddress); // Assuming fee is 0
     callback(JSON.stringify({ message: `Verifying the transaction id(${txID}) to confirm an inference request.` }))
-    await new Promise<void>((resolve) => {
-      const checkAcknowledgement = async () => {
-        const { data } = await axios.get(`${this.apiBaseUrl}/gettransactionconfirmations/${txID}`);
-        if (data?.confirmed) {
-          setTimeout(() => {
-            resolve();
-          }, 1000);
-        } else {
-          setTimeout(checkAcknowledgement, 15000);
-        }
-      };
-      checkAcknowledgement();
-    });
-    return txID;
+    if (txID) {
+      await new Promise<void>((resolve) => {
+        const checkAcknowledgement = async () => {
+          const { data } = await axios.get(`${this.apiBaseUrl}/gettransactionconfirmations/${txID}`);
+          if (data?.confirmed) {
+            setTimeout(() => {
+              resolve();
+            }, 1000);
+          } else {
+            setTimeout(checkAcknowledgement, 15000);
+          }
+        };
+        checkAcknowledgement();
+      });
+      return txID;
+    }
+    return '';
   }
 
   // ------------------------- 

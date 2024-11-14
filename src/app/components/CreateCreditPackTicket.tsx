@@ -160,7 +160,12 @@ export default function CreateCreditPackTicket() {
 
     const checkStatus = async () => {
       try {
-        const isConfirmed = await api.isCreditPackConfirmed(txid);
+        let isConfirmed = false;
+        try {
+          isConfirmed = await api.isCreditPackConfirmed(txid);
+        } catch (error) {
+          console.error("Error checking credit pack status:", error);
+        }
 
         if (isConfirmed) {
           setStatus(

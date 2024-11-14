@@ -1609,12 +1609,14 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     creditUsageTrackingAmountInPSL: number,
     burnAddress: string,
     callback: (value: string) => void,
+    onSaveLocalStorage: (value: string) => void,
   ): Promise<string> {
     const sendTo = [{ address: burnAddress, amount: creditUsageTrackingAmountInPSL }];
     callback(JSON.stringify({ message: `Sending ${creditUsageTrackingAmountInPSL} PSL to confirm an inference request.` }))
     const txID = await this.createSendToTransaction(sendTo, creditUsageTrackingPSLAddress); // Assuming fee is 0
     callback(JSON.stringify({ message: `Verifying the transaction id(${txID}) to confirm an inference request.` }))
     if (txID) {
+      onSaveLocalStorage(txID);
       await new Promise<void>((resolve) => {
         const checkAcknowledgement = async () => {
           const { data } = await axios.get(`${this.apiBaseUrl}/gettransactionconfirmations/${txID}`);
@@ -1636,6 +1638,13 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
   // ------------------------- 
   // Misc Other Methods
   // -------------------------
+
+  async getTransactionConfirmations(
+    txid: string,
+  ): Promise<boolean> {
+    const { data } = await axios.get(`${this.apiBaseUrl}/gettransactionconfirmations/${txid}`);
+    return data?.confirmed || false
+  }
 
   async getTransactionDetails(
     txid: string,

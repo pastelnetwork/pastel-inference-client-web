@@ -870,10 +870,11 @@ function safeStringify(obj: unknown, space = 2) {
 export async function handleInferenceRequestEndToEnd(
   params: InferenceRequestParams,
   callback: (value: string) => void,
-  times: number = 0
+  times: number = 0,
+  currentSupernodeURL: string = '',
 ): Promise<InferenceResult | null> {
   try {
-    if (times > 5) {
+    if (times > 11) {
       return null;
     }
     const pastelID = pastelGlobals.getPastelId();
@@ -902,9 +903,15 @@ export async function handleInferenceRequestEndToEnd(
     }
 
     const maxTries = Math.min(5, supernodeURLs.length);
-
+    const getCurrentSupernodeURL = () => {
+      const inferenceLocal = localStorage.getItem('MY_LOCAL_INFERENCE_REQUEST_INFO');
+      if (inferenceLocal) {
+        return JSON.parse(inferenceLocal)?.supernodeURL || ''
+      }
+      return currentSupernodeURL || ''
+    }
     for (let i = 0; i < maxTries; i++) {
-      const supernodeURL = supernodeURLs[i];
+      const supernodeURL = getCurrentSupernodeURL() || supernodeURLs[i];
       callback(JSON.stringify({ message: `Attempting inference request to Supernode URL: ${supernodeURL}` }))
       console.log(
         `Attempting inference request to Supernode URL: ${supernodeURL}`
@@ -999,16 +1006,39 @@ export async function handleInferenceRequestEndToEnd(
           if (inferenceLocal) {
             const parseInferenceLocal = JSON.parse(inferenceLocal);
             if (JSON.stringify(params) === JSON.stringify(parseInferenceLocal.params)) {
+              await new Promise<void>((resolve) => {
+                callback(JSON.stringify({ message: `Verifying the transaction id(${parseInferenceLocal.txid}) to confirm an inference request.` }))
+                const checkAcknowledgement = async () => {
+                  const confirmed = await rpc.getTransactionConfirmations(parseInferenceLocal.txid);
+                  if (confirmed) {
+                    setTimeout(() => {
+                      resolve();
+                    }, 1000);
+                  } else {
+                    setTimeout(checkAcknowledgement, 15000);
+                  }
+                };
+                checkAcknowledgement();
+              });
+
               trackingTransactionTxid = parseInferenceLocal.txid;
             }
           }
           if (!trackingTransactionTxid) {
+            const onSaveLocalStorage = (txid: string) => {
+              localStorage.setItem('MY_LOCAL_INFERENCE_REQUEST_INFO', JSON.stringify({
+                txid,
+                params,
+                supernodeURL,
+              }))
+            }
             trackingTransactionTxid = await rpc.sendTrackingAmountFromControlAddressToBurnAddressToConfirmInferenceRequest(
               inferenceRequestID,
               creditUsageTrackingPSLAddress,
               creditUsageTrackingAmountInPSL,
               burnAddress,
-              callback
+              callback,
+              onSaveLocalStorage
             );
           }
 
@@ -1017,10 +1047,6 @@ export async function handleInferenceRequestEndToEnd(
           );
 
           if (txidLooksValid) {
-            localStorage.setItem('MY_LOCAL_INFERENCE_REQUEST_INFO', JSON.stringify({
-              txid: trackingTransactionTxid,
-              params
-            }))
             const confirmationData: InferenceConfirmation = {
               inference_request_id: inferenceRequestID,
               requesting_pastelid: pastelID,
@@ -1034,7 +1060,7 @@ export async function handleInferenceRequestEndToEnd(
                 callback
               );
             if (!confirmationResult) {
-              handleInferenceRequestEndToEnd(params, callback, times + 1);
+              handleInferenceRequestEndToEnd(params, callback, times + 1, supernodeURL);
               return null;
             }
             callback(JSON.stringify({ message: `Sent inference confirmation: ${utils.prettyJSON(

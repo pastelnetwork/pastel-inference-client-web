@@ -1331,7 +1331,6 @@ class PastelInferenceClient {
             challenge_id,
             challenge_signature,
           }),
-          signal: AbortSignal.timeout(30000)
         }
       );
       if (!response.ok)

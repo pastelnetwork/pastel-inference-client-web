@@ -1026,6 +1026,8 @@ export async function handleInferenceRequestEndToEnd(
               });
 
               trackingTransactionTxid = parseInferenceLocal.txid;
+            } else {
+              localStorage.removeItem('MY_LOCAL_INFERENCE_REQUEST_INFO')
             }
           }
           if (!trackingTransactionTxid) {
@@ -1075,7 +1077,6 @@ export async function handleInferenceRequestEndToEnd(
                 confirmationResult
               )}`
             );
-            localStorage.removeItem('MY_LOCAL_INFERENCE_REQUEST_INFO')
             const maxTriesToGetConfirmation = 60;
             const initialWaitTimeInSeconds = 3;
             let waitTimeInSeconds = initialWaitTimeInSeconds;
@@ -1183,7 +1184,7 @@ export async function handleInferenceRequestEndToEnd(
                     callback(JSON.stringify({ message: "Validation results are null" }))
                   }
                 }
-
+                localStorage.removeItem('MY_LOCAL_INFERENCE_REQUEST_INFO')
                 return inferenceResult;
               } else {
                 console.log("Inference results not available yet; retrying...");

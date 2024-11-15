@@ -978,11 +978,15 @@ export async function handleInferenceRequestEndToEnd(
           return api.getMyPslAddressWithLargestBalance();
         }
         const creditUsageTrackingPSLAddress = await getAddress();
-        const creditUsageTrackingAmountInPSL =
+        let creditUsageTrackingAmountInPSL =
           parseFloat(
             usageRequestResponse.request_confirmation_message_amount_in_patoshis.toString()
           ) / 100000;
-        
+
+        // WASM can't send if the PSL < 1
+        if (creditUsageTrackingAmountInPSL < 1) {
+          creditUsageTrackingAmountInPSL = 1;
+        }
         const trackingAddressBalance = await rpc.checkPSLAddressBalance(
           creditUsageTrackingPSLAddress
         );

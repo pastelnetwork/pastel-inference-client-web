@@ -1010,21 +1010,6 @@ export async function handleInferenceRequestEndToEnd(
           if (inferenceLocal) {
             const parseInferenceLocal = JSON.parse(inferenceLocal);
             if (JSON.stringify(params) === JSON.stringify(parseInferenceLocal.params)) {
-              await new Promise<void>((resolve) => {
-                callback(JSON.stringify({ message: `Verifying the transaction id(${parseInferenceLocal.txid}) to confirm an inference request.` }))
-                const checkAcknowledgement = async () => {
-                  const confirmed = await rpc.getTransactionConfirmations(parseInferenceLocal.txid);
-                  if (confirmed) {
-                    setTimeout(() => {
-                      resolve();
-                    }, 1000);
-                  } else {
-                    setTimeout(checkAcknowledgement, 15000);
-                  }
-                };
-                checkAcknowledgement();
-              });
-
               trackingTransactionTxid = parseInferenceLocal.txid;
             } else {
               localStorage.removeItem('MY_LOCAL_INFERENCE_REQUEST_INFO')

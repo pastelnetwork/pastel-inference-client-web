@@ -1617,19 +1617,6 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     callback(JSON.stringify({ message: `Verifying the transaction id(${txID}) to confirm an inference request.` }))
     if (txID) {
       onSaveLocalStorage(txID);
-      await new Promise<void>((resolve) => {
-        const checkAcknowledgement = async () => {
-          const { data } = await axios.get(`${this.apiBaseUrl}/gettransactionconfirmations/${txID}`);
-          if (data?.confirmed) {
-            setTimeout(() => {
-              resolve();
-            }, 1000);
-          } else {
-            setTimeout(checkAcknowledgement, 15000);
-          }
-        };
-        checkAcknowledgement();
-      });
       return txID;
     }
     return '';

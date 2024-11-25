@@ -32,6 +32,9 @@ export default function SelectCreditPackTicket() {
 
   useEffect(() => {
     getMyValidCreditPacks();
+    window.addEventListener('refreshCreditPackTickets', () => {
+      getMyValidCreditPacks();
+    });
   }, [getMyValidCreditPacks]);
 
   const handleTicketSelection = (txid: string) => {

@@ -4,7 +4,6 @@
 
 import { v4 as uuidv4 } from 'uuid';
 
-import api from "@/app/lib/api";
 import BrowserRPCReplacement from "@/app/lib/BrowserRPCReplacement";
 import { BrowserDatabase } from "@/app/lib/BrowserDatabase";
 import PastelInferenceClient from "@/app/lib/PastelInferenceClient";
@@ -371,9 +370,6 @@ export async function handleCreditPackTicketEndToEnd(
           };
         }
       } catch (error) {
-        callback(JSON.stringify({ message: `Failed to create credit pack with supernode ${supernode.url}: ${
-          (error as Error).message
-        }` }))
         browserLogger.warn(
           `Failed to create credit pack with supernode ${supernode.url}: ${
             (error as Error).message
@@ -381,7 +377,6 @@ export async function handleCreditPackTicketEndToEnd(
         );
       }
     }
-    callback(JSON.stringify({ message: "Failed to create credit pack ticket with all available supernodes" }))
     throw new Error(
       "Failed to create credit pack ticket with all available supernodes"
     );
@@ -389,7 +384,6 @@ export async function handleCreditPackTicketEndToEnd(
     browserLogger.error(
       `Error in handleCreditPackTicketEndToEnd: ${(error as Error).message}`
     );
-    callback(JSON.stringify({ message: "An unexpected error occurred while processing your credit pack purchase. Please try again later." }))
     throw new Error(
       "An unexpected error occurred while processing your credit pack purchase. Please try again later."
     );
@@ -874,9 +868,14 @@ function safeStringify(obj: unknown, space = 2) {
 
 export async function handleInferenceRequestEndToEnd(
   params: InferenceRequestParams,
-  callback: (value: string) => void
+  callback: (value: string) => void,
+  times: number = 0,
+  currentSupernodeURL: string = '',
 ): Promise<InferenceResult | null> {
   try {
+    if (times > 11) {
+      return null;
+    }
     const pastelID = pastelGlobals.getPastelId();
     const passphrase = pastelGlobals.getPassphrase();
     if (!pastelID || !passphrase) {
@@ -903,9 +902,15 @@ export async function handleInferenceRequestEndToEnd(
     }
 
     const maxTries = Math.min(5, supernodeURLs.length);
-
+    const getCurrentSupernodeURL = () => {
+      const inferenceLocal = localStorage.getItem('MY_LOCAL_INFERENCE_REQUEST_INFO');
+      if (inferenceLocal) {
+        return JSON.parse(inferenceLocal)?.supernodeURL || ''
+      }
+      return currentSupernodeURL || ''
+    }
     for (let i = 0; i < maxTries; i++) {
-      const supernodeURL = supernodeURLs[i];
+      const supernodeURL = getCurrentSupernodeURL() || supernodeURLs[i];
       callback(JSON.stringify({ message: `Attempting inference request to Supernode URL: ${supernodeURL}` }))
       console.log(
         `Attempting inference request to Supernode URL: ${supernodeURL}`
@@ -968,15 +973,12 @@ export async function handleInferenceRequestEndToEnd(
         const proposedCostInCredits = parseFloat(
           usageRequestResponse.proposed_cost_of_request_in_inference_credits.toString()
         );
-        const getAddress = async () => {
-          return api.getMyPslAddressWithLargestBalance();
-        }
-        const creditUsageTrackingPSLAddress = await getAddress();
+        const creditUsageTrackingPSLAddress = usageRequestResponse.credit_usage_tracking_psl_address;
         const creditUsageTrackingAmountInPSL =
           parseFloat(
             usageRequestResponse.request_confirmation_message_amount_in_patoshis.toString()
           ) / 100000;
-        
+
         const trackingAddressBalance = await rpc.checkPSLAddressBalance(
           creditUsageTrackingPSLAddress
         );
@@ -995,14 +997,33 @@ export async function handleInferenceRequestEndToEnd(
 
         if (proposedCostInCredits <= params.maximumInferenceCostInCredits) {
           const burnAddress = await rpc.getBurnAddress();
-          const trackingTransactionTxid =
-            await rpc.sendTrackingAmountFromControlAddressToBurnAddressToConfirmInferenceRequest(
+          let trackingTransactionTxid = '';
+          const inferenceLocal = localStorage.getItem('MY_LOCAL_INFERENCE_REQUEST_INFO');
+          if (inferenceLocal) {
+            const parseInferenceLocal = JSON.parse(inferenceLocal);
+            if (JSON.stringify(params) === JSON.stringify(parseInferenceLocal.params)) {
+              trackingTransactionTxid = parseInferenceLocal.txid;
+            } else {
+              localStorage.removeItem('MY_LOCAL_INFERENCE_REQUEST_INFO')
+            }
+          }
+          if (!trackingTransactionTxid) {
+            const onSaveLocalStorage = (txid: string) => {
+              localStorage.setItem('MY_LOCAL_INFERENCE_REQUEST_INFO', JSON.stringify({
+                txid,
+                params,
+                supernodeURL,
+              }))
+            }
+            trackingTransactionTxid = await rpc.sendTrackingAmountFromControlAddressToBurnAddressToConfirmInferenceRequest(
               inferenceRequestID,
               creditUsageTrackingPSLAddress,
               creditUsageTrackingAmountInPSL,
               burnAddress,
-              callback
+              callback,
+              onSaveLocalStorage
             );
+          }
 
           const txidLooksValid = /^[0-9a-fA-F]{64}$/.test(
             trackingTransactionTxid
@@ -1021,6 +1042,10 @@ export async function handleInferenceRequestEndToEnd(
                 confirmationData,
                 callback
               );
+            if (!confirmationResult) {
+              handleInferenceRequestEndToEnd(params, callback, times + 1, supernodeURL);
+              return null;
+            }
             callback(JSON.stringify({ message: `Sent inference confirmation: ${utils.prettyJSON(
                 confirmationResult
               )}` }))
@@ -1029,7 +1054,6 @@ export async function handleInferenceRequestEndToEnd(
                 confirmationResult
               )}`
             );
-
             const maxTriesToGetConfirmation = 60;
             const initialWaitTimeInSeconds = 3;
             let waitTimeInSeconds = initialWaitTimeInSeconds;
@@ -1137,7 +1161,7 @@ export async function handleInferenceRequestEndToEnd(
                     callback(JSON.stringify({ message: "Validation results are null" }))
                   }
                 }
-
+                localStorage.removeItem('MY_LOCAL_INFERENCE_REQUEST_INFO')
                 return inferenceResult;
               } else {
                 console.log("Inference results not available yet; retrying...");

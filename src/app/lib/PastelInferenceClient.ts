@@ -688,7 +688,9 @@ class PastelInferenceClient {
         maximumPerCreditPriceInPSL,
         callback
       );
-      callback(JSON.stringify({ message: `Agree with price quote: ${agreeWithPriceQuote}; responding to preliminary price quote to Supernode at ${supernodeURL}...` }))
+      if (agreeWithPriceQuote) {
+        callback(JSON.stringify({ message: `Agree with price quote: ${agreeWithPriceQuote}; responding to preliminary price quote to Supernode at ${supernodeURL}...` }))
+      }
       console.info(
         `Agree with price quote: ${agreeWithPriceQuote}; responding to preliminary price quote to Supernode at ${supernodeURL}...`
       );
@@ -1346,8 +1348,7 @@ class PastelInferenceClient {
       console.error(
         `Error sending inference confirmation: ${utils.safeStringify(error)}`
       );
-      callback(JSON.stringify({ message: `Error sending inference confirmation: ${utils.safeStringify(error)}` }))
-      throw error;
+      return false
     }
   }
 

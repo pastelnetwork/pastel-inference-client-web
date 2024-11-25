@@ -3,6 +3,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from "react";
+import { Button, Typography, Modal } from "antd";
 
 import * as api from '@/app/lib/api';
 import { CreditPackCreationResult } from '@/app/types';
@@ -15,8 +16,62 @@ interface CreditPackTicketDetails {
   credit_pack_confirmation_outcome_string: string;
 }
 
+interface DownloadWalletModal {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const { Title, Paragraph } = Typography;
+
+function DownloadWalletModal({ isOpen, onClose }: DownloadWalletModal) {
+  const [isLoading, setLoading] = useState(false);
+  const handleBackupWalletApp = async () => {
+    setLoading(true)
+    try {
+      const walletData = await api.exportWallet();
+      const element = document.createElement('a');
+      const file = new Blob([walletData], {type: 'text/plain'});
+      element.href = URL.createObjectURL(file);
+      element.download = 'pastel.wallet';
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      onClose();
+    } catch (error) {
+      console.error(error)
+    }
+    setLoading(false)
+  }
+
+  return (
+    <Modal
+      centered
+      open={isOpen}
+      width={500}
+      footer={null}
+      onCancel={onClose}
+    >
+      <div className="bg-white p-4 rounded-lg w-full">
+        <Title level={2} className="text-2xl font-bold mb-4">Save Your Credit Pack</Title>
+        <div className='w-full relative mt-8'>
+          <Paragraph className="text-base text-center">Your new credit pack has been created. Please save it for use on other devices.</Paragraph>
+          <div className="text-center mt-3">
+            <Button
+              className="btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block"
+              onClick={handleBackupWalletApp}
+              disabled={isLoading}
+            >
+              Download
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 export default function CreateCreditPackTicket() {
-  const { balance } = useStore();
+  const { balance, saveWalletToLocalStorage } = useStore();
   const [numCredits, setNumCredits] = useState<string>("1500");
   const [maxTotalPrice, setMaxTotalPrice] = useState<string>("150000");
   const [maxPerCreditPrice, setMaxPerCreditPrice] = useState<string>("100.0");
@@ -24,6 +79,7 @@ export default function CreateCreditPackTicket() {
   const [status, setStatus] = useState<string>("");
   const [newTicketDetails, setNewTicketDetails] =
     useState<CreditPackTicketDetails | null>(null);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   const updateMaxTotalPrice = useCallback(() => {
     const credits = parseFloat(numCredits.replace(/,/g, ""));
@@ -117,6 +173,7 @@ export default function CreateCreditPackTicket() {
 
       const { newCreditTrackingAddress } = await api.createAndFundNewAddress(amountToFundCreditTrackingAddress);
       if (newCreditTrackingAddress) {
+        await saveWalletToLocalStorage();
         const result: CreditPackCreationResult = await api.createCreditPackTicket(
           parseInt(numCredits.replace(/,/g, "")),
           newCreditTrackingAddress,
@@ -138,6 +195,7 @@ export default function CreateCreditPackTicket() {
           pollCreditPackStatus(
             confirmation.pastel_api_credit_pack_ticket_registration_txid as string
           );
+          setShowDownloadModal(true);
         } else {
           throw new Error("Failed to create new credit pack ticket");
         }
@@ -160,7 +218,12 @@ export default function CreateCreditPackTicket() {
 
     const checkStatus = async () => {
       try {
-        const isConfirmed = await api.isCreditPackConfirmed(txid);
+        let isConfirmed = false;
+        try {
+          isConfirmed = await api.isCreditPackConfirmed(txid);
+        } catch (error) {
+          console.error("Error checking credit pack status:", error);
+        }
 
         if (isConfirmed) {
           setStatus(
@@ -189,6 +252,7 @@ export default function CreateCreditPackTicket() {
       }
     };
 
+    setStatus('Checking credit pack status...')
     checkStatus();
   };
 
@@ -321,6 +385,7 @@ export default function CreateCreditPackTicket() {
           </div>
         </div>
       )}
+      <DownloadWalletModal isOpen={showDownloadModal} onClose={() => setShowDownloadModal(false)} />
     </div>
   );
 }

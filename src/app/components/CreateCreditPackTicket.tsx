@@ -16,7 +16,7 @@ interface CreditPackTicketDetails {
 }
 
 export default function CreateCreditPackTicket() {
-  const { balance } = useStore();
+  const { balance, saveWalletToLocalStorage } = useStore();
   const [numCredits, setNumCredits] = useState<string>("1500");
   const [maxTotalPrice, setMaxTotalPrice] = useState<string>("150000");
   const [maxPerCreditPrice, setMaxPerCreditPrice] = useState<string>("100.0");
@@ -117,6 +117,7 @@ export default function CreateCreditPackTicket() {
 
       const { newCreditTrackingAddress } = await api.createAndFundNewAddress(amountToFundCreditTrackingAddress);
       if (newCreditTrackingAddress) {
+        await saveWalletToLocalStorage();
         const result: CreditPackCreationResult = await api.createCreditPackTicket(
           parseInt(numCredits.replace(/,/g, "")),
           newCreditTrackingAddress,

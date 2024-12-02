@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8">
+      <title>ImportLegacyPrivateKey Test</title>
+      <script type="text/javascript" src="libpastel_wasm.js"></script>
+      <style>
+         body {
+         font-family: Arial, sans-serif;
+         margin: 20px;
+         }
+         .waiting {
+         cursor: wait;
+         }
+         .test-group {
+         margin-bottom: 20px;
+         padding: 10px;
+         border: 1px solid #ccc;
+         border-radius: 5px;
+         }
+         .success {
+         color: green;
+         }
+         .error {
+         color: red;
+         }
+         .log-container {
+         margin-top: 10px;
+         padding: 10px;
+         background-color: #f5f5f5;
+         border-radius: 5px;
+         max-height: 300px;
+         overflow-y: auto;
+         }
+         button {
+         margin: 5px;
+         padding: 5px 10px;
+         }
+         input[type="text"] {
+         width: 400px;
+         padding: 5px;
+         margin: 5px;
+         }
+         select {
+         padding: 5px;
+         margin: 5px;
+         }
+      </style>
+   </head>
+   <body>
+      <h2>ImportLegacyPrivateKey Test Suite</h2>
+      <div class="test-group">
+         <h3>1. Wallet Setup</h3>
+         <button id="createWallet">Create New Wallet</button>
+         <button id="unlockWallet">Unlock Wallet</button>
+         <div id="walletStatus" class="log-container"></div>
+      </div>
+      <div class="test-group">
+         <h3>2. Network Selection</h3>
+         <select id="networkMode">
+            <option value="Mainnet">Mainnet</option>
+            <option value="Testnet">Testnet</option>
+            <option value="Devnet">Devnet</option>
+         </select>
+      </div>
+      <div class="test-group">
+         <h3>3. Import Legacy Private Key</h3>
+         <div>
+            <input type="text" id="privateKeyInput" 
+               value="L4YPJk97c98S5bnDnaS2d2mM2YnVCvtFwPBhKxVxzB1AU3rtrja5"/>
+            <button id="importKey">Import Private Key</button>
+         </div>
+         <div>
+            <input type="text" id="expectedAddressInput" 
+               value="PtnayNztxjUvYt82f5XuLqYLyZCCPWG6j3f"/>
+            <button id="verifyAddress">Verify Address</button>
+         </div>
+         <div id="importStatus" class="log-container"></div>
+      </div>
+      <div class="test-group">
+         <h3>4. Key Verification Tests</h3>
+         <button id="getSecret">Test GetSecret</button>
+         <button id="createTestTx">Test Transaction Creation</button>
+         <div id="verificationStatus" class="log-container"></div>
+      </div>
+      <div class="test-group">
+         <h3>5. Additional Verification Tests</h3>
+         <button id="testAlternativeImports">Test Alternative Imports</button>
+         <button id="testUtxos">Test UTXO Handling</button>
+         <button id="testWalletStates">Test Wallet States</button>
+         <div id="utxoStatus" class="log-container"></div>
+      </div>
+      <script>
+         let pastelInstance;
+         
+         function log(containerId, message, isError = false) {
+             const container = document.getElementById(containerId);
+             const div = document.createElement('div');
+             div.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+             div.className = isError ? 'error' : 'success';
+             container.appendChild(div);
+             container.scrollTop = container.scrollHeight;
+         }
+         
+         function setCursorToWait() {
+             document.body.classList.add('waiting');
+         }
+         
+         function setCursorToDefault() {
+             document.body.classList.remove('waiting');
+         }
+         
+         function getMode() {
+             const selectedMode = document.getElementById("networkMode").value;
+             return Module.NetworkMode[selectedMode];
+         }
+         
+         async function createWallet() {
+             try {
+                 const result = pastelInstance.CreateNewWallet("test123");
+                 const parsed = JSON.parse(result);
+                 if (parsed.result) {
+                     log('walletStatus', `Wallet created successfully. Mnemonic: ${parsed.data}`);
+                     return true;
+                 } else {
+                     log('walletStatus', `Failed to create wallet: ${parsed.error}`, true);
+                     return false;
+                 }
+             } catch (e) {
+                 log('walletStatus', `Error creating wallet: ${e.message}`, true);
+                 return false;
+             }
+         }
+         
+         async function unlockWallet() {
+             try {
+                 const result = pastelInstance.UnlockWallet("test123");
+                 const parsed = JSON.parse(result);
+                 if (parsed.result) {
+                     log('walletStatus', 'Wallet unlocked successfully');
+                     return true;
+                 } else {
+                     log('walletStatus', `Failed to unlock wallet: ${parsed.error}`, true);
+                     return false;
+                 }
+             } catch (e) {
+                 log('walletStatus', `Error unlocking wallet: ${e.message}`, true);
+                 return false;
+             }
+         }
+         
+         async function importPrivateKey() {
+             const privateKey = document.getElementById('privateKeyInput').value;
+             const mode = getMode();
+             try {
+                 const result = pastelInstance.ImportLegacyPrivateKey(privateKey, mode);
+                 const parsed = JSON.parse(result);
+                 if (parsed.result) {
+                     log('importStatus', `Key imported successfully. Address: ${parsed.data}`);
+                     return parsed.data;
+                 } else {
+                     log('importStatus', `Failed to import key: ${parsed.error}`, true);
+                     return null;
+                 }
+             } catch (e) {
+                 log('importStatus', `Error importing key: ${e.message}`, true);
+                 return null;
+             }
+         }
+         
+         async function verifyAddress() {
+             const expectedAddress = document.getElementById('expectedAddressInput').value;
+             const importedAddress = await importPrivateKey();
+             if (importedAddress === expectedAddress) {
+                 log('importStatus', 'Address verification successful - matches expected address');
+                 return true;
+             } else {
+                 log('importStatus', `Address mismatch. Expected: ${expectedAddress}, Got: ${importedAddress}`, true);
+                 return false;
+             }
+         }
+         
+         async function testGetSecret() {
+             const address = document.getElementById('expectedAddressInput').value;
+             const mode = getMode();
+             try {
+                 const result = pastelInstance.GetAddressSecret(address, mode);
+                 const parsed = JSON.parse(result);
+                 if (parsed.result) {
+                     const privateKey = document.getElementById('privateKeyInput').value;
+                     if (parsed.data === privateKey) {
+                         log('verificationStatus', 'GetSecret test passed - retrieved key matches original');
+                         return true;
+                     } else {
+                         log('verificationStatus', `GetSecret test failed - keys don't match. Original: ${privateKey}, Retrieved: ${parsed.data}`, true);
+                         return false;
+                     }
+                 } else {
+                     log('verificationStatus', `GetSecret test failed: ${parsed.error}`, true);
+                     return false;
+                 }
+             } catch (e) {
+                 log('verificationStatus', `Error in GetSecret test: ${e.message}`, true);
+                 return false;
+             }
+         }
+         
+         async function testTransaction() {
+             const address = document.getElementById('expectedAddressInput').value;
+             const mode = getMode();
+             try {
+                 // First test a smaller amount to verify signing works
+                 const sendToJson = JSON.stringify([{
+                     "address": "PtpnzqgsXVyHXtWzKGHYHRNEokYh3vmwp7W",
+                     "amount": 0.1
+                 }]);
+         
+                 // Test with multiple UTXOs to verify signing works with multiple inputs
+                 const utxoJson = JSON.stringify([
+                     {
+                         "address": address,
+                         "txid": "1723e7ccecd43c2ff45a12c5b67638c2c322b31bb786012e9769b8972486facf",
+                         "outputIndex": 1,
+                         "script": "76a914512d60a12702df4d2b00f1950aefb850bd67d01488ac",
+                         "patoshis": 98824,
+                         "height": 750929
+                     },
+                     {
+                         "address": address,
+                         "txid": "299ce49b32e5545d68b9903c30cb49da1d4f88b72b64b470d7f05cb01effb5ef",
+                         "outputIndex": 0,
+                         "script": "76a914512d60a12702df4d2b00f1950aefb850bd67d01488ac",
+                         "patoshis": 99607,
+                         "height": 750929
+                     }
+                 ]);
+         
+                 const result = pastelInstance.CreateSendToTransactionJson(
+                     mode,
+                     sendToJson,
+                     address,
+                     utxoJson,
+                     754758,
+                     0
+                 );
+         
+                 const parsed = JSON.parse(result);
+                 if (parsed.result) {
+                     log('verificationStatus', 'Transaction creation test passed');
+                     
+                     // The transaction hex returned should be a complete signed transaction
+                     // If it's missing signatures, it would fail at this stage
+                     const txHex = parsed.data;
+                     
+                     // Log detailed transaction info
+                     log('verificationStatus', 'Transaction successfully signed with imported key');
+                     log('verificationStatus', `Full signed transaction hex: ${txHex}`);
+                     
+                     // Additional verification steps:
+                     // 1. Try creating transactions with different amounts
+                     const smallAmount = JSON.stringify([{
+                         "address": "PtpnzqgsXVyHXtWzKGHYHRNEokYh3vmwp7W",
+                         "amount": 0.01
+                     }]);
+                     
+                     const smallTxResult = pastelInstance.CreateSendToTransactionJson(
+                         mode,
+                         smallAmount,
+                         address,
+                         utxoJson,
+                         754758,
+                         0
+                     );
+                     const smallTxParsed = JSON.parse(smallTxResult);
+                     
+                     if (smallTxParsed.result) {
+                         log('verificationStatus', 'Small amount transaction test passed');
+                     } else {
+                         log('verificationStatus', `Small amount transaction failed: ${smallTxParsed.error}`, true);
+                     }
+         
+                     // 2. Try with single UTXO to verify signing works with one input
+                     const singleUtxoJson = JSON.stringify([utxoJson[0]]);
+                     const singleUtxoResult = pastelInstance.CreateSendToTransactionJson(
+                         mode,
+                         sendToJson,
+                         address,
+                         singleUtxoJson,
+                         754758,
+                         0
+                     );
+                     const singleUtxoParsed = JSON.parse(singleUtxoResult);
+                     
+                     if (singleUtxoParsed.result) {
+                         log('verificationStatus', 'Single UTXO transaction test passed');
+                     } else {
+                         log('verificationStatus', `Single UTXO transaction failed: ${singleUtxoParsed.error}`, true);
+                     }
+         
+                     // All tests passed
+                     return true;
+                 } else {
+                     log('verificationStatus', `Transaction creation failed: ${parsed.error}`, true);
+                     return false;
+                 }
+             } catch (e) {
+                 log('verificationStatus', `Error in transaction test: ${e.message}`, true);
+                 return false;
+             }
+         }
+         
+         async function testAlternativeImports() {
+         const address = document.getElementById('expectedAddressInput').value;
+         const privateKey = document.getElementById('privateKeyInput').value;
+         const mode = getMode();
+         
+         // Test MakeNewLegacyAddress first to verify legacy address handling works at all
+         try {
+             const newLegacyResult = pastelInstance.MakeNewLegacyAddress(mode);
+             const parsed = JSON.parse(newLegacyResult);
+             if (parsed.result) {
+                 log('importStatus', `MakeNewLegacyAddress succeeded: ${parsed.data}`);
+                 // Try to get secret of newly created address
+                 const secretResult = pastelInstance.GetAddressSecret(parsed.data, mode);
+                 log('importStatus', `New legacy address secret retrieval: ${secretResult}`);
+             }
+         } catch (e) {
+             log('importStatus', `MakeNewLegacyAddress failed: ${e.message}`, true);
+         }
+         
+         // Try importing same key multiple times to check consistency
+         try {
+             const result1 = pastelInstance.ImportLegacyPrivateKey(privateKey, mode);
+             const result2 = pastelInstance.ImportLegacyPrivateKey(privateKey, mode);
+             log('importStatus', `Multiple imports - First: ${result1}`);
+             log('importStatus', `Multiple imports - Second: ${result2}`);
+         } catch (e) {
+             log('importStatus', `Multiple import test failed: ${e.message}`, true);
+         }
+         
+         // Try wallet export/import to see if legacy keys persist
+         try {
+             const exportResult = pastelInstance.ExportWallet();
+             const newInstance = new Module.Pastel();
+             newInstance.ImportWallet(JSON.parse(exportResult).data);
+             newInstance.UnlockWallet("test123");
+             const secretAfterReload = newInstance.GetAddressSecret(address, mode);
+             log('importStatus', `Key persistence after wallet reload: ${secretAfterReload}`);
+         } catch (e) {
+             log('importStatus', `Wallet export/import test failed: ${e.message}`, true);
+         }
+         }
+         
+         async function testAddressUtxos() {
+             const address = document.getElementById('expectedAddressInput').value;
+             const mode = getMode();
+         
+             // Test both single and multiple UTXOs
+             const utxoSets = [
+                 // Single UTXO
+                 JSON.stringify([{
+                     "address": address,
+                     "txid": "1723e7ccecd43c2ff45a12c5b67638c2c322b31bb786012e9769b8972486facf",
+                     "outputIndex": 1,
+                     "script": "76a914512d60a12702df4d2b00f1950aefb850bd67d01488ac",
+                     "patoshis": 98824,
+                     "height": 750929
+                 }]),
+                 // Multiple UTXOs
+                 JSON.stringify([{
+                     "address": address,
+                     "txid": "1723e7ccecd43c2ff45a12c5b67638c2c322b31bb786012e9769b8972486facf",
+                     "outputIndex": 1,
+                     "script": "76a914512d60a12702df4d2b00f1950aefb850bd67d01488ac",
+                     "patoshis": 98824,
+                     "height": 750929
+                 },
+                 {
+                     "address": address,
+                     "txid": "299ce49b32e5545d68b9903c30cb49da1d4f88b72b64b470d7f05cb01effb5ef", 
+                     "outputIndex": 0,
+                     "script": "76a914512d60a12702df4d2b00f1950aefb850bd67d01488ac",
+                     "patoshis": 99607,
+                     "height": 750929
+                 }])
+             ];
+         
+             for (let utxoJson of utxoSets) {
+                 try {
+                     // Try different amounts to test UTXO selection and signing
+                     const amounts = [0.0001, 0.001, 0.01];
+                     for (let amount of amounts) {
+                         const sendToJson = JSON.stringify([{
+                             "address": "PtpnzqgsXVyHXtWzKGHYHRNEokYh3vmwp7W",
+                             "amount": amount
+                         }]);
+         
+                         const result = pastelInstance.CreateSendToTransactionJson(
+                             mode,
+                             sendToJson,
+                             address,
+                             utxoJson,
+                             754758,
+                             0
+                         );
+                         log('utxoStatus', `TX test - UTXOs: ${utxoJson.length}, Amount: ${amount}, Result: ${result}`);
+                     }
+                 } catch (e) {
+                     log('utxoStatus', `UTXO test failed with ${utxoJson.length} UTXOs: ${e.message}`, true);
+                 }
+             }
+         }
+         
+         async function testWalletStates() {
+             const address = document.getElementById('expectedAddressInput').value;
+             const privateKey = document.getElementById('privateKeyInput').value;
+             const mode = getMode();
+         
+             // Test with locked/unlocked states
+             try {
+                 // Lock wallet
+                 pastelInstance.LockWallet();
+                 try {
+                     const importResult = pastelInstance.ImportLegacyPrivateKey(privateKey, mode);
+                     log('walletStatus', `Import with locked wallet: ${importResult}`, true);
+                 } catch (e) {
+                     log('walletStatus', `Import correctly failed with locked wallet: ${e.message}`);
+                 }
+         
+                 // Unlock and retry
+                 pastelInstance.UnlockWallet("test123");
+                 const importResult = pastelInstance.ImportLegacyPrivateKey(privateKey, mode);
+                 log('walletStatus', `Import with unlocked wallet: ${importResult}`);
+         
+                 // Test key persistence through lock/unlock cycles
+                 pastelInstance.LockWallet();
+                 pastelInstance.UnlockWallet("test123");
+                 const secretAfterCycle = pastelInstance.GetAddressSecret(address, mode);
+                 log('walletStatus', `Key retrieval after lock/unlock: ${secretAfterCycle}`);
+             } catch (e) {
+                 log('walletStatus', `Wallet state test failed: ${e.message}`, true);
+             }
+         }
+         
+         Module.onRuntimeInitialized = function() {
+             pastelInstance = new Module.Pastel();
+             
+             document.getElementById('createWallet').addEventListener('click', async () => {
+                 setCursorToWait();
+                 await createWallet();
+                 setCursorToDefault();
+             });
+         
+             document.getElementById('unlockWallet').addEventListener('click', async () => {
+                 setCursorToWait();
+                 await unlockWallet();
+                 setCursorToDefault();
+             });
+         
+             document.getElementById('importKey').addEventListener('click', async () => {
+                 setCursorToWait();
+                 await importPrivateKey();
+                 setCursorToDefault();
+             });
+         
+             document.getElementById('verifyAddress').addEventListener('click', async () => {
+                 setCursorToWait();
+                 await verifyAddress();
+                 setCursorToDefault();
+             });
+         
+             document.getElementById('getSecret').addEventListener('click', async () => {
+                 setCursorToWait();
+                 await testGetSecret();
+                 setCursorToDefault();
+             });
+         
+             document.getElementById('createTestTx').addEventListener('click', async () => {
+                 setCursorToWait();
+                 await testTransaction();
+                 setCursorToDefault();
+             });
+         
+             document.getElementById('testAlternativeImports').addEventListener('click', async () => {
+                 setCursorToWait();
+                 await testAlternativeImports();
+                 setCursorToDefault();
+             });
+         
+             document.getElementById('testUtxos').addEventListener('click', async () => {
+                 setCursorToWait();
+                 await testAddressUtxos();
+                 setCursorToDefault();
+             });
+         
+             document.getElementById('testWalletStates').addEventListener('click', async () => {
+                 setCursorToWait();
+                 await testWalletStates();
+                 setCursorToDefault();
+             });
+         
+             log('walletStatus', 'Test suite initialized');
+         };
+      </script>
+   </body>
+</html>

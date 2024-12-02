@@ -1408,7 +1408,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
       const pack = packData[i];
       browserLogger.info(`Processing pack ${i + 1} of ${packData.length}`);
 
-      // // 1. Import Wallet
+      // 1. Import Wallet
       try {
         await rpc.importWallet(pack.wallet_file_content);
         await rpc.unlockWallet(pack.wallet_password)
@@ -1419,6 +1419,11 @@ export async function importPromotionalPack(jsonData: string): Promise<{
       } catch {
         browserLogger.warn("Failed to import wallet");
       }
+
+      await rpc.importPromotionalPackKeys({
+        psl_credit_usage_tracking_address: pack.psl_credit_usage_tracking_address,
+        psl_credit_usage_tracking_address_private_key: pack.psl_credit_usage_tracking_address_private_key
+      });
 
       // 2. Import PastelID
       const importResult = await rpc.importPastelIDFileIntoWallet(pack.secureContainerBase64, pack.pastel_id_pubkey, pack.pastel_id_passphrase);

@@ -19,6 +19,7 @@ import {
   CreditPackPurchaseRequestResponse,
   SupernodeWithDistance,
   PastelIDType,
+  NetworkMode,
 } from "@/app/types";
 
 // Initialize WASM SHA3
@@ -1373,12 +1374,23 @@ export async function waitForCreditPackConfirmation(
   return isConfirmed;
 }
 
+interface PromotionalPack {
+  pastel_id_pubkey: string;
+  pastel_id_passphrase: string;
+  secureContainerBase64: string;
+  credit_pack_registration_txid: string;
+  requested_initial_credits_in_credit_pack: number;
+  psl_credit_usage_tracking_address: string;
+  psl_credit_usage_tracking_address_private_key: string;
+}
+
 export async function importPromotionalPack(jsonData: string): Promise<{
   success: boolean;
   message: string;
   processedPacks?: { pub_key: string; passphrase: string }[];
 }> {
-  browserLogger.info(`Starting import of promotional pack`);
+  browserLogger.info(`Starting import of promotional pack with jsonData: ${jsonData}`);
+
   const processedPacks: { pub_key: string; passphrase: string }[] = [];
 
   try {
@@ -1389,123 +1401,121 @@ export async function importPromotionalPack(jsonData: string): Promise<{
     browserLogger.info("WASM initialized successfully");
 
     // Parse the JSON data
-    let packData: {
-      pastel_id_pubkey: string;
-      pastel_id_passphrase: string;
-      secureContainerBase64: string;
-      requested_initial_credits_in_credit_pack: number;
-      psl_credit_usage_tracking_address: string;
-      psl_credit_usage_tracking_address_private_key: string;
-      wallet_address: string;
-      wallet_file_content: string;
-      wallet_password: string;
-    }[] = JSON.parse(jsonData);
-    if (!Array.isArray(packData)) {
-      packData = [packData];
+    const packData: PromotionalPack = JSON.parse(jsonData);
+
+    browserLogger.info(`Parsed pack data: ${JSON.stringify(packData, null, 2)}`);
+
+    // Validate required fields
+    const requiredFields: Array<keyof PromotionalPack> = [
+      "pastel_id_pubkey",
+      "pastel_id_passphrase",
+      "secureContainerBase64",
+      "credit_pack_registration_txid",
+      "requested_initial_credits_in_credit_pack",
+      "psl_credit_usage_tracking_address",
+      "psl_credit_usage_tracking_address_private_key",
+    ];
+
+    for (const field of requiredFields) {
+      if (
+        packData[field] === undefined ||
+        packData[field] === null ||
+        (typeof packData[field] === "string" && packData[field].trim() === "")
+      ) {
+        throw new Error(`Missing or invalid field '${field}' in promotional pack`);
+      }
     }
 
-    for (let i = 0; i < packData.length; i++) {
-      const pack = packData[i];
-      browserLogger.info(`Processing pack ${i + 1} of ${packData.length}`);
+    // Process the pack
+    browserLogger.info(`Processing promotional pack for PastelID: ${packData.pastel_id_pubkey}`);
 
-      // 1. Import Wallet
-      try {
-        await rpc.importWallet(pack.wallet_file_content);
-        await rpc.unlockWallet(pack.wallet_password)
-        localStorage.setItem('walletPassword', pack.wallet_password)
-        browserLogger.info(
-          `Wallet imported successfully for tracking address: ${pack.wallet_address}`
-        );
-      } catch {
-        browserLogger.warn("Failed to import wallet");
-      }
-
-      await rpc.importPromotionalPackKeys({
-        psl_credit_usage_tracking_address: pack.psl_credit_usage_tracking_address,
-        psl_credit_usage_tracking_address_private_key: pack.psl_credit_usage_tracking_address_private_key
-      });
-
-      // 2. Import PastelID
-      const importResult = await rpc.importPastelIDFileIntoWallet(pack.secureContainerBase64, pack.pastel_id_pubkey, pack.pastel_id_passphrase);
-
-      if (importResult.success) {
-        browserLogger.info(`PastelID ${pack.pastel_id_pubkey} imported successfully`);
-      } else {
-        throw new Error(`Failed to import PastelID: ${importResult.message}`);
-      }
-
-      // 3. Import the tracking address private key
-      browserLogger.info(
-        `Importing private key for tracking address: ${pack.psl_credit_usage_tracking_address}`
+    // 1. Import PastelID
+    try {
+      const importIDResult = await rpc.importPastelIDFileIntoWallet(
+        packData.secureContainerBase64,
+        packData.pastel_id_pubkey,
+        packData.pastel_id_passphrase
       );
 
-      const importPrivKeyResult = await rpc.importPrivKey(pack.psl_credit_usage_tracking_address_private_key);
-      if (importPrivKeyResult) {
-        browserLogger.info(
-          `Private key imported successfully for tracking address: ${pack.psl_credit_usage_tracking_address}`
-        );
+      if (importIDResult.success) {
+        browserLogger.info(`PastelID ${packData.pastel_id_pubkey} imported successfully`);
       } else {
-        browserLogger.warn("Failed to import private key");
+        throw new Error(`Failed to import PastelID: ${importIDResult.message}`);
       }
-
-      // 4. Verify PastelID import and functionality
-      try {
-        const testMessage = "This is a test message for PastelID verification";
-        const signature = await rpc.signMessageWithPastelID(
-          pack.pastel_id_pubkey,
-          testMessage,
-          PastelIDType.PastelID
-        );
-        browserLogger.info(
-          `Signature created successfully for PastelID: ${pack.pastel_id_pubkey}`
-        );
-
-        const verificationResult = await rpc.verifyMessageWithPastelID(
-          pack.pastel_id_pubkey,
-          testMessage,
-          signature
-        );
-
-        if (verificationResult === true) {
-          browserLogger.info(
-            `PastelID ${pack.pastel_id_pubkey} verified successfully`
-          );
-        } else {
-          browserLogger.warn(
-            `PastelID ${pack.pastel_id_pubkey} verification failed`
-          );
-        }
-
-        processedPacks.push({
-          pub_key: pack.pastel_id_pubkey,
-          passphrase: pack.pastel_id_passphrase,
-        });
-
-        // Log other important information
-        browserLogger.info(`Credit Pack Ticket: ${JSON.stringify({
-          requested_initial_credits_in_credit_pack: pack.requested_initial_credits_in_credit_pack,
-          psl_credit_usage_tracking_address: pack.psl_credit_usage_tracking_address,
-        }, null, 2)}`);
-
-      } catch (error) {
-        browserLogger.error(
-          `Error verifying pack ${i + 1}: ${(error as Error).message}`
-        );
-      }
+    } catch (importIDError) {
+      browserLogger.error(`Failed to import PastelID: ${(importIDError as Error).message}`);
+      throw importIDError;
     }
 
-    browserLogger.info(
-      "All promo packs in the file have been processed and verified"
-    );
+    // 2. Import the tracking address private key using ImportLegacyPrivateKey
+    try {
+      browserLogger.info(`Importing private key for tracking address: ${packData.psl_credit_usage_tracking_address}`);
+      const importPrivKeyResult = await rpc.importLegacyPrivateKey(
+        packData.psl_credit_usage_tracking_address_private_key,
+        NetworkMode.Mainnet
+      );
+
+      browserLogger.info(`Private key import result: ${importPrivKeyResult}`);
+
+      // Optionally verify the address
+      if (importPrivKeyResult !== packData.psl_credit_usage_tracking_address) {
+        browserLogger.warn(`Imported address (${importPrivKeyResult}) does not match expected address (${packData.psl_credit_usage_tracking_address})`);
+      }
+
+      // Since importLegacyPrivateKey returns a string (address) or throws,
+      // if we reach here, the import was successful.
+      browserLogger.info(`Private key imported successfully for tracking address: ${packData.psl_credit_usage_tracking_address}`);
+    } catch (privKeyError) {
+      browserLogger.error(`Error importing private key for address ${packData.psl_credit_usage_tracking_address}: ${(privKeyError as Error).message}`);
+      throw privKeyError;
+    }
+
+    // 3. Verify PastelID import and functionality
+    try {
+      const testMessage = "This is a test message for PastelID verification";
+      const signature = await rpc.signMessageWithPastelID(
+        packData.pastel_id_pubkey,
+        testMessage,
+        PastelIDType.PastelID
+      );
+      browserLogger.info(`Signature created successfully for PastelID: ${packData.pastel_id_pubkey}`);
+
+      const verificationResult = await rpc.verifyMessageWithPastelID(
+        packData.pastel_id_pubkey,
+        testMessage,
+        signature
+      );
+
+      if (verificationResult === true) {
+        browserLogger.info(`PastelID ${packData.pastel_id_pubkey} verified successfully`);
+      } else {
+        throw new Error(`PastelID ${packData.pastel_id_pubkey} verification failed`);
+      }
+
+      processedPacks.push({
+        pub_key: packData.pastel_id_pubkey,
+        passphrase: packData.pastel_id_passphrase,
+      });
+
+      // Log other important information
+      browserLogger.info(`Credit Pack Ticket: ${JSON.stringify({
+        requested_initial_credits_in_credit_pack: packData.requested_initial_credits_in_credit_pack,
+        psl_credit_usage_tracking_address: packData.psl_credit_usage_tracking_address,
+      }, null, 2)}`);
+
+    } catch (verificationError) {
+      browserLogger.error(`Error verifying PastelID: ${(verificationError as Error).message}`);
+      throw verificationError;
+    }
+
+    browserLogger.info("Promotional pack has been processed and verified successfully");
     return {
       success: true,
-      message: "Promotional pack(s) imported and verified successfully",
+      message: "Promotional pack imported and verified successfully",
       processedPacks: processedPacks,
     };
   } catch (error) {
-    browserLogger.error(
-      `Error importing promotional pack: ${(error as Error).message}`
-    );
+    browserLogger.error(`Error importing promotional pack: ${(error as Error).message}`);
     return {
       success: false,
       message: `Failed to import promotional pack: ${(error as Error).message}`,

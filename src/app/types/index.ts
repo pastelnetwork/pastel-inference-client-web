@@ -152,6 +152,8 @@ export interface PastelInstance {
   // -------------------------
   
   ExportPastelIDKeys(pastelID: string, password: string, path: string): boolean;
+
+  IsLocked(): string;
 }
 
 /**
@@ -1067,4 +1069,14 @@ export interface InferenceRequest {
   requestTimestamp: string;
   elapsedTimeInSeconds: number;
   inferenceResultsDecoded: string;
+}
+
+// First define the UTXO interface
+export interface UTXO {
+  address: string;
+  txid: string;
+  outputIndex: number;
+  script: string;
+  patoshis: number;
+  height: number;
 }

@@ -1397,7 +1397,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
     // Initialize WASM
     browserLogger.info("Initializing WASM...");
     const rpc = BrowserRPCReplacement.getInstance();
-    await rpc.initialize(true);
+    await rpc.initialize();
     browserLogger.info("WASM initialized successfully");
 
     // Parse the JSON data
@@ -1420,7 +1420,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
       if (
         packData[field] === undefined ||
         packData[field] === null ||
-        (typeof packData[field] === "string" && packData[field].trim() === "")
+        (typeof packData[field] === "string" && packData[field]?.toString()?.trim() === "")
       ) {
         throw new Error(`Missing or invalid field '${field}' in promotional pack`);
       }
@@ -1506,6 +1506,12 @@ export async function importPromotionalPack(jsonData: string): Promise<{
     } catch (verificationError) {
       browserLogger.error(`Error verifying PastelID: ${(verificationError as Error).message}`);
       throw verificationError;
+    }
+
+    // Create a new address if it doesn't exist.
+    const addressCount = await rpc.getAddressesCount();
+    if (!addressCount) {
+      await rpc.makeNewAddress();
     }
 
     browserLogger.info("Promotional pack has been processed and verified successfully");

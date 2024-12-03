@@ -667,8 +667,9 @@ const useStore = create<WalletState & WalletActions>()(
           const ids = listPastelIDs.filter((value) => value !== localPastelID)
           get().setPastelIDs(ids);
           if (ids.length > 0) {
-            get().setSelectedPastelID(ids[0]);
-            get().setPastelId(ids[0]);
+            const currentPastelID = localStorage.getItem('MY_LOCAL_PASTELID')
+            get().setSelectedPastelID(currentPastelID || ids[0]);
+            get().setPastelId(currentPastelID || ids[0]);
           }
         } catch (error) {
           browserLogger.error("Error fetching PastelIDs:", error);

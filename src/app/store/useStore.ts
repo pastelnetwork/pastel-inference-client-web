@@ -160,7 +160,7 @@ interface WalletActions {
   getCurrentPastelBlockHeight: () => Promise<number>;
   getBestBlockHashAndMerkleRoot: () => Promise<[string, string, number]>;
   sendToAddress: (address: string, amount: number) => Promise<string>;
-  sendMany: (amounts: { address: string; amount: number }[]) => Promise<string>;
+  sendMany: (amounts: { address: string; amount: number; }[]) => Promise<string>;
   setMyPslAddress: (address: string) => void;
   setSelectedPastelID: (address: string) => void;
   setPastelIDs: (pastelIDs: string[]) => void;

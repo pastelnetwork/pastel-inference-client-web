@@ -292,10 +292,10 @@ export async function handleCreditPackTicketEndToEnd(
 
         const burnTransactionResponse = await rpc.sendToAddress(
           burnAddress,
-          Math.round(
+          (Math.round(
             signedCreditPackTicket.proposed_total_cost_of_credit_pack_in_psl *
               100000
-          ) / 100000,
+          ) / 100000).toString(),
           creditUsageTrackingPSLAddress,
         );
 

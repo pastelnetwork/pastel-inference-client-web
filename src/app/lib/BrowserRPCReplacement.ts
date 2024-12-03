@@ -1,7 +1,7 @@
 // src/app/lib/BrowserRPCReplacement.ts
 
 import axios from "axios";
-
+import Decimal from "decimal.js";
 import { initWasm } from "./wasmLoader";
 import {
   PastelInstance,
@@ -686,47 +686,82 @@ class BrowserRPCReplacement {
    * @param fee - The transaction fee.
    * @returns The created transaction data as a serialized string.
    */
+
+  /**
+   * Creates a transaction to send funds to specified recipients.
+   * @param sendTo - An array of recipients and amounts.
+   * @param fromAddress - The address to send funds from.
+   * @returns The transaction ID.
+   */
   public async createSendToTransaction(
-    sendTo: { address: string; amount: number }[],
+    sendTo: { address: string; amount: string }[],
     fromAddress: string
   ): Promise<string> {
     this.ensureInitialized();
 
-    // Initialize wallet with the required private key
-    await this.initializeWalletForTransaction(fromAddress);
+    try {
+      // Initialize wallet with the required private key
+      await this.initializeWalletForTransaction(fromAddress);
 
-    const utxos = await this.getAddressUtxos(fromAddress);
-    const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
-    const sendToJson = JSON.stringify(sendTo);
-    const utxosJson = JSON.stringify(utxos);
-    const currentBlockHeight = await this.getCurrentPastelBlockHeight();
+      const utxos = await this.getAddressUtxos(fromAddress);
+      const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
+      const sendToJson = JSON.stringify(sendTo);
+      const utxosJson = JSON.stringify(utxos);
+      const currentBlockHeight = await this.getCurrentPastelBlockHeight();
 
-    // Make sure wallet is unlocked
-    const walletPassword = localStorage.getItem("walletPassword");
-    if (!walletPassword) {
-      throw new Error("Wallet password not found in local storage");
-    }
-    await this.unlockWallet(walletPassword);
+      // Make sure wallet is unlocked
+      const walletPassword = localStorage.getItem("walletPassword");
+      if (!walletPassword) {
+        throw new Error("Wallet password not found in local storage");
+      }
+      await this.unlockWallet(walletPassword);
 
-    const response = await this.executeWasmMethod(() =>
-      this.pastelInstance!.CreateSendToTransaction(
-        networkMode,
-        sendToJson,
-        fromAddress,
-        utxosJson,
-        currentBlockHeight,
-        0
-      )
-    );
+      // Log transaction details for debugging
+      console.log(`Creating transaction from address: ${fromAddress}`);
+      console.log(`Send To JSON: ${sendToJson}`);
+      console.log(`UTXOs JSON: ${utxosJson}`);
+      console.log(`Network Mode: ${networkMode}`);
+      console.log(`Current Block Height: ${currentBlockHeight}`);
 
-    if (response) {
-      const parseData = JSON.parse(JSON.parse(response).data);
-      const { data } = await axios.post(
-        `${this.apiBaseUrl}/sendrawtransaction?hex_string=${parseData.hex}&allow_high_fees=false`
+      const response = await this.executeWasmMethod(() =>
+        this.pastelInstance!.CreateSendToTransaction(
+          networkMode,
+          sendToJson,
+          fromAddress,
+          utxosJson,
+          currentBlockHeight,
+          0 // Assuming fee is handled internally or set to zero
+        )
       );
-      return data.txid;
+
+      if (response) {
+        const parseData = JSON.parse(JSON.parse(response).data);
+        console.log(`Transaction Hex: ${parseData.hex}`);
+
+        // Send the raw transaction to the network
+        const { data } = await axios.post(
+          `${this.apiBaseUrl}/sendrawtransaction`,
+          {
+            hex_string: parseData.hex,
+            allow_high_fees: false,
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        console.log(`Transaction ID Received: ${data.txid}`);
+        return data.txid;
+      }
+
+      console.error("Transaction creation failed without a response.");
+      return "";
+    } catch (error) {
+      console.error("Error in createSendToTransaction:", error);
+      throw error;
     }
-    return "";
   }
 
   /**
@@ -765,27 +800,51 @@ class BrowserRPCReplacement {
    * Creates a transaction to send funds to specified recipients in JSON format.
    * @param sendToJson - A JSON string representing recipients and amounts.
    * @param fromAddress - The address to send funds from.
-   * @param fee - The transaction fee.
+   * @param nHeight - The current block height.
    * @returns The created transaction data as a serialized string.
    */
   public async createSendToTransactionJson(
     sendToJson: string,
     fromAddress: string,
-    fee: number = 0
+    nHeight: number
   ): Promise<string> {
     this.ensureInitialized();
-    const utxos = await this.getAddressUtxos(fromAddress);
-    const utxosJson = JSON.stringify(utxos);
-    const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
-    return this.executeWasmMethod(() =>
-      this.pastelInstance!.CreateSendToTransactionJson(
-        networkMode,
-        sendToJson,
-        fromAddress,
-        utxosJson,
-        fee
-      )
-    );
+
+    try {
+      const utxos = await this.getAddressUtxos(fromAddress);
+      const utxosJson = JSON.stringify(utxos);
+      const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
+
+      // Log transaction details for debugging
+      console.log(
+        `Creating SendToTransactionJson from address: ${fromAddress}`
+      );
+      console.log(`Send To JSON: ${sendToJson}`);
+      console.log(`UTXOs JSON: ${utxosJson}`);
+      console.log(`Network Mode: ${networkMode}`);
+      console.log(`Block Height: ${nHeight}`);
+
+      const response = this.executeWasmMethod(() =>
+        this.pastelInstance!.CreateSendToTransactionJson(
+          networkMode,
+          sendToJson,
+          fromAddress,
+          utxosJson,
+          nHeight
+        )
+      );
+
+      if (response) {
+        console.log(`CreateSendToTransactionJson Response: ${response}`);
+        return response;
+      }
+
+      console.error("CreateSendToTransactionJson failed without a response.");
+      return "";
+    } catch (error) {
+      console.error("Error in createSendToTransactionJson:", error);
+      throw error;
+    }
   }
 
   /**
@@ -1696,12 +1755,37 @@ class BrowserRPCReplacement {
     const addresses = addressesList || (await this.getAllAddresses());
 
     for (const address of addresses) {
-      const balance = await this.checkPSLAddressBalance(address);
-      if (balance < 1.0) {
-        const amountNeeded = Math.round((1.0 - balance) * 10000) / 10000;
-        if (amountNeeded > 0.0001) {
-          await this.sendToAddress(address, amountNeeded);
+      const balanceNumber = await this.checkPSLAddressBalance(address);
+      const balance = new Decimal(balanceNumber);
+
+      const minimalBalance = new Decimal(1.0);
+      if (balance.lessThan(minimalBalance)) {
+        const amountNeeded = minimalBalance.minus(balance).toDecimalPlaces(5);
+
+        // Define minimum threshold using Decimal
+        const threshold = new Decimal(0.0001);
+        if (amountNeeded.greaterThan(threshold)) {
+          const formattedAmountNeeded = amountNeeded.toFixed(5); // "0.00005"
+
+          // Log the amount being sent
+          console.log(
+            `Sending ${formattedAmountNeeded} PSL to address ${address} to reach minimal balance.`
+          );
+
+          await this.sendToAddress(address, formattedAmountNeeded);
+        } else {
+          console.log(
+            `Amount needed (${amountNeeded.toFixed(
+              5
+            )} PSL) is below the threshold. No action taken for address ${address}.`
+          );
         }
+      } else {
+        console.log(
+          `Address ${address} already has a sufficient balance of ${balance.toFixed(
+            5
+          )} PSL.`
+        );
       }
     }
   }
@@ -1714,16 +1798,60 @@ class BrowserRPCReplacement {
    */
   public async sendToAddress(
     address: string,
-    amount: number,
+    amountStr: string,
     creditUsageTrackingPSLAddress: string = ""
   ): Promise<string> {
     this.ensureInitialized();
-    const sendTo = [{ address, amount }];
+
+    // Convert the amount string to Decimal for validation
+    const amountDecimal = new Decimal(amountStr);
+
+    // Define minimum and maximum allowable amounts (if any)
+    const minAmount = new Decimal("0.00001"); // Example minimum
+    const maxAmount = new Decimal("1000000"); // Example maximum to prevent overflow
+
+    // Validate the amount
+    if (amountDecimal.lessThan(minAmount)) {
+      throw new Error(
+        `Amount ${amountDecimal.toFixed(5)} PSL is below the minimum allowed.`
+      );
+    }
+
+    if (amountDecimal.greaterThan(maxAmount)) {
+      throw new Error(
+        `Amount ${amountDecimal.toFixed(5)} PSL exceeds the maximum allowed.`
+      );
+    }
+
+    // Format the amount to ensure it's a fixed decimal string
+    const formattedAmount = amountDecimal.toFixed(5); // "0.00005"
+
+    // Log the send action
+    console.log(
+      `Preparing to send ${formattedAmount} PSL to address ${address}.`
+    );
+
+    const sendTo = [{ address, amount: formattedAmount }];
+
+    // Log the sendTo array
+    console.log("Send To Array:", JSON.stringify(sendTo, null, 2));
+
     const fromAddress = await this.getMyPslAddressWithLargestBalance();
-    return this.createSendToTransaction(
-      sendTo,
-      creditUsageTrackingPSLAddress || fromAddress
-    ); // Assuming fee is 0
+
+    // Determine the actual fromAddress
+    const actualFromAddress = creditUsageTrackingPSLAddress || fromAddress;
+
+    console.log(`Sending from address: ${actualFromAddress}`);
+
+    // Create and send the transaction
+    const txID = await this.createSendToTransaction(sendTo, actualFromAddress);
+
+    // Log the transaction ID
+    console.log(
+      `Transaction ID ${txID} created for sending ${formattedAmount} PSL to ${address}.`
+    );
+
+    return txID;
   }
 
   /**
@@ -1732,11 +1860,21 @@ class BrowserRPCReplacement {
    * @returns The transaction ID.
    */
   public async sendMany(
-    amounts: { address: string; amount: number }[]
+    amounts: { address: string; amount: number }[] // Accept number types
   ): Promise<string> {
     this.ensureInitialized();
     const fromAddress = await this.getMyPslAddressWithLargestBalance();
-    return this.createSendToTransaction(amounts, fromAddress); // Assuming fee is 0
+
+    // Convert amounts to strings with desired precision using decimal.js
+    const sendTo = amounts.map((item) => ({
+      address: item.address,
+      amount: new Decimal(item.amount).toFixed(5), // e.g., "0.00005"
+    }));
+
+    // Log the sendTo array
+    console.log("Send To Array:", JSON.stringify(sendTo, null, 2));
+
+    return this.createSendToTransaction(sendTo, fromAddress);
   }
 
   /**
@@ -1843,28 +1981,53 @@ class BrowserRPCReplacement {
     callback: (value: string) => void,
     onSaveLocalStorage: (value: string) => void
   ): Promise<string> {
+    const minAmount = new Decimal("0.0000000001"); // Define minimum acceptable amount
+    const amountDecimal = new Decimal(creditUsageTrackingAmountInPSL);
+
+    if (amountDecimal.lessThan(minAmount)) {
+      throw new Error("Amount is below the minimum required threshold.");
+    }
+
+    // Convert amount to string with fixed decimal places to avoid scientific notation
+    const formattedAmount = amountDecimal.toFixed(10); // "0.00005"
+
+    // Log the formatted amount
+    console.log(`Formatted Amount: ${formattedAmount}`);
+
+    // Construct the sendTo array with precise amounts
     const sendTo = [
-      { address: burnAddress, amount: creditUsageTrackingAmountInPSL },
+      { address: burnAddress, amount: formattedAmount }, // Passing string
     ];
+
+    // Log the sendTo array
+    console.log("Send To Array:", JSON.stringify(sendTo, null, 2));
+
+    // Inform via callback
     callback(
       JSON.stringify({
-        message: `Sending ${creditUsageTrackingAmountInPSL} PSL to confirm an inference request.`,
+        message: `Sending ${formattedAmount} PSL to confirm an inference request.`,
       })
     );
+
+    // Create the transaction
     const txID = await this.createSendToTransaction(
       sendTo,
       creditUsageTrackingPSLAddress
-    ); // Assuming fee is 0
+    ); // Assuming fee is handled internally
+
+    // Inform via callback
     callback(
       JSON.stringify({
         message: `Verifying the transaction id(${txID}) to confirm an inference request.`,
       })
     );
+
     if (txID) {
       onSaveLocalStorage(txID);
       return txID;
     }
-    return "";
+
+    throw new Error("Transaction ID is empty");
   }
 
   // -------------------------
@@ -2013,9 +2176,11 @@ class BrowserRPCReplacement {
       return await generateNewAddress();
     };
     const newAddress = await generateNewAddress();
+    const formattedAmountOfPSLToFundAddressWith =
+      amountOfPSLToFundAddressWith.toFixed(5);
     const txid = await this.sendToAddress(
       newAddress,
-      amountOfPSLToFundAddressWith
+      formattedAmountOfPSLToFundAddressWith
     );
     return { newCreditTrackingAddress: newAddress, txid };
   }

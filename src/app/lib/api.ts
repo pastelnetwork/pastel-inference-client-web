@@ -520,10 +520,11 @@ export async function getBestBlockHashAndMerkleRoot(): Promise<[string, string, 
 
 export async function sendToAddress(address: string, amount: number): Promise<string> {
   const rpc = BrowserRPCReplacement.getInstance();
-  return await rpc.sendToAddress(address, amount);
+  const amountFormatted = amount.toFixed(5);
+  return await rpc.sendToAddress(address, amountFormatted);
 }
 
-export async function sendMany(amounts: { address: string; amount: number }[]): Promise<string> {
+export async function sendMany(amounts: { address: string; amount: number;}[]): Promise<string> {
   const rpc = BrowserRPCReplacement.getInstance();
   return await rpc.sendMany(amounts);
 }

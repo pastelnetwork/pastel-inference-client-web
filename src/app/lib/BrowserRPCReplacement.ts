@@ -36,6 +36,44 @@ import {
   setNetworkInLocalStorage,
 } from "@/app/lib/storage";
 
+
+export async function unlockWallet(): Promise<void> {
+  // Step 1: Retrieve the wallet password from localStorage
+  const rpc = BrowserRPCReplacement.getInstance();
+
+  const walletLocalStorageName = "walletInfo";
+  const walletDataEncoded = localStorage.getItem(walletLocalStorageName);
+  if (!walletDataEncoded) {
+    throw new Error("Wallet data not found in localStorage.");
+  }
+
+  // Decode from base64 and parse JSON
+  let walletData;
+  try {
+    const decodedData = atob(walletDataEncoded);
+    walletData = JSON.parse(decodedData);
+  } catch {
+    throw new Error("Failed to decode wallet data from localStorage.");
+  }
+
+  if (!walletData.walletPassword) {
+    throw new Error("Wallet password not found in wallet data.");
+  }
+
+  const walletPassword = walletData.walletPassword;
+  console.log("Retrieved wallet password from localStorage.");
+
+  // Step 2: Check if the wallet is locked and unlock it if necessary
+  const isLocked = await rpc.isLocked();
+  if (isLocked) {
+    console.log("Wallet is locked. Attempting to unlock...");
+    await rpc.unlockWallet(walletPassword);
+    console.log("Wallet unlocked successfully.");
+  } else {
+    console.log("Wallet is already unlocked.");
+  }
+}
+
 class BrowserRPCReplacement {
   private static instance: BrowserRPCReplacement | null = null;
 
@@ -1007,6 +1045,8 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
       console.log(`UTXOs JSON: ${utxosJson}`);
       console.log(`Network Mode: ${networkMode}`);
       console.log(`Block Height: ${nHeight}`);
+
+      await unlockWallet()
 
       const response = this.executeWasmMethod(() =>
         this.pastelInstance!.CreateSendToTransaction(

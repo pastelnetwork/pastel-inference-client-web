@@ -1384,7 +1384,7 @@ interface PromotionalPack {
   psl_credit_usage_tracking_address_private_key: string;
 }
 
-async function unlockWallet(): Promise<void> {
+export async function unlockWallet(): Promise<void> {
     // Step 1: Retrieve the wallet password from localStorage
     const rpc = BrowserRPCReplacement.getInstance();
 

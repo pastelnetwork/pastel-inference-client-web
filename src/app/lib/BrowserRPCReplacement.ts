@@ -268,18 +268,56 @@ class BrowserRPCReplacement {
     this.ensureInitialized();
     try {
       const addressCount = await this.getAddressesCount();
-      if (!addressCount) {
-        console.warn("GetAddresses returned undefined or null");
+      console.log(`getAllAddresses: Initial count is ${addressCount}`);
+  
+      if (addressCount === 0) {
         return [];
       }
-      const addresses = [];
-      const networkMode =
-        mode || this.getNetworkModeEnum(await this.getNetworkMode());
-      for (let i = 0; i < addressCount; i++) {
-        const address = await this.getAddress(i, networkMode as NetworkMode);
-        addresses.push(address);
+  
+      const networkMode = mode !== undefined
+        ? mode
+        : this.getNetworkModeEnum(await this.getNetworkMode());
+  
+      console.log(`getAllAddresses: Getting addresses for network mode ${networkMode}`);
+  
+      // Get response which should be a direct array of addresses
+      const response = await this.executeWasmMethod(() =>
+        this.pastelInstance!.GetAddresses(networkMode)
+      );
+  
+      let addresses: string[];
+      
+      // Handle both possible return formats:
+      // 1. Direct array of strings
+      // 2. JSON response with data field
+      if (typeof response === 'string' && (response as string).startsWith('P')) {
+        // Direct array case - response is a single address
+        addresses = [response];
+      } else if (typeof response === 'string' && ((response as string).startsWith('[') || (response as string).startsWith('{'))) {
+        // JSON format case
+        try {
+          const parsed = JSON.parse(response);
+          addresses = parsed.data ? JSON.parse(parsed.data) : parsed;
+        } catch {
+          // If JSON parse fails, treat as single address
+          addresses = [response];
+        }
+      } else if (Array.isArray(response)) {
+        // Direct array from WASM
+        addresses = response;
+      } else {
+        console.error('Unexpected response format from GetAddresses:', response);
+        return [];
       }
+  
+      // Validate addresses
+      addresses = addresses.filter(addr => 
+        typeof addr === 'string' && addr.startsWith('P')
+      );
+  
+      console.log(`getAllAddresses: Successfully retrieved ${addresses.length} addresses:`, addresses);
       return addresses;
+  
     } catch (error) {
       console.error("Error in getAllAddresses:", error);
       return [];
@@ -287,19 +325,22 @@ class BrowserRPCReplacement {
   }
 
   /**
-   * Retrieves the total count of addresses in the wallet.
+   * Retrieves the total count of addresses in the wallet (both HD and legacy).
    * @returns The total number of addresses.
    */
   public async getAddressesCount(): Promise<number> {
     this.ensureInitialized();
-    const resAdresss = await this.executeWasmMethod(() =>
-      this.pastelInstance!.GetAddressesCount()
-    );
-    if (resAdresss) {
-      const parseAddress = JSON.parse(resAdresss);
-      return parseAddress?.data || 0;
+    try {
+      const count = await this.executeWasmMethod<number>(() =>
+        parseInt(this.pastelInstance!.GetAddressesCount(), 10)
+      );
+
+      console.log(`Total addresses found in wallet (HD + legacy): ${count}`);
+      return count;
+    } catch (error) {
+      console.error("Error getting addresses count:", error);
+      return 0;
     }
-    return 0;
   }
 
   // -------------------------
@@ -391,6 +432,28 @@ class BrowserRPCReplacement {
   // Signing and Verification Methods
   // -------------------------
 
+  public async getWalletPassword(): Promise<string> {
+    const walletLocalStorageName = "walletInfo";
+    const walletDataEncoded = localStorage.getItem(walletLocalStorageName);
+    if (!walletDataEncoded) {
+      throw new Error("Wallet data not found in localStorage.");
+    }
+    // Decode from base64 and parse JSON
+    let walletData;
+    try {
+      const decodedData = atob(walletDataEncoded);
+      walletData = JSON.parse(decodedData);
+    } catch {
+      throw new Error("Failed to decode wallet data from localStorage.");
+    }
+    if (!walletData.walletPassword) {
+      throw new Error("Wallet password not found in wallet data.");
+    }
+    const walletPassword = walletData.walletPassword;
+    console.log("Retrieved wallet password from localStorage.");
+    return walletPassword;
+  }
+
   /**
    * Signs data using a specific PastelID.
    * @param pastelID - The PastelID identifier used for signing.
@@ -406,6 +469,8 @@ class BrowserRPCReplacement {
     flag: boolean = true
   ): Promise<string> {
     this.ensureInitialized();
+    const walletPassword = await this.getWalletPassword();
+    await this.unlockWallet(walletPassword);
     const result = await this.executeWasmMethod(() =>
       this.pastelInstance!.SignWithPastelID(pastelID, data, type, flag)
     );
@@ -642,23 +707,32 @@ class BrowserRPCReplacement {
   // Transaction Management Methods
   // -------------------------
 
-  async initializeWalletForTransaction(creditUsageTrackingPSLAddress: string): Promise<void> {
+  async initializeWalletForTransaction(
+    creditUsageTrackingPSLAddress: string
+  ): Promise<void> {
     const addresses = await this.getAllAddresses();
-    
+
     // Check if we already have access to this address
     if (!addresses.includes(creditUsageTrackingPSLAddress)) {
-      throw new Error(`No access to address ${creditUsageTrackingPSLAddress} - please import the private key first`);
+      throw new Error(
+        `No access to address ${creditUsageTrackingPSLAddress} - please import the private key first`
+      );
     }
-  
+
     // Verify we can access the private key through the HD wallet
     try {
       const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
-      const secret = await this.getAddressSecret(creditUsageTrackingPSLAddress, networkMode);
+      const secret = await this.getAddressSecret(
+        creditUsageTrackingPSLAddress,
+        networkMode
+      );
       if (!secret) {
-        throw new Error('Unable to access address private key');
+        throw new Error("Unable to access address private key");
       }
     } catch (error) {
-      throw new Error(`Failed to verify access to address ${creditUsageTrackingPSLAddress}: ${error}`);
+      throw new Error(
+        `Failed to verify access to address ${creditUsageTrackingPSLAddress}: ${error}`
+      );
     }
   }
 
@@ -1658,15 +1732,33 @@ class BrowserRPCReplacement {
   public async getMyPslAddressWithLargestBalance(): Promise<string> {
     this.ensureInitialized();
     const addresses = await this.getAllAddresses();
+    console.log(`Retrieved ${addresses.length} addresses:`, addresses);
+
     let maxBalance = -1;
     let addressWithMaxBalance = "";
+
     for (const address of addresses) {
+      if (typeof address !== "string") {
+        console.warn(`Invalid address format:`, address);
+        continue;
+      }
+
+      console.log(`Checking address balance for ${address}`);
       const balance = await this.checkPSLAddressBalance(address);
       if (balance > maxBalance) {
         maxBalance = balance;
         addressWithMaxBalance = address;
       }
     }
+
+    if (!addressWithMaxBalance) {
+      console.warn("No valid address with balance found");
+    } else {
+      console.log(
+        `Address with largest balance (${maxBalance}): ${addressWithMaxBalance}`
+      );
+    }
+
     return addressWithMaxBalance;
   }
 

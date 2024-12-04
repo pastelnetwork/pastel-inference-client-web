@@ -234,6 +234,7 @@ export async function getBalance(): Promise<number> {
     let totalBalance = 0;
     for (const address of addresses) {
       try {
+        console.log(`Now checking PSL balance for ${address}`);
         const balance = await rpc.checkPSLAddressBalance(address);
         totalBalance += balance;
       } catch (error) {

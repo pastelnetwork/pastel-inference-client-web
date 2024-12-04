@@ -1384,14 +1384,10 @@ interface PromotionalPack {
   psl_credit_usage_tracking_address_private_key: string;
 }
 
-async function importPrivateKeySecurely(
-  privateKeyWIF: string,
-  expectedAddress: string | undefined = undefined,
-): Promise<{ success: boolean; address: string; error?: string }> {
-  const rpc = BrowserRPCReplacement.getInstance();
-
-  try {
+async function unlockWallet(): Promise<void> {
     // Step 1: Retrieve the wallet password from localStorage
+    const rpc = BrowserRPCReplacement.getInstance();
+
     const walletLocalStorageName = "walletInfo";
     const walletDataEncoded = localStorage.getItem(walletLocalStorageName);
     if (!walletDataEncoded) {
@@ -1423,6 +1419,17 @@ async function importPrivateKeySecurely(
     } else {
       console.log("Wallet is already unlocked.");
     }
+  }
+
+async function importPrivateKeySecurely(
+  privateKeyWIF: string,
+  expectedAddress: string | undefined = undefined,
+): Promise<{ success: boolean; address: string; error?: string }> {
+  const rpc = BrowserRPCReplacement.getInstance();
+
+  try {
+
+    await unlockWallet();
 
     // Step 3: Import the private key
     console.log(`Importing private key: ${privateKeyWIF}`);
@@ -1453,6 +1460,7 @@ async function importPrivateKeySecurely(
     // Step 5: Verify key import by creating a test transaction
     try {
       const burnAddress = await rpc.getBurnAddress();
+      console.log(`Now checking PSL balance for ${importedAddress}`);
       const balance = await rpc.checkPSLAddressBalance(importedAddress);
 
       console.log(`Balance for ${importedAddress}: ${balance} PSL`);
@@ -1598,11 +1606,13 @@ export async function importPromotionalPack(jsonData: string): Promise<{
 
     // 3. Verify PastelID import and functionality
     try {
+      await unlockWallet();
+
       const testMessage = "This is a test message for PastelID verification";
       const signature = await rpc.signMessageWithPastelID(
         packData.pastel_id_pubkey,
         testMessage,
-        PastelIDType.PastelID
+        PastelIDType.PastelID,
       );
       browserLogger.info(`Signature created successfully for PastelID: ${packData.pastel_id_pubkey}`);
 

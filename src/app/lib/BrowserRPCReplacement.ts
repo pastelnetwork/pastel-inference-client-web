@@ -258,90 +258,110 @@ class BrowserRPCReplacement {
     }
     return "";
   }
+/**
+ * Retrieves the total count of addresses in the wallet (both HD and legacy).
+ * @returns The total number of addresses.
+ */
+public async getAddressesCount(): Promise<number> {
+  this.ensureInitialized();
+  try {
+    const response = await this.executeWasmMethod(() =>
+      this.pastelInstance!.GetAddressesCount()
+    );
 
-  /**
-   * Retrieves all addresses, optionally filtered by network mode.
-   * @param mode - (Optional) The network mode. If omitted, retrieves addresses for all modes.
-   * @returns An array of wallet addresses.
-   */
-  public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
-    this.ensureInitialized();
-    try {
-      const addressCount = await this.getAddressesCount();
-      console.log(`getAllAddresses: Initial count is ${addressCount}`);
-  
-      if (addressCount === 0) {
-        return [];
+    // Handle response which could be a string or a number
+    let count: number;
+    if (typeof response === 'string') {
+      // Try to parse as JSON first in case it's wrapped
+      try {
+        const parsed = JSON.parse(response);
+        count = parsed.data ? parseInt(parsed.data, 10) : parseInt(response, 10);
+      } catch {
+        // If JSON parse fails, try direct parseInt
+        count = parseInt(response, 10);
       }
-  
-      const networkMode = mode !== undefined
-        ? mode
-        : this.getNetworkModeEnum(await this.getNetworkMode());
-  
-      console.log(`getAllAddresses: Getting addresses for network mode ${networkMode}`);
-  
-      // Get response which should be a direct array of addresses
-      const response = await this.executeWasmMethod(() =>
-        this.pastelInstance!.GetAddresses(networkMode)
-      );
-  
-      let addresses: string[];
-      
-      // Handle both possible return formats:
-      // 1. Direct array of strings
-      // 2. JSON response with data field
-      if (typeof response === 'string' && (response as string).startsWith('P')) {
-        // Direct array case - response is a single address
-        addresses = [response];
-      } else if (typeof response === 'string' && ((response as string).startsWith('[') || (response as string).startsWith('{'))) {
-        // JSON format case
-        try {
-          const parsed = JSON.parse(response);
-          addresses = parsed.data ? JSON.parse(parsed.data) : parsed;
-        } catch {
-          // If JSON parse fails, treat as single address
-          addresses = [response];
-        }
-      } else if (Array.isArray(response)) {
-        // Direct array from WASM
-        addresses = response;
-      } else {
-        console.error('Unexpected response format from GetAddresses:', response);
-        return [];
-      }
-  
-      // Validate addresses
-      addresses = addresses.filter(addr => 
-        typeof addr === 'string' && addr.startsWith('P')
-      );
-  
-      console.log(`getAllAddresses: Successfully retrieved ${addresses.length} addresses:`, addresses);
-      return addresses;
-  
-    } catch (error) {
-      console.error("Error in getAllAddresses:", error);
-      return [];
+    } else {
+      count = Number(response);
     }
-  }
 
-  /**
-   * Retrieves the total count of addresses in the wallet (both HD and legacy).
-   * @returns The total number of addresses.
-   */
-  public async getAddressesCount(): Promise<number> {
-    this.ensureInitialized();
-    try {
-      const count = await this.executeWasmMethod<number>(() =>
-        parseInt(this.pastelInstance!.GetAddressesCount(), 10)
-      );
-
-      console.log(`Total addresses found in wallet (HD + legacy): ${count}`);
-      return count;
-    } catch (error) {
-      console.error("Error getting addresses count:", error);
+    if (isNaN(count)) {
+      console.warn("Invalid address count received:", response);
       return 0;
     }
+
+    console.log(`Total addresses found in wallet (HD + legacy): ${count}`);
+    return count;
+  } catch (error) {
+    console.error("Error getting addresses count:", error);
+    return 0;
   }
+}
+
+/**
+ * Retrieves all addresses, optionally filtered by network mode.
+ * @param mode - (Optional) The network mode. If omitted, retrieves addresses for all modes.
+ * @returns An array of wallet addresses.
+ */
+public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
+  this.ensureInitialized();
+  try {
+    const addressCount = await this.getAddressesCount();
+    console.log(`getAllAddresses: Initial count is ${addressCount}`);
+
+    if (addressCount === 0) {
+      return [];
+    }
+
+    const networkMode = mode !== undefined
+      ? mode
+      : this.getNetworkModeEnum(await this.getNetworkMode());
+
+    console.log(`getAllAddresses: Getting addresses for network mode ${networkMode}`);
+
+    const response = await this.executeWasmMethod(() =>
+      this.pastelInstance!.GetAddresses(networkMode)
+    );
+
+    let addresses: string[];
+    
+    // Based on the logs, we're getting a direct vector of strings from WASM
+    if (Array.isArray(response)) {
+      addresses = response;
+    } else if (typeof response === 'string') {
+      // Handle string response
+      if ((response as string).startsWith('P')) {
+        // Single address
+        addresses = [response];
+      } else {
+        // Try parsing as JSON
+        try {
+          const parsed = JSON.parse(response);
+          addresses = Array.isArray(parsed.data) ? parsed.data : 
+                     Array.isArray(parsed) ? parsed :
+                     [String(parsed)];
+        } catch {
+          // If JSON parse fails and it's a valid address, treat as single address
+          addresses = ((response as string).startsWith('P')) ? [response] : [];
+        }
+      }
+    } else {
+      console.error('Unexpected response format from GetAddresses:', response);
+      return [];
+    }
+
+    // Validate addresses and remove any invalid ones
+    addresses = addresses.filter(addr => 
+      typeof addr === 'string' && addr.startsWith('P')
+    );
+
+    console.log(`getAllAddresses: Successfully retrieved ${addresses.length} addresses:`, addresses);
+    return addresses;
+
+  } catch (error) {
+    console.error("Error in getAllAddresses:", error);
+    return [];
+  }
+}
 
   // -------------------------
   // PastelID Management Methods

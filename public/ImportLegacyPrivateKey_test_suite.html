@@ -235,7 +235,7 @@
                      }
                  ]);
          
-                 const result = pastelInstance.CreateSendToTransactionJson(
+                 const result = pastelInstance.CreateSendToTransaction(
                      mode,
                      sendToJson,
                      address,
@@ -263,7 +263,7 @@
                          "amount": 0.01
                      }]);
                      
-                     const smallTxResult = pastelInstance.CreateSendToTransactionJson(
+                     const smallTxResult = pastelInstance.CreateSendToTransaction(
                          mode,
                          smallAmount,
                          address,
@@ -281,7 +281,7 @@
          
                      // 2. Try with single UTXO to verify signing works with one input
                      const singleUtxoJson = JSON.stringify([utxoJson[0]]);
-                     const singleUtxoResult = pastelInstance.CreateSendToTransactionJson(
+                     const singleUtxoResult = pastelInstance.CreateSendToTransaction(
                          mode,
                          sendToJson,
                          address,
@@ -395,7 +395,7 @@
                              "amount": amount
                          }]);
          
-                         const result = pastelInstance.CreateSendToTransactionJson(
+                         const result = pastelInstance.CreateSendToTransaction(
                              mode,
                              sendToJson,
                              address,

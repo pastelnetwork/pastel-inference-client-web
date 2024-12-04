@@ -116,7 +116,7 @@ export interface PastelInstance {
     blockHeight: number,
     expiryBlockHeight: number,
   ): string;
-  CreateSendToTransactionJson(
+  CreateSendToTransaction(
     mode: NetworkMode,
     sendToJson: string,
     optionalField: string,

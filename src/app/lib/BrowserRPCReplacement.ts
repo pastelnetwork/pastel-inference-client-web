@@ -893,7 +893,7 @@ class BrowserRPCReplacement {
    * @param nHeight - The current block height.
    * @returns The created transaction data as a serialized string.
    */
-  public async createSendToTransactionJson(
+  public async CreateSendToTransaction(
     sendToJson: string,
     fromAddress: string,
     nHeight: number
@@ -915,7 +915,7 @@ class BrowserRPCReplacement {
       console.log(`Block Height: ${nHeight}`);
 
       const response = this.executeWasmMethod(() =>
-        this.pastelInstance!.CreateSendToTransactionJson(
+        this.pastelInstance!.CreateSendToTransaction(
           networkMode,
           sendToJson,
           fromAddress,
@@ -925,14 +925,14 @@ class BrowserRPCReplacement {
       );
 
       if (response) {
-        console.log(`CreateSendToTransactionJson Response: ${response}`);
+        console.log(`CreateSendToTransaction Response: ${response}`);
         return response;
       }
 
-      console.error("CreateSendToTransactionJson failed without a response.");
+      console.error("CreateSendToTransaction failed without a response.");
       return "";
     } catch (error) {
-      console.error("Error in createSendToTransactionJson:", error);
+      console.error("Error in CreateSendToTransaction:", error);
       throw error;
     }
   }

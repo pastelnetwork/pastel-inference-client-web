@@ -1387,17 +1387,45 @@ interface PromotionalPack {
 async function importPrivateKeySecurely(
   privateKeyWIF: string,
   expectedAddress: string | undefined = undefined,
-  password: string | undefined = undefined
 ): Promise<{ success: boolean; address: string; error?: string }> {
   const rpc = BrowserRPCReplacement.getInstance();
-  
+
   try {
-    // Step 1: Check wallet lock status and unlock if needed
-    if (await rpc.isLocked() && password) {
-      await rpc.unlockWallet(password);
+    // Step 1: Retrieve the wallet password from localStorage
+    const walletLocalStorageName = "walletInfo";
+    const walletDataEncoded = localStorage.getItem(walletLocalStorageName);
+    if (!walletDataEncoded) {
+      throw new Error("Wallet data not found in localStorage.");
     }
-    
-    // Step 2: Import the private key and properly parse the response
+
+    // Decode from base64 and parse JSON
+    let walletData;
+    try {
+      const decodedData = atob(walletDataEncoded);
+      walletData = JSON.parse(decodedData);
+    } catch {
+      throw new Error("Failed to decode wallet data from localStorage.");
+    }
+
+    if (!walletData.walletPassword) {
+      throw new Error("Wallet password not found in wallet data.");
+    }
+
+    const walletPassword = walletData.walletPassword;
+    console.log("Retrieved wallet password from localStorage.");
+
+    // Step 2: Check if the wallet is locked and unlock it if necessary
+    const isLocked = await rpc.isLocked();
+    if (isLocked) {
+      console.log("Wallet is locked. Attempting to unlock...");
+      await rpc.unlockWallet(walletPassword);
+      console.log("Wallet unlocked successfully.");
+    } else {
+      console.log("Wallet is already unlocked.");
+    }
+
+    // Step 3: Import the private key
+    console.log(`Importing private key: ${privateKeyWIF}`);
     const importResponse = await rpc.importLegacyPrivateKey(
       privateKeyWIF,
       NetworkMode.Mainnet
@@ -1413,44 +1441,57 @@ async function importPrivateKeySecurely(
       throw new Error(`Invalid response format from importLegacyPrivateKey: ${importResponse}`);
     }
 
-    // Step 3: Validate the imported address matches expected address if provided
+    console.log(`Imported Address: ${importedAddress}`);
+
+    // Step 4: Validate the imported address matches the expected address if provided
     if (expectedAddress && importedAddress !== expectedAddress) {
       throw new Error(
         `Address mismatch: imported address ${importedAddress} does not match expected address ${expectedAddress}`
       );
     }
 
-    // Step 4: Test key by preparing a transaction using direct CreateSendToTransactionJson
+    // Step 5: Verify key import by creating a test transaction
     try {
       const burnAddress = await rpc.getBurnAddress();
       const balance = await rpc.checkPSLAddressBalance(importedAddress);
-      
+
+      console.log(`Balance for ${importedAddress}: ${balance} PSL`);
+
       if (balance <= 0) {
         throw new Error("Cannot test key - address has no balance");
       }
 
       const utxos = await rpc.getAddressUtxos(importedAddress);
       console.log(`UTXOs for ${importedAddress}:`, utxos);
-      
+
       const currentBlockHeight = await rpc.getCurrentPastelBlockHeight();
 
-      // Use the lower-level CreateSendToTransactionJson interface
+      // Prepare the SendToTransaction JSON
       const sendToJson = JSON.stringify([
         { address: burnAddress, amount: 0.00000005 } // 5 patoshis
       ]);
 
-      const response = await rpc.createSendToTransactionJson(
+      console.log(`Send To JSON: ${sendToJson}`);
+
+      const utxosJSON = JSON.stringify(utxos);
+      console.log(`UTXOs JSON: ${utxosJSON}`);
+
+      const networkMode = await rpc.getNetworkMode().then(mode => rpc.getNetworkModeEnum(mode));
+      console.log(`Network Mode: ${networkMode}`);
+      console.log(`Block Height: ${currentBlockHeight}`);
+
+      const transactionResponse = await rpc.CreateSendToTransaction(
         sendToJson,
         importedAddress,
         currentBlockHeight
       );
 
-      if (!response) {
-        throw new Error("Failed to create test transaction");
-      }
+      const response = JSON.parse(transactionResponse);
+      const transactionResult = JSON.parse(response.data); 
+      console.log(`Transaction Result: ${JSON.stringify(transactionResult, null, 2)}`);
 
     } catch (error) {
-      throw new Error(`Key verification failed - unable to create test transaction: ${error}`);
+      throw new Error(`Key verification failed - unable to create test transaction: ${error instanceof Error ? error.message : error}`);
     }
 
     return {
@@ -1467,7 +1508,6 @@ async function importPrivateKeySecurely(
     };
   }
 }
-
 export async function importPromotionalPack(jsonData: string): Promise<{
   success: boolean;
   message: string;
@@ -1534,16 +1574,14 @@ export async function importPromotionalPack(jsonData: string): Promise<{
     // 2. Import the tracking address private key using ImportLegacyPrivateKey
     try {
       browserLogger.info(`Importing private key for tracking address: ${packData.psl_credit_usage_tracking_address}`);
-  
+
+      // Step 2b: Import the private key using the retrieved password
       const importResult = await importPrivateKeySecurely(
         packData.psl_credit_usage_tracking_address_private_key,
-        packData.psl_credit_usage_tracking_address
+        packData.psl_credit_usage_tracking_address,
       );
-  
-      if (!importResult.success) {
-        browserLogger.error(`Error importing private key: ${importResult.error}`);
-        throw new Error(importResult.error);
-      }
+
+      browserLogger.info(`ImportResult: ${JSON.stringify(importResult)}`);
   
       browserLogger.info(`Private key imported successfully for tracking address: ${packData.psl_credit_usage_tracking_address}`);
       
@@ -1573,6 +1611,7 @@ export async function importPromotionalPack(jsonData: string): Promise<{
         testMessage,
         signature
       );
+
 
       if (verificationResult === true) {
         browserLogger.info(`PastelID ${packData.pastel_id_pubkey} verified successfully`);

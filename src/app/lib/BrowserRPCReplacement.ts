@@ -642,40 +642,23 @@ class BrowserRPCReplacement {
   // Transaction Management Methods
   // -------------------------
 
-  public async initializeWalletForTransaction(
-    creditUsageTrackingPSLAddress: string
-  ): Promise<void> {
-    // First check if we already have the private key for this address
-    const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
+  async initializeWalletForTransaction(creditUsageTrackingPSLAddress: string): Promise<void> {
     const addresses = await this.getAllAddresses();
-
+    
+    // Check if we already have access to this address
     if (!addresses.includes(creditUsageTrackingPSLAddress)) {
-      // If we don't have the address, check if we have stored a WIF key for it
-      const storedKeys = JSON.parse(
-        localStorage.getItem("psltKeyStore") || "{}"
-      );
-      const wifKey = storedKeys[creditUsageTrackingPSLAddress];
-
-      if (wifKey) {
-        try {
-          // Import the private key
-          await this.executeWasmMethod(() =>
-            this.pastelInstance!.ImportLegacyPrivateKey(wifKey, networkMode)
-          );
-          console.log(
-            `Successfully imported key for address: ${creditUsageTrackingPSLAddress}`
-          );
-        } catch (error) {
-          console.error("Error importing private key:", error);
-          throw new Error(
-            `Failed to import private key for ${creditUsageTrackingPSLAddress}`
-          );
-        }
-      } else {
-        throw new Error(
-          `No private key available for ${creditUsageTrackingPSLAddress}`
-        );
+      throw new Error(`No access to address ${creditUsageTrackingPSLAddress} - please import the private key first`);
+    }
+  
+    // Verify we can access the private key through the HD wallet
+    try {
+      const networkMode = this.getNetworkModeEnum(await this.getNetworkMode());
+      const secret = await this.getAddressSecret(creditUsageTrackingPSLAddress, networkMode);
+      if (!secret) {
+        throw new Error('Unable to access address private key');
       }
+    } catch (error) {
+      throw new Error(`Failed to verify access to address ${creditUsageTrackingPSLAddress}: ${error}`);
     }
   }
 
@@ -1285,7 +1268,7 @@ class BrowserRPCReplacement {
    * Retrieves the current network mode.
    * @returns The current network mode as a string.
    */
-  private async getNetworkMode(): Promise<string> {
+  public async getNetworkMode(): Promise<string> {
     const networkInfo = await this.getNetworkInfo();
     return networkInfo.network;
   }
@@ -1295,7 +1278,7 @@ class BrowserRPCReplacement {
    * @param mode - The network mode as a string.
    * @returns The corresponding NetworkMode enum value.
    */
-  private getNetworkModeEnum(mode: string): NetworkMode {
+  public getNetworkModeEnum(mode: string): NetworkMode {
     switch (mode) {
       case "Mainnet":
         return NetworkMode.Mainnet;

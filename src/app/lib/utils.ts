@@ -1384,11 +1384,6 @@ interface PromotionalPack {
   psl_credit_usage_tracking_address_private_key: string;
 }
 
-interface WasmResponse {
-  data: string;
-  result: boolean;
-}
-
 async function importPrivateKeySecurely(
   privateKeyWIF: string,
   expectedAddress: string | undefined = undefined,
@@ -1397,93 +1392,74 @@ async function importPrivateKeySecurely(
   const rpc = BrowserRPCReplacement.getInstance();
   
   try {
-
-    // Step 1: Validate private key format (basic WIF check)
-    if (!privateKeyWIF || typeof privateKeyWIF !== 'string' || privateKeyWIF.length < 50) {
-      throw new Error("Invalid private key format");
-    }
-
-    // Step 2: Check wallet lock status and unlock if needed
+    // Step 1: Check wallet lock status and unlock if needed
     if (await rpc.isLocked() && password) {
-      try {
-        await rpc.unlockWallet(password);
-        console.log("Wallet unlocked successfully");
-      } catch (unlockError) {
-        throw new Error(`Failed to unlock wallet: ${unlockError}`);
-      }
+      await rpc.unlockWallet(password);
     }
     
-    // Step 3: Import the private key
-    const response = await rpc.importLegacyPrivateKey(
+    // Step 2: Import the private key and properly parse the response
+    const importResponse = await rpc.importLegacyPrivateKey(
       privateKeyWIF,
       NetworkMode.Mainnet
     );
 
-    // Handle response which might be a string, JSON string, or object
     let importedAddress: string;
-    try {
-      if (typeof response === 'string') {
-        try {
-          // First try to parse as JSON
-          const parsedResponse = JSON.parse(response);
-          if (typeof parsedResponse === 'object' && 'data' in parsedResponse) {
-            importedAddress = parsedResponse.data;
-          } else {
-            // If parsed but not in expected format, use as is
-            importedAddress = response;
-          }
-        } catch {
-          // If JSON parse fails, use the string directly
-          importedAddress = response;
-        }
-      } else if (typeof response === 'object' && 'data' in response) {
-        importedAddress = (response as WasmResponse).data;
-      } else {
-        throw new Error(`Invalid response format from WASM: ${JSON.stringify(response)}`);
-      }
-    } catch (error) {
-      console.error("Error parsing WASM response:", error);
-      throw new Error(`Failed to parse WASM response: ${error instanceof Error ? error.message : String(error)}`);
+    if (typeof importResponse === 'string') {
+      const parsed = JSON.parse(importResponse);
+      importedAddress = parsed.data as string;
+    } else if (typeof importResponse === 'object' && importResponse && 'data' in importResponse) {
+      importedAddress = (importResponse as { data: string }).data;
+    } else {
+      throw new Error(`Invalid response format from importLegacyPrivateKey: ${importResponse}`);
     }
 
-    // Log the values for debugging
-    console.log('Imported address:', importedAddress);
-    console.log('Expected address:', expectedAddress);
-    console.log('Raw response:', response);
-
-    // Step 4: Validate the imported address matches expected address if provided
+    // Step 3: Validate the imported address matches expected address if provided
     if (expectedAddress && importedAddress !== expectedAddress) {
       throw new Error(
         `Address mismatch: imported address ${importedAddress} does not match expected address ${expectedAddress}`
       );
     }
 
-    // Step 5: Verify we can sign with the imported key
+    // Step 4: Test key by preparing a transaction using direct CreateSendToTransactionJson
     try {
-      const testMessage = "key_verification_test";
-      const signature = await rpc.signWithKeyAt(0, testMessage);
-      if (!signature) {
-        throw new Error("Key verification failed - unable to sign test message");
+      const burnAddress = await rpc.getBurnAddress();
+      const balance = await rpc.checkPSLAddressBalance(importedAddress);
+      
+      if (balance <= 0) {
+        throw new Error("Cannot test key - address has no balance");
       }
-    } catch (signError) {
-      throw new Error(`Failed to verify key usability: ${signError}`);
+
+      const utxos = await rpc.getAddressUtxos(importedAddress);
+      console.log(`UTXOs for ${importedAddress}:`, utxos);
+      
+      const currentBlockHeight = await rpc.getCurrentPastelBlockHeight();
+
+      // Use the lower-level CreateSendToTransactionJson interface
+      const sendToJson = JSON.stringify([
+        { address: burnAddress, amount: 0.00000005 } // 5 patoshis
+      ]);
+
+      const response = await rpc.createSendToTransactionJson(
+        sendToJson,
+        importedAddress,
+        currentBlockHeight
+      );
+
+      if (!response) {
+        throw new Error("Failed to create test transaction");
+      }
+
+    } catch (error) {
+      throw new Error(`Key verification failed - unable to create test transaction: ${error}`);
     }
 
-    // Step 6: Store the imported address in localStorage
-    const storedKeys = JSON.parse(localStorage.getItem("psltKeyStore") || "{}");
-    storedKeys[importedAddress] = privateKeyWIF;
-    localStorage.setItem("psltKeyStore", JSON.stringify(storedKeys));
-
-    // Step 7: Return success result
     return {
       success: true,
       address: importedAddress
     };
 
-  } catch (error: unknown) {
-    // Step 8: Comprehensive error handling
+  } catch (error) {
     console.error("Private key import failed:", error);
-    // Return a structured error response
     return {
       success: false,
       address: "",
@@ -1558,29 +1534,25 @@ export async function importPromotionalPack(jsonData: string): Promise<{
     // 2. Import the tracking address private key using ImportLegacyPrivateKey
     try {
       browserLogger.info(`Importing private key for tracking address: ${packData.psl_credit_usage_tracking_address}`);
-
+  
       const importResult = await importPrivateKeySecurely(
-          packData.psl_credit_usage_tracking_address_private_key,
-          packData.psl_credit_usage_tracking_address
-        );
-
+        packData.psl_credit_usage_tracking_address_private_key,
+        packData.psl_credit_usage_tracking_address
+      );
+  
       if (!importResult.success) {
         browserLogger.error(`Error importing private key: ${importResult.error}`);
         throw new Error(importResult.error);
       }
-
-      const importPrivKeyResult = importResult.address;
-
-      browserLogger.info(`Private key import result: ${importPrivKeyResult}`);
-
-      // Optionally verify the address
-      if (importPrivKeyResult !== packData.psl_credit_usage_tracking_address) {
-        browserLogger.warn(`Imported address (${importPrivKeyResult}) does not match expected address (${packData.psl_credit_usage_tracking_address})`);
-      }
-
-      // Since importLegacyPrivateKey returns a string (address) or throws,
-      // if we reach here, the import was successful.
+  
       browserLogger.info(`Private key imported successfully for tracking address: ${packData.psl_credit_usage_tracking_address}`);
+      
+      // Verify key import by checking wallet access
+      const networkMode = await rpc.getNetworkMode().then(mode => rpc.getNetworkModeEnum(mode));
+      const secret = await rpc.getAddressSecret(packData.psl_credit_usage_tracking_address, networkMode);
+      if (!secret) {
+        throw new Error('Failed to verify key import - unable to retrieve private key');
+      }
     } catch (privKeyError) {
       browserLogger.error(`Error importing private key for address ${packData.psl_credit_usage_tracking_address}: ${(privKeyError as Error).message}`);
       throw privKeyError;

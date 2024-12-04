@@ -115,14 +115,15 @@ export interface PastelInstance {
     utxos: string,
     blockHeight: number,
     expiryBlockHeight: number,
+    walletPassword: string,
   ): string;
-  CreateSendToTransaction(
-    mode: NetworkMode,
-    sendToJson: string,
-    optionalField: string,
-    utxoJson: string,
-    fee: number
-  ): string;
+  // CreateSendToTransaction(
+  //   mode: NetworkMode,
+  //   sendToJson: string,
+  //   optionalField: string,
+  //   utxoJson: string,
+  //   fee: number
+  // ): string;
   CreateRegisterPastelIdTransaction(
     mode: NetworkMode,
     pastelID: string,

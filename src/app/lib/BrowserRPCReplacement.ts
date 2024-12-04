@@ -37,7 +37,7 @@ import {
 } from "@/app/lib/storage";
 
 
-export async function unlockWallet(): Promise<void> {
+export async function unlockWalletGettingPWFromStorage(): Promise<void> {
   // Step 1: Retrieve the wallet password from localStorage
   const rpc = BrowserRPCReplacement.getInstance();
 
@@ -862,55 +862,73 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
           )} PSL, need ${totalAmount.toFixed(8)} PSL`
         );
       }
+    // Step 5: Get wallet password
 
-      // Step 5: Prepare transaction data
-      const networkMode = await this.getNetworkMode().then((mode) =>
-        this.getNetworkModeEnum(mode)
-      );
-      const sendToJson = JSON.stringify(sendTo);
-      const utxosJson = JSON.stringify(utxos);
-      const currentBlockHeight = await this.getCurrentPastelBlockHeight();
+    const walletDataEncoded = localStorage.getItem("walletInfo");
+    if (!walletDataEncoded) {
+      throw new Error("Wallet data not found in localStorage.");
+    }
 
-      // Step 6: Unlock wallet
-      try {
-        const walletPassword = localStorage.getItem("walletPassword");
-        if (!walletPassword) {
-          throw new Error("Wallet password not found");
-        }
-        await this.unlockWallet(walletPassword);
+    let walletData;
+    try {
+      const decodedData = atob(walletDataEncoded);
+      walletData = JSON.parse(decodedData);
+    } catch {
+      throw new Error("Failed to decode wallet data from localStorage.");
+    }
 
-        // Double check wallet is unlocked
-        const isWalletLocked = await this.isLocked();
-        if (isWalletLocked) {
-          throw new Error("Wallet is still locked after unlock attempt");
-        }
-        console.log(`${logPrefix} Wallet successfully unlocked`);
-      } catch (error) {
-        throw new Error(
-          `Wallet unlock failed: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
+    if (!walletData.walletPassword) {
+      throw new Error("Wallet password not found in wallet data.");
+    }
+
+    const walletPassword = walletData.walletPassword;
+    console.log(`${logPrefix} Retrieved wallet password from localStorage.`);
+
+    // Step 6: Prepare transaction data
+    const networkMode = await this.getNetworkMode().then((mode) =>
+      this.getNetworkModeEnum(mode)
+    );
+    const sendToJson = JSON.stringify(sendTo);
+    const utxosJson = JSON.stringify(utxos);
+    const currentBlockHeight = await this.getCurrentPastelBlockHeight();
+
+    // Step 7: Unlock wallet
+    try {
+      // Double check wallet is unlocked after providing password
+      await this.unlockWallet(walletPassword);
+      const isWalletLocked = await this.isLocked();
+      if (isWalletLocked) {
+        throw new Error("Wallet is still locked after unlock attempt");
       }
-
-      // Step 7: Create transaction
-      console.log(`${logPrefix} Creating transaction with params:
-      From: ${fromAddress}
-      Network: ${networkMode}
-      Block Height: ${currentBlockHeight}
-      Recipients: ${sendToJson}
-      Available UTXOs: ${utxosJson}`);
-
-      const response = await this.executeWasmMethod(() =>
-        this.pastelInstance!.CreateSendToTransaction(
-          networkMode,
-          sendToJson,
-          fromAddress,
-          utxosJson,
-          currentBlockHeight,
-          0
-        )
+      console.log(`${logPrefix} Wallet successfully unlocked`);
+    } catch (error) {
+      throw new Error(
+        `Wallet unlock failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
+    }
+
+    // Step 8: Create transaction
+    console.log(`${logPrefix} Creating transaction with params:
+    From: ${fromAddress}
+    Network: ${networkMode}
+    Block Height: ${currentBlockHeight}
+    Expiry Height: ${0}
+    Recipients: ${sendToJson}
+    Available UTXOs: ${utxosJson}`);
+
+    const response = await this.executeWasmMethod(() =>
+      this.pastelInstance!.CreateSendToTransaction(
+        networkMode,
+        sendToJson,
+        fromAddress,
+        utxosJson,
+        currentBlockHeight,
+        0,
+        walletPassword
+      )
+    );
 
       if (!response) {
         throw new Error("Transaction creation failed - no response from WASM");
@@ -1046,7 +1064,8 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
       console.log(`Network Mode: ${networkMode}`);
       console.log(`Block Height: ${nHeight}`);
 
-      await unlockWallet()
+      const walletPassword = await this.getWalletPassword();
+      await this.unlockWallet(walletPassword);
 
       const response = this.executeWasmMethod(() =>
         this.pastelInstance!.CreateSendToTransaction(
@@ -1054,7 +1073,9 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
           sendToJson,
           fromAddress,
           utxosJson,
-          nHeight
+          nHeight,
+          0,
+          walletPassword
         )
       );
 

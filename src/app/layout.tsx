@@ -23,10 +23,6 @@ export default function RootLayout({
   return (
     <html lang="en" data-theme="light">
       <head>
-        <meta 
-          httpEquiv="Content-Security-Policy" 
-          content="block-all-mixed-content; connect-src 'self' http: https:;"
-        />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@sira-ui/tailwind/dist/css/styles.css" />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/default.min.css" />

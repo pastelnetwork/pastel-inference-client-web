@@ -934,8 +934,8 @@ function dbg(...args) {
 // end include: runtime_debug.js
 // === Body ===
 var ASM_CONSTS = {
-  1299836: () => Module.getRandomValue(),
-  1299872: () => {
+  1300652: () => Module.getRandomValue(),
+  1300688: () => {
     if (Module.getRandomValue === undefined) {
       try {
         var window_ = "object" === typeof window ? window : self;
@@ -963,7 +963,7 @@ var ASM_CONSTS = {
       }
     }
   },
-  1300648: () => {
+  1301464: () => {
     if (!FS.analyzePath("/wallet_data").exists) {
       FS.mkdir("/wallet_data");
       FS.mount(IDBFS, {}, "/wallet_data");
@@ -979,7 +979,7 @@ var ASM_CONSTS = {
       }
     });
   },
-  1301070: () => {
+  1301886: () => {
     FS.syncfs(function(err) {
       if (err) {
         console.error("Error syncing file system:", err);

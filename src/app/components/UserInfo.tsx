@@ -381,15 +381,24 @@ export default function UserInfo() {
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(
-      () => {
-        setMessage("Address copied to clipboard!");
-        setTimeout(() => setMessage(""), 3000);
-      },
-      (err) => {
-        browserLogger.error("Could not copy text: ", err);
-      }
-    );
+    // Create a temporary input element
+    const tempInput = document.createElement('input');
+    tempInput.value = text;
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    
+    try {
+      // Execute copy command
+      document.execCommand('copy');
+      setMessage("Address copied to clipboard!");
+      setTimeout(() => setMessage(""), 3000);
+    } catch (err) {
+      browserLogger.error("Could not copy text: ", err);
+      setMessage("Failed to copy address");
+    } finally {
+      // Clean up by removing the temporary input
+      document.body.removeChild(tempInput);
+    }
   };
 
   return (

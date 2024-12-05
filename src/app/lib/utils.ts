@@ -1220,7 +1220,7 @@ export async function filterSupernodes(
       const pingStart = performance.now();
       try {
         await Promise.race([
-          fetch(`http://${ipAddress}:7123/ping`),
+          fetch(`http://${ipAddress}:7123/liveness_ping`),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), maxResponseTimeInMilliseconds))
         ]);
       } catch {

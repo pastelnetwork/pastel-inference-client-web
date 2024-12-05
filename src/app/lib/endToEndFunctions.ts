@@ -1033,16 +1033,16 @@ export async function handleInferenceRequestEndToEnd(
           await utils.validateCreditPackTicketMessageData(usageRequestResponse);
         if (validationErrors && validationErrors.length > 0) {
           callback(
-            JSON.stringify({
+            utils.safeStringify({
               message: `Invalid inference request response from Supernode URL ${supernodeURL}: ${validationErrors.join(
                 ", "
               )}`,
             })
           );
           throw new Error(
-            `Invalid inference request response from Supernode URL ${supernodeURL}: ${validationErrors.join(
+            `Invalid inference request response from Supernode URL ${supernodeURL}: ${utils.safeStringify(validationErrors.join(
               ", "
-            )}`
+            ))}`
           );
         }
 

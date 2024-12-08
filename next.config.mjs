@@ -8,7 +8,14 @@ const nextConfig = {
 
     return config;
   },
-  // Remove the headers section completely
+  // This configuration allows server actions from any origin/host
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',  // Optional: adjust as needed
+      allowedOrigins: ['*'],
+      allowedForwardedHosts: ['*']
+    }
+  }
 };
 
 export default nextConfig;

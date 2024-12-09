@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import jsQR from 'jsqr';
-import { Button, Typography, Modal, Spin } from "antd";
-import { LoadingOutlined } from '@ant-design/icons';
+import { Button, Typography, Modal } from "antd";
 
 const { Title, Paragraph } = Typography;
 
+import Loading from '@/app/components/Loading';
 import useStore from '@/app/store/useStore';
 import * as api from '@/app/lib/api';
 
@@ -143,7 +143,7 @@ const QRCodeScanner: React.FC = () => {
         footer={null}
         onCancel={closeQRCodeScan}
       >
-        <div className="bg-white p-4 rounded-lg w-full">
+        <div className="bg-white sm:p-4 rounded-lg w-full">
           <Title level={2} className="text-2xl font-bold mb-4">Scan QR Code</Title>
           <div className='w-full relative mt-8'>
             <div className={`text-center flex justify-center qr-reader-wrapper relative ${hasPermission && showQRScanner ? 'bg-black' : 'permission-wrapper'}`}>
@@ -165,12 +165,7 @@ const QRCodeScanner: React.FC = () => {
                 </div>
               }
             </div>
-            {isLoading ? (
-              <div className='absolute top-0 left-0 right-0 bottom-0 flex justify-center items-center z-50 w-full h-full bg-opacity-60 bg-slate-50'>
-                <Spin indicator={<LoadingOutlined style={{ fontSize: 28 }} spin />} />
-                <div className='ml-3'>Loading ...</div>
-              </div>
-            ) : null }
+            <Loading isLoading={isLoading} className='absolute top-0 left-0 right-0 bottom-0 z-50 w-full h-full bg-opacity-60 bg-slate-50 text-base' />
           </div>
         </div>
       </Modal>

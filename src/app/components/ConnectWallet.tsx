@@ -27,13 +27,13 @@ const ConnectWallet: React.FC = () => {
         closable={false}
         footer={null}
       >
-        <div className="bg-white p-4 rounded-lg text-center">
+        <div className="bg-white sm:p-4 rounded-lg text-center">
           <Title level={2} className="text-2xl font-bold mb-4">Connect Wallet</Title>
           <Paragraph className="mb-4 text-base">Please import an existing wallet or create a new wallet.</Paragraph>
           <div className='mb-4'>
             <Button
               onClick={createNewWallet}
-              className="btn success outline w-80 transition duration-300 text-base font-bold"
+              className="btn success outline w-full sm:w-80 transition duration-300 text-base font-bold"
             >
               Create New Wallet
             </Button>
@@ -41,7 +41,7 @@ const ConnectWallet: React.FC = () => {
           <div className='mb-4'>
             <Button
               onClick={handleImportExistingWallet}
-              className="btn success outline w-80 transition duration-300 text-base font-bold"
+              className="btn success outline w-full sm:w-80 transition duration-300 text-base font-bold"
             >
               Import Existing Wallet
             </Button>

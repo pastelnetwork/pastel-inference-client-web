@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import compress from 'browser-image-compression';
 
+import Loading from '@/app/components/Loading';
 import { ModelMenu, ModelInfo, ModelParameter, InferenceResultDict, InferenceRequestParams } from '@/app/types';
 import * as api from '@/app/lib/api';
 import useStore from '@/app/store/useStore';
@@ -304,7 +305,7 @@ export default function CreateInferenceRequest({ modelMenu }: CreateInferenceReq
   return (
     <div className="grid grid-cols-1 gap-4 p-4 has-border rounded-xl bg-white shadow-md mt-3">
       <h2 className="text-2xl text-bw-800">Create New Inference Request</h2>
-      <form id="inferenceRequestForm" className="grid grid-cols-2 gap-4" onSubmit={handleSubmit}>
+      <form id="inferenceRequestForm" className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleSubmit}>
         <div>
           <label className="block text-bw-700 font-bold mb-2" htmlFor="inferenceType">Inference Type</label>
           <select 
@@ -487,17 +488,16 @@ export default function CreateInferenceRequest({ modelMenu }: CreateInferenceReq
         )}
 
         <div className="col-span-full flex justify-between">
-          <div className="flex gap-4 items-center" style={{ width: '100%' }}>
+          <div className="flex gap-4 md:items-center flex-col md:flex-row" style={{ width: '100%' }}>
             <button 
-              className="btn success outline" 
+              className="btn success outline order-2 md:order-1 w-56 py-3 md:py-0 md:w-44" 
               type="submit" 
-              style={{ width: '180px' }}
               disabled={isLoading}
             >
               Create Inference Request
             </button>
-            {isLoading && <div className="btn is-loading">Processing...</div>}
-            <div className="prompt success xs" id="currentStatusContainer">
+            <Loading isLoading={isLoading} className='order-3 md:order-2 font-normal text-sm' text="Processing..." />
+            <div className="prompt success xs order-1 md:order-3" id="currentStatusContainer">
               <label className="text-bw-800 font-bold mb-4" htmlFor="currentStatus">Current Status:</label>
               <div className="content p-2" id="currentStatus">{status}</div>
             </div>

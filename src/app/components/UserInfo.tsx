@@ -3,6 +3,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { Tooltip } from 'antd';
+
+import Loading from '@/app/components/Loading';
 import browserLogger from "@/app/lib/logger";
 import * as api from "@/app/lib/api";
 import * as utils from "@/app/lib/utils";
@@ -44,6 +47,8 @@ export default function UserInfo() {
     message: "",
   });
   const [shoModalMessage, setShowModalMessage] = useState<boolean>(false);
+  const [isCopiedPassword, setCopiedPassword] = useState(false);
+  const [isCopiedAddress, setCopiedAddress] = useState(false);
 
   const refreshWalletInfo = useCallback(async () => {
     timeout = setTimeout(() => {
@@ -382,6 +387,7 @@ export default function UserInfo() {
 
   const copyToClipboard = (text: string) => {
     // Create a temporary input element
+    setCopiedAddress(true);
     const tempInput = document.createElement('input');
     tempInput.value = text;
     document.body.appendChild(tempInput);
@@ -390,20 +396,30 @@ export default function UserInfo() {
     try {
       // Execute copy command
       document.execCommand('copy');
-      setMessage("Address copied to clipboard!");
-      setTimeout(() => setMessage(""), 3000);
+      setTimeout(() => {
+        setCopiedAddress(false);
+      }, 3000);
     } catch (err) {
       browserLogger.error("Could not copy text: ", err);
       setMessage("Failed to copy address");
+      setCopiedAddress(false);
     } finally {
       // Clean up by removing the temporary input
       document.body.removeChild(tempInput);
     }
   };
 
+  const handleCopyPassword = () => {
+    if (walletPassword) {
+      setCopiedPassword(true);
+      navigator.clipboard.writeText(walletPassword);
+      setTimeout(() => setCopiedPassword(false), 5000);
+    }
+  }
+
   return (
-    <div className="grid grid-cols-5 gap-4 p-4 has-border rounded-xl bg-white shadow-md mt-3">
-      <h2 className="text-2xl col-span-full text-bw-800">User Information</h2>
+    <div className="flex flex-col gap-4 p-4 has-border rounded-xl bg-white shadow-md mt-3">
+      <h2 className="text-xl md:text-2xl col-span-full text-bw-800">User Information</h2>
 
       <div className="mt-4 col-span-full">
         <div className="flex items-center">
@@ -416,18 +432,20 @@ export default function UserInfo() {
         </div>
 
         {showPassword && walletPassword && (
-          <div className="mt-2 p-4 bg-gray-50 border border-gray-300 rounded-lg w-full">
+          <div className="mt-2 p-4 bg-bw-100 border border-gray-300 rounded-lg w-full">
             <p className="text-bw-700 font-bold text-gray-700 mb-2">Wallet Password:</p>
             <div className="inline-flex items-center justify-between bg-white border border-gray-200 p-2 rounded w-auto">
-              <span className="font-medium text-gray-900 break-all">
+              <span className="font-medium  break-all">
                 {walletPassword}
               </span>
-              <button
-                onClick={() => navigator.clipboard.writeText(walletPassword)}
-                className="ml-4 text-green-600 hover:text-green-800 transition-colors"
-              >
-                📋 Copy
-              </button>
+              <Tooltip title={!isCopiedPassword ? "Copy password to clipboard" : "Password copied to clipboard!"}>
+                <button
+                  onClick={handleCopyPassword}
+                  className="ml-4 text-green-600 hover:text-green-800 transition-colors whitespace-nowrap"
+                >
+                  📋 {!isCopiedPassword ? "Copy" : "Copied"}
+                </button>
+              </Tooltip>
             </div>
             <p className="text-xs text-gray-600 mt-2">
               Please store this password securely. You&apos;ll need it if you
@@ -515,9 +533,7 @@ export default function UserInfo() {
                 >
                   Create PastelID
                 </button>
-                {isCreatingPastelID && (
-                  <div className="btn is-loading">Creating...</div>
-                )}
+                <Loading isLoading={isCreatingPastelID} text="Creating..." className="pt-4" />
               </div>
             </form>
             <p className="mt-4">
@@ -605,39 +621,42 @@ export default function UserInfo() {
           <label className="block text-bw-700 font-bold mb-2">
             Your Currently Selected PastelID:
           </label>
-          <span id="userPastelID" className="text-bw-700">
+          <span id="userPastelID" className="text-bw-700  truncate max-w-full block">
             {selectedPastelID || "No PastelID selected"}
           </span>
         </div>
       </div>
 
-      {/* Wallet Balance Section */}
-      <div className="mt-4">
-        <span className="block text-bw-700 font-bold mb-2">
-          Wallet Balance (PSL):
-        </span>
-        <span id="walletBalance" className="text-bw-700">
-          {walletBalance}
-        </span>
-      </div>
-
-      {/* PSL Address Section */}
-      <div className="mt-4">
-        <span className="block text-bw-700 font-bold mb-2 whitespace-nowrap">
-          My PSL Address:
-        </span>
-        <div className="flex">
-          <span id="myPslAddress" className="text-bw-700">
-            {myPslAddress}
+      <div className="mt-4 flex gap-4 md:gap-10 flex-wrap md:flex-nowrap w-full">
+        {/* Wallet Balance Section */}
+        <div>
+          <span className="block text-bw-700 font-bold mb-2 whitespace-nowrap">
+            Wallet Balance (PSL):
           </span>
-          <button
-            id="copyAddressButton"
-            className="ml-2 tooltip"
-            data-tooltip="Copy address to clipboard"
-            onClick={() => copyToClipboard(myPslAddress)}
-          >
-            📋
-          </button>
+          <span id="walletBalance" className="text-bw-700">
+            {walletBalance}
+          </span>
+        </div>
+
+        {/* PSL Address Section */}
+        <div className="block w-full">
+          <span className="block text-bw-700 font-bold mb-2 whitespace-nowrap">
+            My PSL Address:
+          </span>
+          <div className="flex whitespace-nowrap w-full">
+            <span id="myPslAddress" className="text-bw-700 truncate-mobile">
+              {myPslAddress}
+            </span>
+            <Tooltip title={!isCopiedAddress ? "Copy address to clipboard" : "Address copied to clipboard!"}>
+              <button
+                id="copyAddressButton"
+                className="ml-2 flex gap-1 whitespace-nowrap text-green-600 hover:text-green-800"
+                onClick={() => copyToClipboard(myPslAddress)}
+              >
+                📋 {!isCopiedAddress ? "Copy" : "Copied"}
+              </button>
+            </Tooltip>
+          </div>
         </div>
       </div>
 

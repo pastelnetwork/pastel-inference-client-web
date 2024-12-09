@@ -4,6 +4,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
+import { Tooltip } from 'antd';
 
 import { InferenceRequest } from '@/app/types';
 import useStore from '@/app/store/useStore';
@@ -173,17 +174,18 @@ export default function PreviousRequests() {
                 <span>
                   <span className="icon-large">{getInferenceTypeIcon(request.selectedInferenceType)}</span> {getPromptPreview(request)}...
                 </span>
-                <button 
-                  className="delete-btn" 
-                  style={{fontSize: '0.75rem'}} 
-                  title="Delete entry?" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteRequest(index);
-                  }}
-                >
-                  ❌
-                </button>
+                <Tooltip title="Delete entry?">
+                  <button
+                    className="delete-btn"
+                    style={{fontSize: '0.75rem'}}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteRequest(index);
+                    }}
+                  >
+                    ❌
+                  </button>
+                </Tooltip>
               </div>
             ))
           )}

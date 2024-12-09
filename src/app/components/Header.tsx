@@ -30,14 +30,14 @@ export default function Header() {
   }
 
   return (
-    <div className="flex gap-6 items-center sticky top-0 p-4 bg-bw-50 z-10 ground-glass shadow-md" id="title">
-      <h1 className="text-4xl font-bold text-bw-600">
-        Pastel Inference Client
-        <span id="networkName" className="text-xl font-normal align-middle"> ({network})</span>
+    <div className="flex gap-6 justify-between sm:justify-start sm:items-center sticky top-0 p-4 bg-bw-50 z-10 ground-glass shadow-md" id="title">
+      <h1 className="text-2xl md:text-4xl font-bold text-bw-600 flex gap-1 sm:items-center sm:flex-row flex-col">
+        <span>Pastel Inference Client</span>
+        <span id="networkName" className="text-lg md:text-xl font-normal align-middle"> ({network})</span>
       </h1>
       <input
         id="theme-toggle"
-        className="switch success lg"
+        className="switch success lg w-14"
         data-content={isDarkMode ? "🌙" : "☀"}
         type="checkbox"
         checked={isDarkMode}

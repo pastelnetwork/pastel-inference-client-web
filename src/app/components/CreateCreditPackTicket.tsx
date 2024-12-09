@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Button, Typography, Modal } from "antd";
 
+import Loading from '@/app/components/Loading';
 import * as api from '@/app/lib/api';
 import { CreditPackCreationResult } from '@/app/types';
 import useStore from "@/app/store/useStore";
@@ -261,7 +262,7 @@ export default function CreateCreditPackTicket() {
       <h2 className="text-2xl text-bw-800">Create New Credit Pack Ticket</h2>
       <form
         id="createTicketForm"
-        className="grid grid-cols-2 gap-4"
+        className="grid grid-cols-1 md:grid-cols-2 gap-4"
         onSubmit={createNewCreditPackTicket}
       >
         <div>
@@ -320,17 +321,17 @@ export default function CreateCreditPackTicket() {
         </div>
 
         <div className="col-span-full flex justify-between">
-          <div className="flex gap-4 items-center" style={{ width: "100%" }}>
+          <div className="flex gap-4 md:items-center flex-col md:flex-row" style={{ width: "100%" }}>
             <button
-              className="btn success outline"
+              className="btn success outline order-2 md:order-1"
               type="submit"
               id="createCreditPackButton"
               disabled={isLoading}
             >
               Create Credit Pack
             </button>
-            {isLoading && <div className="btn is-loading">Loading...</div>}
-            <div className="prompt success xs" id="createTicketStatusContainer">
+            <Loading isLoading={isLoading} className='order-3 md:order-2 font-normal text-sm' />
+            <div className="prompt success xs order-1 md:order-3" id="createTicketStatusContainer">
               <label
                 className="text-bw-800 font-bold mb-4"
                 htmlFor="createTicketStatus"

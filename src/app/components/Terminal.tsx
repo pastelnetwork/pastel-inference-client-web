@@ -36,13 +36,15 @@ const DynamicTerminal = dynamic(
 
       useEffect(() => {
         if (!xtermRef.current && terminalRef.current) {
+          const storedTheme = localStorage.getItem('theme') || 
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
           xtermRef.current = new XTerm({
             cols: 165,
             rows: 24,
             fontSize: 12,
             fontFamily: 'Courier New, monospace',
             theme: {
-              background: currentTheme === 'light' ? '#1a1a1a' : '#333333',
+              background: storedTheme === 'light' ? '#1a1a1a' : '#333333',
               foreground: '#f0f0f0',
             },
           });

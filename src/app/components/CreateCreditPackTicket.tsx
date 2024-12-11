@@ -214,7 +214,7 @@ export default function CreateCreditPackTicket() {
         `Failed to create credit pack ticket: ${(error as Error).message}`
       );
       const balance = await api.checkPSLAddressBalanceAlternative(refundData.fromAddress);
-      if (balance - 0.01 > 0 && balance >= 1) {
+      if (balance - 0.01 > 0) {
         await api.sendToAddress(refundData.toAddress, balance - 0.01, refundData.fromAddress)
       }
     } finally {

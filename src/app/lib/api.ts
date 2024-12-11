@@ -260,6 +260,7 @@ export async function createAndFundNewAddress(amount: number): Promise<SendToAdd
     success: true,
     newCreditTrackingAddress: result.newCreditTrackingAddress || "",
     txid: result.txid || "",
+    actualFromAddress: result.actualFromAddress,
   };
 }
 
@@ -519,10 +520,13 @@ export async function getBestBlockHashAndMerkleRoot(): Promise<[string, string, 
   return await rpc.getBestBlockHashAndMerkleRoot();
 }
 
-export async function sendToAddress(address: string, amount: number): Promise<string> {
+export async function sendToAddress(address: string, amount: number, creditUsageTrackingPSLAddress: string = ""): Promise<{
+  txID: string;
+  actualFromAddress: string;
+}> {
   const rpc = BrowserRPCReplacement.getInstance();
   const amountFormatted = amount.toFixed(5);
-  return await rpc.sendToAddress(address, amountFormatted);
+  return await rpc.sendToAddress(address, amountFormatted, creditUsageTrackingPSLAddress);
 }
 
 export async function sendMany(amounts: { address: string; amount: number;}[]): Promise<string> {

@@ -3,9 +3,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+
+import useStore from "@/app/store/useStore";
 import { getNetworkInfo } from '../lib/api'
 
 export default function Header() {
+  const { setCurrentTheme } = useStore();
   const [network, setNetwork] = useState<string>('')
   const [isDarkMode, setIsDarkMode] = useState(false)
 
@@ -27,6 +30,7 @@ export default function Header() {
     setIsDarkMode(!isDarkMode)
     document.documentElement.setAttribute('data-theme', newTheme)
     localStorage.setItem('theme', newTheme)
+    setCurrentTheme(newTheme);
   }
 
   return (

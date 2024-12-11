@@ -53,7 +53,7 @@ function DownloadWalletModal({ isOpen, onClose }: DownloadWalletModal) {
       onCancel={onClose}
     >
       <div className="bg-white p-4 rounded-lg w-full">
-        <Title level={2} className="text-2xl font-bold mb-4">Save Your Credit Pack</Title>
+        <Title level={2} className="text-xl sm:text-2xl font-bold mb-4">Save Your Credit Pack</Title>
         <div className='w-full relative mt-8'>
           <Paragraph className="text-base text-center">Your new credit pack has been created. Please save it for use on other devices.</Paragraph>
           <div className="text-center mt-3">
@@ -150,7 +150,10 @@ export default function CreateCreditPackTicket() {
     setIsLoading(true);
     setStatus("Initializing ticket creation...");
     setNewTicketDetails(null);
-
+    let refundData = {
+      fromAddress: '',
+      toAddress: '',
+    }
     try {
       const creditPriceCushionPercentage = 0.15;
       const amountOfPSLForTrackingTransactions = 10.0;
@@ -172,8 +175,12 @@ export default function CreateCreditPackTicket() {
         return;
       }
 
-      const { newCreditTrackingAddress } = await api.createAndFundNewAddress(amountToFundCreditTrackingAddress);
+      const { newCreditTrackingAddress, actualFromAddress } = await api.createAndFundNewAddress(amountToFundCreditTrackingAddress);
       if (newCreditTrackingAddress) {
+        refundData = {
+          toAddress: actualFromAddress || '',
+          fromAddress: newCreditTrackingAddress,
+        }
         await saveWalletToLocalStorage();
         const result: CreditPackCreationResult = await api.createCreditPackTicket(
           parseInt(numCredits.replace(/,/g, "")),
@@ -206,11 +213,14 @@ export default function CreateCreditPackTicket() {
       setStatus(
         `Failed to create credit pack ticket: ${(error as Error).message}`
       );
+      const balance = await api.checkPSLAddressBalanceAlternative(refundData.fromAddress);
+      if (balance - 0.01 > 0 && balance >= 1) {
+        await api.sendToAddress(refundData.toAddress, balance - 0.01, refundData.fromAddress)
+      }
     } finally {
       setIsLoading(false);
     }
   };
-  
 
   const pollCreditPackStatus = async (txid: string) => {
     const pollInterval = 30000; // 30 seconds

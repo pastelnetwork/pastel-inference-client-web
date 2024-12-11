@@ -471,7 +471,7 @@ body {
 }
 
 [data-theme="dark"] #terminal {
-  background-color: #1a1a1a;
+  background-color: #333333;
   color: #f0f0f0;
 }
 

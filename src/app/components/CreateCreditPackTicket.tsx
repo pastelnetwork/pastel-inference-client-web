@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Button, Typography, Modal } from "antd";
 
+import Loading from '@/app/components/Loading';
 import * as api from '@/app/lib/api';
 import { CreditPackCreationResult } from '@/app/types';
 import useStore from "@/app/store/useStore";
@@ -52,7 +53,7 @@ function DownloadWalletModal({ isOpen, onClose }: DownloadWalletModal) {
       onCancel={onClose}
     >
       <div className="bg-white p-4 rounded-lg w-full">
-        <Title level={2} className="text-2xl font-bold mb-4">Save Your Credit Pack</Title>
+        <Title level={2} className="text-xl sm:text-2xl font-bold mb-4">Save Your Credit Pack</Title>
         <div className='w-full relative mt-8'>
           <Paragraph className="text-base text-center">Your new credit pack has been created. Please save it for use on other devices.</Paragraph>
           <div className="text-center mt-3">
@@ -149,7 +150,10 @@ export default function CreateCreditPackTicket() {
     setIsLoading(true);
     setStatus("Initializing ticket creation...");
     setNewTicketDetails(null);
-
+    let refundData = {
+      fromAddress: '',
+      toAddress: '',
+    }
     try {
       const creditPriceCushionPercentage = 0.15;
       const amountOfPSLForTrackingTransactions = 10.0;
@@ -171,8 +175,12 @@ export default function CreateCreditPackTicket() {
         return;
       }
 
-      const { newCreditTrackingAddress } = await api.createAndFundNewAddress(amountToFundCreditTrackingAddress);
+      const { newCreditTrackingAddress, actualFromAddress } = await api.createAndFundNewAddress(amountToFundCreditTrackingAddress);
       if (newCreditTrackingAddress) {
+        refundData = {
+          toAddress: actualFromAddress || '',
+          fromAddress: newCreditTrackingAddress,
+        }
         await saveWalletToLocalStorage();
         const result: CreditPackCreationResult = await api.createCreditPackTicket(
           parseInt(numCredits.replace(/,/g, "")),
@@ -205,11 +213,14 @@ export default function CreateCreditPackTicket() {
       setStatus(
         `Failed to create credit pack ticket: ${(error as Error).message}`
       );
+      const balance = await api.checkPSLAddressBalanceAlternative(refundData.fromAddress);
+      if (balance - 0.01 > 0) {
+        await api.sendToAddress(refundData.toAddress, balance - 0.01, refundData.fromAddress)
+      }
     } finally {
       setIsLoading(false);
     }
   };
-  
 
   const pollCreditPackStatus = async (txid: string) => {
     const pollInterval = 30000; // 30 seconds
@@ -261,7 +272,7 @@ export default function CreateCreditPackTicket() {
       <h2 className="text-2xl text-bw-800">Create New Credit Pack Ticket</h2>
       <form
         id="createTicketForm"
-        className="grid grid-cols-2 gap-4"
+        className="grid grid-cols-1 md:grid-cols-2 gap-4"
         onSubmit={createNewCreditPackTicket}
       >
         <div>
@@ -320,17 +331,17 @@ export default function CreateCreditPackTicket() {
         </div>
 
         <div className="col-span-full flex justify-between">
-          <div className="flex gap-4 items-center" style={{ width: "100%" }}>
+          <div className="flex gap-4 md:items-center flex-col md:flex-row" style={{ width: "100%" }}>
             <button
-              className="btn success outline"
+              className="btn success outline order-2 md:order-1"
               type="submit"
               id="createCreditPackButton"
               disabled={isLoading}
             >
               Create Credit Pack
             </button>
-            {isLoading && <div className="btn is-loading">Loading...</div>}
-            <div className="prompt success xs" id="createTicketStatusContainer">
+            <Loading isLoading={isLoading} className='order-3 md:order-2 font-normal text-sm' />
+            <div className="prompt success xs order-1 md:order-3" id="createTicketStatusContainer">
               <label
                 className="text-bw-800 font-bold mb-4"
                 htmlFor="createTicketStatus"

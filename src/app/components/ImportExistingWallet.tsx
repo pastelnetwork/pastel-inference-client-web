@@ -4,6 +4,7 @@ import { Button, Typography, Modal, Card, Col, Row, Tooltip, Input } from "antd"
 import { InfoCircleOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import jsQR from 'jsqr';
 
+import Loading from '@/app/components/Loading';
 import useStore from '@/app/store/useStore';
 import * as api from '@/app/lib/api';
 import { generateSecurePassword } from "@/app/lib/passwordUtils";
@@ -243,9 +244,9 @@ const ImportExistingWallet: React.FC = () => {
         <div className="bg-white p-4 rounded-lg text-center">
           <div className='relative'>
             <Tooltip title="Back to Connect Wallet">
-              <Button shape="circle" icon={<ArrowLeftOutlined />} className='absolute top-1 left-0' onClick={onBack} />
+              <Button shape="circle" icon={<ArrowLeftOutlined />} className='absolute top-1 -left-2 sm:left-0' onClick={onBack} />
             </Tooltip>
-            <Title level={2} className="text-2xl font-bold">Import Existing Wallet</Title>
+            <Title level={2} className="text-xl sm:text-2xl font-bold">Import Existing Wallet</Title>
           </div>
           <div className='mt-8'>
             <Row gutter={24}>
@@ -259,15 +260,15 @@ const ImportExistingWallet: React.FC = () => {
                       onChange={(e) => setPrivKey(e.target.value)}
                     />
                   </div>
-                  <div className='mt-4'>
+                  <div className='mt-4 flex'>
                     <Button
                       onClick={importPrivKey}
-                      className="btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block"
+                      className="btn success outline w-full sm:w-44 text-center transition duration-300 text-base font-bold inline-block"
                       disabled={walletManagementLoading.isPrivateKeyLoading}
                     >
                       Import Private Key
                     </Button>
-                    {walletManagementLoading.isPrivateKeyLoading && <div className="btn is-loading">Importing...</div>}
+                    <Loading isLoading={walletManagementLoading.isPrivateKeyLoading} text="Importing..." className="ml-3" />
                   </div>
                 </Card>
               </Col>
@@ -291,35 +292,35 @@ const ImportExistingWallet: React.FC = () => {
                       type='password'
                     />
                   </div>
-                  <div className='mt-4'>
+                  <div className='mt-4 flex items-center'>
                     <Button
                       onClick={importWallet}
-                      className="btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block"
+                      className="btn success outline w-full sm:w-44 text-center transition duration-300 text-base font-bold inline-block"
                       disabled={walletManagementLoading.isImportWalletLoading}
                     >
                       Import Wallet File
                     </Button>
-                    {walletManagementLoading.isImportWalletLoading && <div className="btn is-loading">Importing...</div>}
+                    <Loading isLoading={walletManagementLoading.isImportWalletLoading} text="Importing..." className="ml-3" />
                   </div>
                 </Card>
               </Col>
               <Col span={24} className='mt-4 text-left'>
                 <Card title={getImportByQRTitle()} className='w-full text-left'>
-                  <div className='flex gap-3 items-center'>
+                  <div className='flex gap-3 sm:items-center sm:flex-row flex-col'>
                     <Button
                       onClick={handleImportQR}
-                      className="btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block"
+                      className="btn success outline w-full sm:w-44 text-center transition duration-300 text-base font-bold inline-block"
                     >
                       Scan QR
                     </Button>
-                    <div>- Or -</div>
+                    <div className='sm:w-auto w-full text-center'>- Or -</div>
                     <div>
                       <div className='flex items-center'>
-                        <label className={`btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block custom-button ${walletManagementLoading.isUploadQRLoading ? 'disabled' : ''}`}>
+                        <label className={`btn success outline w-full sm:w-44 text-center transition duration-300 text-base font-bold inline-block custom-button ${walletManagementLoading.isUploadQRLoading ? 'disabled' : ''}`}>
                           <span>Upload QR</span>
                           <input type="file" accept=".png" onChange={handleImageChange} className='opacity-0 w-0 h-0' />
                         </label>
-                        {walletManagementLoading.isUploadQRLoading && <div className="btn is-loading">Importing...</div>}
+                        <Loading isLoading={walletManagementLoading.isUploadQRLoading} text="Importing..." className="ml-3" />
                       </div>
                     </div>
                   </div>

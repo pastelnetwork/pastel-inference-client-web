@@ -2063,7 +2063,10 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     address: string,
     amountStr: string,
     creditUsageTrackingPSLAddress: string = ""
-  ): Promise<string> {
+  ): Promise<{
+    txID: string;
+    actualFromAddress: string;
+  }> {
     this.ensureInitialized();
 
     // Convert the amount string to Decimal for validation
@@ -2114,7 +2117,10 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
       `Transaction ID ${txID} created for sending ${formattedAmount} PSL to ${address}.`
     );
 
-    return txID;
+    return {
+      txID,
+      actualFromAddress,
+    };
   }
 
   /**
@@ -2409,7 +2415,7 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
 
   async createAndFundNewPSLCreditTrackingAddress(
     amountOfPSLToFundAddressWith: number
-  ): Promise<{ newCreditTrackingAddress: string; txid: string }> {
+  ): Promise<{ newCreditTrackingAddress: string; txid: string; actualFromAddress: string }> {
     this.ensureInitialized();
     const addresses = await this.getAllAddresses();
     const localAddress = localStorage.getItem("MY_LOCAL_ADDRESSES");
@@ -2441,11 +2447,11 @@ public async getAllAddresses(mode?: NetworkMode): Promise<string[]> {
     const newAddress = await generateNewAddress();
     const formattedAmountOfPSLToFundAddressWith =
       amountOfPSLToFundAddressWith.toFixed(5);
-    const txid = await this.sendToAddress(
+    const sendData = await this.sendToAddress(
       newAddress,
       formattedAmountOfPSLToFundAddressWith
     );
-    return { newCreditTrackingAddress: newAddress, txid };
+    return { newCreditTrackingAddress: newAddress, txid: sendData.txID, actualFromAddress: sendData.actualFromAddress };
   }
 
   async importPrivKey(privKey: string): Promise<string> {

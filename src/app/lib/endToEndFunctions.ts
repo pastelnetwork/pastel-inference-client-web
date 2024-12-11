@@ -322,7 +322,7 @@ export async function handleCreditPackTicketEndToEnd(
           throw new Error(`Error sending PSL to burn address`);
         }
 
-        const burnTransactionTxid = burnTransactionResponse;
+        const burnTransactionTxid = burnTransactionResponse.txID;
 
         const creditPackPurchaseRequestConfirmation =
           await buildCreditPackPurchaseRequestConfirmation(

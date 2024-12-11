@@ -3,6 +3,9 @@
 'use client';
 
 import React, { useState } from "react";
+import { Tooltip } from 'antd';
+
+import Loading from '@/app/components/Loading';
 import { AddressAmount, WalletInfo } from "@/app/types";
 import * as api from '@/app/lib/api';
 import { parseAndFormatNumber } from '@/app/lib/utils';
@@ -29,6 +32,7 @@ export default function WalletManagement() {
     isImportWalletLoading: false,
     isPrivateKeyLoading: false,
   });
+  const [isCopiedList, setCopiedList] = useState<string[]>([])
 
   const importPrivKey = async () => {
     if (!privKey) {
@@ -145,11 +149,16 @@ export default function WalletManagement() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
+  const copyToClipboard = (text: string, action: string) => {
     navigator.clipboard
       .writeText(text)
       .then(() => {
-        alert("Copied to clipboard!");
+        const copied = isCopiedList;
+        copied.push(action)
+        setCopiedList([...copied]);
+        setTimeout(() => {
+          setCopiedList([...copied.filter((val) => val !== action)]);
+        }, 5000)
       })
       .catch((err) => {
         console.error("Failed to copy: ", err);
@@ -165,12 +174,11 @@ export default function WalletManagement() {
           htmlFor="importPrivKey"
         >
           Import Private Key
-          <span
-            className="tooltip"
-            data-tooltip="Import a private key into your wallet."
-          >
-            &#9432;
-          </span>
+          <Tooltip title="Import a private key into your wallet.">
+            <span className="inline-block ml-1">
+              &#9432;
+            </span>
+          </Tooltip>
         </label>
         <input
           id="importPrivKey"
@@ -189,7 +197,7 @@ export default function WalletManagement() {
           >
             Import Private Key
           </button>
-          {walletManagementLoading.isPrivateKeyLoading && <div className="btn is-loading">Importing...</div>}
+          <Loading isLoading={walletManagementLoading.isPrivateKeyLoading} text="Importing..." />
         </div>
       </div>
 
@@ -199,12 +207,13 @@ export default function WalletManagement() {
           htmlFor="importWallet"
         >
           Import Wallet
-          <span
-            className="tooltip"
-            data-tooltip="You can use the wallet file (*.wallet) from the Pastel Lite to import to the Inference Client"
-          >
-            &#9432;
-          </span>
+          <Tooltip title="You can use the wallet file (*.wallet) from the Pastel Lite to import to the Inference Client">
+            <span
+              className="inline-block ml-1"
+            >
+              &#9432;
+            </span>
+          </Tooltip>
         </label>
         <input
           id="importWallet"
@@ -240,7 +249,7 @@ export default function WalletManagement() {
           >
             Import Wallet
           </button>
-          {walletManagementLoading.isImportWalletLoading && <div className="btn is-loading">Importing...</div>}
+          <Loading isLoading={walletManagementLoading.isImportWalletLoading} text="Importing..." />
         </div>
       </div>
 
@@ -259,14 +268,13 @@ export default function WalletManagement() {
             disabled={walletManagementLoading.isListAddressAmountsLoading}
           >
             List Address Amounts
-            <span
-              className="tooltip"
-              data-tooltip="List the amounts associated with each address in your wallet."
-            >
-              &#9432;
-            </span>
+            <Tooltip title="List the amounts associated with each address in your wallet.">
+              <span>
+                &#9432;
+              </span>
+            </Tooltip>
           </button>
-          {walletManagementLoading.isListAddressAmountsLoading && <div className="btn is-loading">Loading...</div>}
+          <Loading isLoading={walletManagementLoading.isListAddressAmountsLoading} />
         </div>
         {addressAmounts && (
           <div
@@ -274,15 +282,18 @@ export default function WalletManagement() {
             className="mt-4"
             style={{ position: "relative" }}
           >
-            <h2 className="text-2xl text-bw-800">Address Amounts:</h2>
-            <button
-              id="copyAddressAmountsButton"
-              className="btn success outline"
-              style={{ position: "absolute", top: "-1.5rem", right: "0.5rem" }}
-              onClick={() => copyToClipboard(JSON.stringify(addressAmounts))}
-            >
-              📋
-            </button>
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-2xl text-bw-800">Address Amounts:</h2>
+              <Tooltip title={isCopiedList.includes('addressAmounts') ? "List Address Amounts copied to clipboard!" : "Copy List Address Amounts to Clipboard"}>
+                <button
+                  id="copyAddressAmountsButton"
+                  className="btn success outline"
+                  onClick={() => copyToClipboard(JSON.stringify(addressAmounts), 'addressAmounts')}
+                >
+                  📋 {isCopiedList.includes('addressAmounts') ? "Copied" : "Copy"}
+                </button>
+              </Tooltip>
+            </div>
             <div className="table-responsive">
               <table id="addressAmountsTable" className="table bordered bw">
                 <thead>
@@ -294,7 +305,11 @@ export default function WalletManagement() {
                 <tbody>
                   {Object.entries(addressAmounts).map(([address, amount]) => (
                     <tr key={address}>
-                      <td>{address}</td>
+                      <td className="truncate">
+                        <Tooltip title={address}>
+                          <span>{address}</span>
+                        </Tooltip>
+                      </td>
                       <td>{parseAndFormatNumber(`${amount}`)}</td>
                     </tr>
                   ))}
@@ -313,14 +328,13 @@ export default function WalletManagement() {
             disabled={walletManagementLoading.isWalletInfoLoading}
           >
             Get Wallet Info
-            <span
-              className="tooltip"
-              data-tooltip="Retrieve information about your wallet."
-            >
-              &#9432;
-            </span>
+            <Tooltip title="Retrieve information about your wallet.">
+              <span>
+                &#9432;
+              </span>
+            </Tooltip>
           </button>
-          {walletManagementLoading.isWalletInfoLoading && <div className="btn is-loading">Loading...</div>}
+          <Loading isLoading={walletManagementLoading.isWalletInfoLoading} />
         </div>
         {walletInfo && (
           <div
@@ -328,15 +342,18 @@ export default function WalletManagement() {
             className="mt-4"
             style={{ position: "relative" }}
           >
-            <h2 className="text-2xl text-bw-800">Wallet Info:</h2>
-            <button
-              id="copyWalletInfoButton"
-              className="btn success outline"
-              style={{ position: "absolute", top: "-1.5rem", right: "0.5rem" }}
-              onClick={() => copyToClipboard(JSON.stringify(walletInfo))}
-            >
-              📋
-            </button>
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-2xl text-bw-800">Wallet Info:</h2>
+              <Tooltip title={isCopiedList.includes('walletInfo') ? "Wallet Info copied to clipboard!" : "Copy Wallet Info to Clipboard"}>
+                <button
+                  id="copyWalletInfoButton"
+                  className="btn success outline"
+                  onClick={() => copyToClipboard(JSON.stringify(walletInfo), 'walletInfo')}
+                >
+                  📋 {isCopiedList.includes('walletInfo') ? "Copied" : "Copy"}
+                </button>
+              </Tooltip>
+            </div>
             <div className="table-responsive">
               <table id="walletInfoTable" className="table bordered bw">
                 <thead>
@@ -348,7 +365,11 @@ export default function WalletManagement() {
                 <tbody>
                   {Object.entries(walletInfo).map(([key, value]) => (
                     <tr key={key}>
-                      <td>{key}</td>
+                      <td className="truncate">
+                        <Tooltip title={key}>
+                          <span>{key}</span>
+                        </Tooltip>
+                      </td>
                       <td>{JSON.stringify(value)}</td>
                     </tr>
                   ))}
@@ -365,12 +386,11 @@ export default function WalletManagement() {
           onClick={clearLocalStorage}
         >
           Clear Inference Client Local Storage
-          <span
-            className="tooltip"
-            data-tooltip="Clear all local storage data for this page."
-          >
-            &#9432;
-          </span>
+          <Tooltip title="Clear all local storage data for this page." className="whitespace-nowrap">
+            <span>
+              &#9432;
+            </span>
+          </Tooltip>
         </button>
       </div>
     </div>

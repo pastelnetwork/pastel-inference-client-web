@@ -159,7 +159,10 @@ interface WalletActions {
   ) => Promise<boolean>;
   getCurrentPastelBlockHeight: () => Promise<number>;
   getBestBlockHashAndMerkleRoot: () => Promise<[string, string, number]>;
-  sendToAddress: (address: string, amount: number) => Promise<string>;
+  sendToAddress: (address: string, amount: number) => Promise<{
+    txID: string;
+    actualFromAddress: string;
+  }>;
   sendMany: (amounts: { address: string; amount: number; }[]) => Promise<string>;
   setMyPslAddress: (address: string) => void;
   setSelectedPastelID: (address: string) => void;
@@ -180,6 +183,8 @@ interface WalletActions {
   setBackConnectWallet: (status: boolean) => void;
   importedWalletFile: (password: string) => Promise<void>;
   closeImportExistingWallet: () => void;
+  currentTheme: string;
+  setCurrentTheme: (theme: string) => void;
 }
 
 const walletLocalStorageName = 'walletInfo';
@@ -213,6 +218,7 @@ const useStore = create<WalletState & WalletActions>()(
       requests: [],
       showImportExistingWallet: false,
       isBackConnectWallet: false,
+      currentTheme: 'light',
 
       setLocked: (isLocked) => set({ isLocked }),
       setNetworkMode: (mode) => set({ networkMode: mode }),
@@ -238,6 +244,7 @@ const useStore = create<WalletState & WalletActions>()(
       setShowConnectWallet: (status: boolean) => set({ showConnectWallet: status }),
       setShowImportExistingWallet: (status: boolean) => set({ showImportExistingWallet: status }),
       setBackConnectWallet: (status: boolean) => set({ isBackConnectWallet: status }),
+      setCurrentTheme: (theme: string) => set({ currentTheme: theme }),
 
       initializeWallet: async () => {
         if (get().isLoading) return;
@@ -247,6 +254,10 @@ const useStore = create<WalletState & WalletActions>()(
           console.error("Wallet initialization timed out");
           set({ isLoading: false, error: "Wallet initialization timed out" });
         }, 120000);
+
+        const storedTheme = localStorage.getItem('theme') || 
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        set({ currentTheme: storedTheme });
 
         try {
           console.log("Starting wallet initialization");

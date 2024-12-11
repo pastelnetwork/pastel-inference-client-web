@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 
+import useStore from "@/app/store/useStore";
 import useLogger from '@/app/store/useLogger';
 
 interface LogMessage {
@@ -18,6 +19,7 @@ interface LogMessage {
 const DynamicTerminal = dynamic(
   async () => {
     return function TerminalComponent() {
+      const { currentTheme } = useStore();
       const { logMsg } = useLogger();
       const [isVisible, setIsVisible] = useState<boolean>(false);
       const terminalRef = useRef<HTMLDivElement>(null);
@@ -34,13 +36,15 @@ const DynamicTerminal = dynamic(
 
       useEffect(() => {
         if (!xtermRef.current && terminalRef.current) {
+          const storedTheme = localStorage.getItem('theme') || 
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
           xtermRef.current = new XTerm({
-            cols: 175,
+            cols: 165,
             rows: 24,
             fontSize: 12,
             fontFamily: 'Courier New, monospace',
             theme: {
-              background: '#1a1a1a',
+              background: storedTheme === 'light' ? '#1a1a1a' : '#333333',
               foreground: '#f0f0f0',
             },
           });
@@ -57,6 +61,15 @@ const DynamicTerminal = dynamic(
           window.removeEventListener('resize', handleResize);
         };
       }, []);
+
+      useEffect(() => {
+        if (xtermRef.current?.options?.theme) {
+          xtermRef.current.options.theme = {
+            ...xtermRef.current.options.theme,
+            background: currentTheme === 'light' ? '#1a1a1a' : '#333333',
+          };
+        }
+      }, [currentTheme])
 
       const handleResize = () => {
         if (fitAddonRef.current) {

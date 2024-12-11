@@ -3,6 +3,9 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import { Tooltip } from 'antd';
+
+import Loading from '@/app/components/Loading';
 import { CreditPack } from "@/app/types";
 import * as api from '@/app/lib/api';
 
@@ -11,6 +14,7 @@ export default function SelectCreditPackTicket() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const [isCopiedCreditPackTicket, setCopiedCreditPackTicket] = useState<string[]>([]);
 
   const getMyValidCreditPacks = useCallback(async () => {
     setIsLoading(true);
@@ -113,7 +117,7 @@ export default function SelectCreditPackTicket() {
     navigator.clipboard
       .writeText(text)
       .then(() => {
-        alert("Credit pack info copied to clipboard!");
+        // alert("Credit pack info copied to clipboard!");
       })
       .catch((err) => {
         console.error("Failed to copy: ", err);
@@ -125,20 +129,20 @@ export default function SelectCreditPackTicket() {
       <h2 className="text-2xl text-bw-800">
         Select Existing Credit Pack Ticket
       </h2>
-      <div className="relative text-bw-700 overflow-x-auto">
-        <table className="credit-pack-table table bordered bw">
+      <div className="table-responsive">
+        <table className="credit-pack-table table bordered bw new-ticket-table">
           <thead>
             <tr>
-              <th className="select-column">Select</th>
-              <th className="initial-credits-column">
+              <th className="select-column whitespace-nowrap">Select</th>
+              <th className="initial-credits-column whitespace-nowrap">
                 Initial Credits in Pack
               </th>
-              <th className="current-credit-balance-column">
-                Current Credit Balance
+              <th className="current-credit-balance-column whitespace-nowrap">
+                <span>Current Credit Balance</span>
               </th>
-              <th className="tracking-address-column">Tracking Address</th>
-              <th>Blockheight Registered</th>
-              <th>Credit Pack Registration TXID</th>
+              <th className="tracking-address-column whitespace-nowrap">Tracking Address</th>
+              <th className="whitespace-nowrap">Blockheight Registered</th>
+              <th className="whitespace-nowrap">Credit Pack Registration TXID</th>
             </tr>
           </thead>
           <tbody id="creditPackTicketTableBody">
@@ -179,16 +183,23 @@ export default function SelectCreditPackTicket() {
                         handleTicketSelection(credit_pack_registration_txid)
                       }
                     />
-                    <button
-                      className="text-gray-500 hover:text-gray-700 focus:outline-none ml-2"
-                      title="Copy Credit Pack Info to Clipboard"
-                      onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                        e.stopPropagation();
-                        copyToClipboard(JSON.stringify(ticket, null, 2));
-                      }}
-                    >
-                      📋
-                    </button>
+                    <Tooltip title={isCopiedCreditPackTicket.includes(credit_pack_registration_txid) ? " Credit Pack Info copied to clipboard!" : "Copy Credit Pack Info to Clipboard"}>
+                      <button
+                        className="text-green-600 hover:text-green-800 transition-colors focus:outline-none ml-2"
+                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                          e.stopPropagation();
+                          copyToClipboard(JSON.stringify(ticket, null, 2));
+                          const copiedID = isCopiedCreditPackTicket;
+                          copiedID.push(credit_pack_registration_txid)
+                          setCopiedCreditPackTicket([...copiedID]);
+                          setTimeout(() => {
+                            setCopiedCreditPackTicket([...copiedID.filter((val) => val !== credit_pack_registration_txid)])
+                          }, 5000)
+                        }}
+                      >
+                        📋 {!isCopiedCreditPackTicket.includes(credit_pack_registration_txid) ? "Copy" : "Copied"}
+                      </button>
+                    </Tooltip>
                   </td>
                   <td className="truncate">
                     {requested_initial_credits_in_credit_pack.toLocaleString()}
@@ -249,7 +260,7 @@ export default function SelectCreditPackTicket() {
             </span>
           )}
         </button>
-        {isLoading && <div className="btn is-loading">Loading...</div>}
+        <Loading isLoading={isLoading} className='order-3 md:order-2 font-normal text-sm' />
       </div>
     </div>
   );

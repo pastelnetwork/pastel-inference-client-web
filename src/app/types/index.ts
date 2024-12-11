@@ -565,6 +565,7 @@ export interface SendToAddressResult {
   result?: string;
   message?: string;
   newCreditTrackingAddress?: string;
+  actualFromAddress?: string;
   txid?: string;
 }
 

@@ -159,6 +159,7 @@ body {
 .ground-glass {
   background-color: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .icon-large {
@@ -399,7 +400,10 @@ body {
   border-color: #555555;
 }
 
-[data-theme="dark"] .input::placeholder,
+[data-theme="dark"] .input::placeholder {
+  color: #888888;
+  opacity: 1;
+}
 [data-theme="dark"] .input::-ms-input-placeholder {
   color: #888888;
   opacity: 1;
@@ -467,7 +471,7 @@ body {
 }
 
 [data-theme="dark"] #terminal {
-  background-color: #1a1a1a;
+  background-color: #333333;
   color: #f0f0f0;
 }
 
@@ -544,6 +548,11 @@ body {
   height: 400px;
 }
 
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
 /* Media Queries */
 @media (max-width: 1200px) {
   .credit-pack-table {
@@ -564,6 +573,16 @@ body {
 @media (max-width: 768px) {
   .credit-pack-table {
     font-size: 0.75rem;
+  }
+
+  .truncate-mobile {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .prompt.success.xs {
+    max-width: 100%;
   }
 }
 

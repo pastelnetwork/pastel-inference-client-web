@@ -447,7 +447,7 @@ export default function UserInfo() {
                 </button>
               </Tooltip>
             </div>
-            <p className="text-xs text-gray-600 mt-2">
+            <p className="text-xs mt-2">
               Please store this password securely. You&apos;ll need it if you
               want to access your wallet on a different device.
             </p>

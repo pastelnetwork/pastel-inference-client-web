@@ -144,7 +144,7 @@ const QRCodeScanner: React.FC = () => {
         onCancel={closeQRCodeScan}
       >
         <div className="bg-white sm:p-4 rounded-lg w-full">
-          <Title level={2} className="text-2xl font-bold mb-4">Scan QR Code</Title>
+          <Title level={2} className="text-xl sm:text-2xl font-bold mb-4">Scan QR Code</Title>
           <div className='w-full relative mt-8'>
             <div className={`text-center flex justify-center qr-reader-wrapper relative ${hasPermission && showQRScanner ? 'bg-black' : 'permission-wrapper'}`}>
               {hasPermission && showQRScanner ?

@@ -244,9 +244,9 @@ const ImportExistingWallet: React.FC = () => {
         <div className="bg-white p-4 rounded-lg text-center">
           <div className='relative'>
             <Tooltip title="Back to Connect Wallet">
-              <Button shape="circle" icon={<ArrowLeftOutlined />} className='absolute top-1 left-0' onClick={onBack} />
+              <Button shape="circle" icon={<ArrowLeftOutlined />} className='absolute top-1 -left-2 sm:left-0' onClick={onBack} />
             </Tooltip>
-            <Title level={2} className="text-2xl font-bold">Import Existing Wallet</Title>
+            <Title level={2} className="text-xl sm:text-2xl font-bold">Import Existing Wallet</Title>
           </div>
           <div className='mt-8'>
             <Row gutter={24}>
@@ -263,7 +263,7 @@ const ImportExistingWallet: React.FC = () => {
                   <div className='mt-4 flex'>
                     <Button
                       onClick={importPrivKey}
-                      className="btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block"
+                      className="btn success outline w-full sm:w-44 text-center transition duration-300 text-base font-bold inline-block"
                       disabled={walletManagementLoading.isPrivateKeyLoading}
                     >
                       Import Private Key
@@ -295,7 +295,7 @@ const ImportExistingWallet: React.FC = () => {
                   <div className='mt-4 flex items-center'>
                     <Button
                       onClick={importWallet}
-                      className="btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block"
+                      className="btn success outline w-full sm:w-44 text-center transition duration-300 text-base font-bold inline-block"
                       disabled={walletManagementLoading.isImportWalletLoading}
                     >
                       Import Wallet File
@@ -309,14 +309,14 @@ const ImportExistingWallet: React.FC = () => {
                   <div className='flex gap-3 sm:items-center sm:flex-row flex-col'>
                     <Button
                       onClick={handleImportQR}
-                      className="btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block"
+                      className="btn success outline w-full sm:w-44 text-center transition duration-300 text-base font-bold inline-block"
                     >
                       Scan QR
                     </Button>
-                    <div className='sm:w-auto w-44 text-center'>- Or -</div>
+                    <div className='sm:w-auto w-full text-center'>- Or -</div>
                     <div>
                       <div className='flex items-center'>
-                        <label className={`btn success outline w-44 text-center transition duration-300 text-base font-bold inline-block custom-button ${walletManagementLoading.isUploadQRLoading ? 'disabled' : ''}`}>
+                        <label className={`btn success outline w-full sm:w-44 text-center transition duration-300 text-base font-bold inline-block custom-button ${walletManagementLoading.isUploadQRLoading ? 'disabled' : ''}`}>
                           <span>Upload QR</span>
                           <input type="file" accept=".png" onChange={handleImageChange} className='opacity-0 w-0 h-0' />
                         </label>

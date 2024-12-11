@@ -28,7 +28,7 @@ const ConnectWallet: React.FC = () => {
         footer={null}
       >
         <div className="bg-white sm:p-4 rounded-lg text-center">
-          <Title level={2} className="text-2xl font-bold mb-4">Connect Wallet</Title>
+          <Title level={2} className="text-xl sm:text-2xl font-bold mb-4">Connect Wallet</Title>
           <Paragraph className="mb-4 text-base">Please import an existing wallet or create a new wallet.</Paragraph>
           <div className='mb-4'>
             <Button

@@ -1752,80 +1752,45 @@ class PastelInferenceClient {
         ) {
           const unsupportedParameters: string[] = [];
 
-          for (const [desiredParam, desiredValue] of Object.entries(
+          parameterCheck: for (const [desiredParam] of Object.entries(
             desiredParameters
           )) {
-            let paramFound = false;
-
             for (const param of model.model_parameters) {
-              // Handle both string and array formats for inference_types_parameter_applies_to
-              const applicableTypes =
-                typeof param.inference_types_parameter_applies_to === "string"
-                  ? JSON.parse(
-                      String(
-                        param.inference_types_parameter_applies_to
-                      ).replace(/'/g, '"')
-                    )
-                  : param.inference_types_parameter_applies_to;
+              // Safely handle inference_types_parameter_applies_to
+              const inferenceTypes = param.inference_types_parameter_applies_to;
+              let applicableTypes: string[] = [];
+
+              if (typeof inferenceTypes === "string") {
+                // Handle string format that might be a stringified array
+                if (
+                  (inferenceTypes as string).startsWith("[") &&
+                  (inferenceTypes as string).endsWith("]")
+                ) {
+                  try {
+                    const cleaned = (inferenceTypes as string)
+                      .replace(/'/g, '"')
+                      .replace(/\["/g, '["')
+                      .replace(/"\]/g, '"]');
+                    applicableTypes = JSON.parse(cleaned);
+                  } catch {
+                    applicableTypes = [inferenceTypes];
+                  }
+                } else {
+                  applicableTypes = [inferenceTypes];
+                }
+              } else if (Array.isArray(inferenceTypes)) {
+                applicableTypes = inferenceTypes;
+              }
 
               if (
                 param.name === desiredParam &&
-                (applicableTypes.includes(modelInferenceTypeString) ||
-                  applicableTypes === modelInferenceTypeString)
+                applicableTypes.includes(modelInferenceTypeString)
               ) {
-                // Special handling for object types
-                if (param.type === "object") {
-                  paramFound = true;
-                  break;
-                }
-
-                // Handle array types
-                if (param.type === "array") {
-                  paramFound = Array.isArray(desiredValue);
-                  break;
-                }
-
-                // Handle other types
-                if ("type" in param) {
-                  if (
-                    param.type === "int" &&
-                    Number.isInteger(Number(desiredValue))
-                  ) {
-                    paramFound = true;
-                  } else if (
-                    param.type === "float" &&
-                    !isNaN(parseFloat(desiredValue as string))
-                  ) {
-                    paramFound = true;
-                  } else if (
-                    param.type === "string" &&
-                    typeof desiredValue === "string"
-                  ) {
-                    if (
-                      "options" in param &&
-                      Array.isArray(param.options) &&
-                      param.options.includes(desiredValue)
-                    ) {
-                      paramFound = true;
-                    } else if (!("options" in param)) {
-                      paramFound = true;
-                    }
-                  } else if (
-                    param.type === "boolean" &&
-                    typeof desiredValue === "boolean"
-                  ) {
-                    paramFound = true;
-                  }
-                } else {
-                  paramFound = true;
-                }
-                break;
+                continue parameterCheck; // Parameter is supported, continue to next parameter
               }
             }
-
-            if (!paramFound) {
-              unsupportedParameters.push(desiredParam);
-            }
+            // If we get here, parameter wasn't found or supported
+            unsupportedParameters.push(desiredParam);
           }
 
           if (unsupportedParameters.length === 0) {

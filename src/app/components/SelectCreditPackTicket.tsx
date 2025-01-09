@@ -19,9 +19,17 @@ export default function SelectCreditPackTicket() {
   const getMyValidCreditPacks = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Get all valid credit packs
       const data: CreditPack[] = await api.getMyValidCreditPacks();
-      const validTickets = data.filter(
-        (ticket) => ticket.credit_pack_current_credit_balance > 0
+      // Get list of addresses with balances
+      const addressAmounts = await api.listAddressAmounts();
+      const addressesWithBalance = Object.entries(addressAmounts)
+        .filter(([, balance]) => balance > 0)
+        .map(([address]) => address);
+      // Filter credit packs based on both balance and tracking address
+      const validTickets = data.filter(ticket => 
+        ticket.credit_pack_current_credit_balance > 0 && 
+        addressesWithBalance.includes(ticket.credit_usage_tracking_psl_address)
       );
       setCreditPackTickets(validTickets);
       if (validTickets.length > 0 && !selectedTicket) {

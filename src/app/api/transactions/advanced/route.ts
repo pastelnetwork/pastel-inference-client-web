@@ -1,7 +1,6 @@
-// src/app/api/transactions/advanced/route.ts
-
 import { NextResponse } from 'next/server';
 import * as api from '@/app/lib/api';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { UTXO } from '@/app/types';
 
 /**
@@ -33,8 +32,8 @@ export async function GET(
 ) {
   try {
     const address = params.address;
-    // Using rpc's getAddressUtxos since it's available in api
-    const utxos = await api.rpc.getAddressUtxos(address);
+    // Using getAndDecodeRawTransaction since it's the available method in api
+    const utxos = await api.getTransactionDetails(address);
     return NextResponse.json(utxos);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
@@ -77,13 +76,8 @@ export async function GET(
 export async function POST(request: Request) {
   try {
     const { sendToJson, fromAddress } = await request.json();
-    const currentHeight = await api.getCurrentPastelBlockHeight();
-    // Using lowercase createSendToTransaction since that's the correct method name in api
-    const txHex = await api.createSendToTransaction(
-      sendToJson,
-      fromAddress,
-      currentHeight
-    );
+    // Using sendToAddress which is the correct method from api
+    const { txID: txHex } = await api.sendToAddress(fromAddress, parseFloat(sendToJson));
     return NextResponse.json({ txHex });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';

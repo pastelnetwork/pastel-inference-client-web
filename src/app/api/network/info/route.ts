@@ -17,17 +17,26 @@ import * as api from '@/app/lib/api';
  *           application/json:
  *             schema:
  *               type: object
+ *               required:
+ *                 - network
  *               properties:
  *                 network:
  *                   type: string
  *                   enum: [mainnet, testnet, devnet]
+ *                   description: The current network mode
+ *                   example: mainnet
+ *       500:
+ *         $ref: '#/components/responses/InternalError'
  */
-export async function GET() {
+export async function GET(): Promise<NextResponse> {
   try {
     const networkInfo = await api.getNetworkInfo();
     return NextResponse.json(networkInfo);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ error: errorMessage }, { status: 400 });
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: 500 }
+    );
   }
 }

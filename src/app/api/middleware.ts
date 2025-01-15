@@ -1,9 +1,16 @@
-// src/app/api/middleware.ts
-
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import * as api from '@/app/lib/api';
 import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
+
+// Extend NextRequest type to include our custom properties
+declare module 'next/server' {
+  interface NextRequest {
+    pastelID?: string;
+    validatedBody?: unknown;
+  }
+}
 
 // Rate limiting configuration
 const limiter = rateLimit({
@@ -49,7 +56,9 @@ export async function authenticatePastelID(request: NextRequest) {
     // Add PastelID to request context
     request.pastelID = pastelID;
     
-  } catch (error) {
+    return null; // Indicate success
+    
+  } catch {
     return new NextResponse(
       JSON.stringify({ error: 'Authentication failed' }),
       { status: 401 }
@@ -58,8 +67,10 @@ export async function authenticatePastelID(request: NextRequest) {
 }
 
 // Error handling middleware
-export function errorHandler(error: Error) {
-  console.error('API Error:', error);
+export function errorHandler(err: unknown) {
+  console.error('API Error:', err);
+
+  const error = err as Error;  // Type assertion for error handling
 
   // Specific error types
   if (error.name === 'ValidationError') {
@@ -97,17 +108,27 @@ export function errorHandler(error: Error) {
 }
 
 // Request validation middleware using zod
-export function validateRequest(schema: any) {
+export function validateRequest(schema: z.ZodSchema) {
   return async (request: NextRequest) => {
     try {
       const body = await request.json();
       const result = schema.parse(body);
       request.validatedBody = result;
+      return null; // Indicate success
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return new NextResponse(
+          JSON.stringify({
+            error: 'Validation failed',
+            details: error.errors
+          }),
+          { status: 400 }
+        );
+      }
       return new NextResponse(
         JSON.stringify({
           error: 'Validation failed',
-          details: error.errors
+          details: 'Unknown validation error'
         }),
         { status: 400 }
       );
@@ -118,7 +139,7 @@ export function validateRequest(schema: any) {
 // Middleware configuration
 export const config = {
   matcher: '/api/:path*',
-}
+};
 
 // Main middleware function
 export async function middleware(request: NextRequest) {
@@ -144,7 +165,7 @@ export async function middleware(request: NextRequest) {
     response.headers.set('X-XSS-Protection', '1; mode=block');
     
     return response;
-  } catch (error) {
-    return errorHandler(error);
+  } catch (err) {
+    return errorHandler(err);
   }
 }

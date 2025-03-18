@@ -1,5 +1,6 @@
 // src/app/api/docs/route.ts
 import { withSwagger } from 'next-swagger-doc';
+import { NextResponse } from 'next/server';
 
 const swaggerHandler = withSwagger({
   definition: {
@@ -176,4 +177,37 @@ const swaggerHandler = withSwagger({
   ]
 });
 
-export const GET = swaggerHandler();
+// App Router compatible handler
+export async function GET(request: Request) {
+  // Create a mock object that has the properties the swagger handler expects
+  const mockReq = {
+    method: request.method,
+    headers: Object.fromEntries(request.headers),
+    query: Object.fromEntries(new URL(request.url).searchParams),
+    url: request.url
+  };
+  
+  const responseData = await new Promise<Record<string, unknown>>((resolve) => {
+    const mockRes = {
+      setHeader: () => mockRes,
+      status: () => mockRes,
+      json: (data: Record<string, unknown>) => {
+        resolve(data);
+        return mockRes;
+      },
+      send: (data: Record<string, unknown>) => {
+        resolve(data);
+        return mockRes;
+      },
+      end: () => {
+        resolve({});
+        return mockRes;
+      }
+    };
+    
+    // @ts-expect-error - we're adapting between different API styles
+    swaggerHandler()(mockReq, mockRes);
+  });
+  
+  return NextResponse.json(responseData);
+}
